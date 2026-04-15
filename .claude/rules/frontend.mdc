@@ -1,0 +1,13 @@
+---
+description: Conventions Next.js/React/TS pour frontend/ (MONV)
+globs: frontend/**
+alwaysApply: false
+---
+
+# Frontend (`frontend/`)
+
+- **Stack** : **Next.js 15** (App Router sous `src/app/`), **React 19**, TypeScript, **Tailwind CSS**, Lucide, react-markdown. Ce dépôt n’utilise pas Vite ; Radix/shadcn ne figurent pas dans les dépendances npm — composants locaux sous `src/components/`.
+- **Imports** : ordre et style comme dans le projet ; pas d’imports inutilisés laissés en chemin.
+- **Portée** : pas de refactors massifs non demandés ; rester focalisé sur la fonctionnalité ou le correctif.
+- **UX / copie** : textes visibles par l’utilisateur en **français** (libellés, erreurs, toasts), sauf contrainte produit explicite.
+- **Qualité** : pas de script `lint` dans `package.json` à ce jour ; la CI exécute **`npm run build`** — lancer un build localement avant PR pour attraper les erreurs TypeScript / Next.
