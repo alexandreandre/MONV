@@ -1,0 +1,246 @@
+name: Déployer sur Cloud Run (GCP)
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-gcp-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGION: europe-west1
+  BACKEND_SERVICE: monv-backend
+  FRONTEND_SERVICE: monv-frontend
+  AR_REPO: monv
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      url: ${{ steps.backend-url.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Project ID (depuis la clé JSON)
+        id: proj
+        run: |
+          python3 <<'PY'
+          import json, os
+          raw = os.environ["GCP_SA_KEY_JSON"]
+          pid = json.loads(raw)["project_id"]
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"project_id={pid}\n")
+          PY
+        env:
+          GCP_SA_KEY_JSON: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Artifact Registry (création si besoin)
+        run: |
+          gcloud config set project "${{ steps.proj.outputs.project_id }}"
+          if ! gcloud artifacts repositories describe "${{ env.AR_REPO }}" \
+              --location="${{ env.REGION }}" >/dev/null 2>&1; then
+            gcloud artifacts repositories create "${{ env.AR_REPO }}" \
+              --repository-format=docker \
+              --location="${{ env.REGION }}" \
+              --description="Images Docker MONV"
+          fi
+
+      - name: Auth Docker vers Artifact Registry
+        run: gcloud auth configure-docker "${{ env.REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build & push image backend
+        id: image
+        run: |
+          PROJECT="${{ steps.proj.outputs.project_id }}"
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${PROJECT}/${{ env.AR_REPO }}/monv-backend:${GITHUB_SHA}"
+          docker build -t "$IMAGE" ./backend
+          docker push "$IMAGE"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Déployer Cloud Run (backend)
+        env:
+          BACKEND_SERVICE: ${{ env.BACKEND_SERVICE }}
+          REGION: ${{ env.REGION }}
+          BACKEND_IMAGE: ${{ steps.image.outputs.image }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          PAPPERS_API_KEY: ${{ secrets.PAPPERS_API_KEY }}
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+        run: |
+          gcloud config set project "${{ steps.proj.outputs.project_id }}"
+          python3 <<'PY'
+          import os
+          import subprocess
+
+          def q(s: str) -> str:
+              return "'" + str(s).replace("'", "''") + "'"
+
+          def req(name: str) -> str:
+              v = os.environ.get(name, "").strip()
+              if not v:
+                  raise SystemExit(f"Secret GitHub manquant ou vide : {name}")
+              return v
+
+          pairs = {
+              "DEBUG": "false",
+              "PIPELINE_DEBUG": "false",
+              "SKIP_DB_VERIFY_ON_STARTUP": "false",
+              "SUPABASE_URL": req("SUPABASE_URL"),
+              "SUPABASE_SERVICE_KEY": req("SUPABASE_SERVICE_KEY"),
+              "OPENROUTER_API_KEY": req("OPENROUTER_API_KEY"),
+              "JWT_SECRET": req("JWT_SECRET"),
+          }
+          for opt in ("SUPABASE_KEY", "PAPPERS_API_KEY", "GOOGLE_PLACES_API_KEY"):
+              v = os.environ.get(opt, "").strip()
+              if v:
+                  pairs[opt] = v
+
+          with open("/tmp/monv-backend-env.yaml", "w", encoding="utf-8") as f:
+              for k, v in pairs.items():
+                  f.write(f"{k}: {q(v)}\n")
+
+          subprocess.run(
+              [
+                  "gcloud",
+                  "run",
+                  "deploy",
+                  os.environ["BACKEND_SERVICE"],
+                  "--image",
+                  os.environ["BACKEND_IMAGE"],
+                  "--region",
+                  os.environ["REGION"],
+                  "--platform",
+                  "managed",
+                  "--allow-unauthenticated",
+                  "--port",
+                  "8080",
+                  "--memory",
+                  "1Gi",
+                  "--env-vars-file",
+                  "/tmp/monv-backend-env.yaml",
+              ],
+              check=True,
+          )
+          PY
+
+      - name: URL du backend
+        id: backend-url
+        run: |
+          gcloud config set project "${{ steps.proj.outputs.project_id }}"
+          URL="$(gcloud run services describe "${{ env.BACKEND_SERVICE }}" \
+            --region="${{ env.REGION }}" \
+            --format='value(status.url)')"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+  deploy-frontend:
+    needs: deploy-backend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      url: ${{ steps.frontend-url.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Project ID
+        id: proj
+        run: |
+          python3 <<'PY'
+          import json, os
+          pid = json.loads(os.environ["GCP_SA_KEY_JSON"])["project_id"]
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"project_id={pid}\n")
+          PY
+        env:
+          GCP_SA_KEY_JSON: ${{ secrets.GCP_SA_KEY }}
+
+      - run: |
+          gcloud config set project "${{ steps.proj.outputs.project_id }}"
+          gcloud auth configure-docker "${{ env.REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build & push image frontend
+        id: image
+        env:
+          BACKEND_URL: ${{ needs.deploy-backend.outputs.url }}
+        run: |
+          PROJECT="${{ steps.proj.outputs.project_id }}"
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${PROJECT}/${{ env.AR_REPO }}/monv-frontend:${GITHUB_SHA}"
+          docker build \
+            --build-arg "BACKEND_INTERNAL_URL=${BACKEND_URL}" \
+            -t "$IMAGE" ./frontend
+          docker push "$IMAGE"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Déployer Cloud Run (frontend)
+        run: |
+          gcloud config set project "${{ steps.proj.outputs.project_id }}"
+          gcloud run deploy "${{ env.FRONTEND_SERVICE }}" \
+            --image="${{ steps.image.outputs.image }}" \
+            --region="${{ env.REGION }}" \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=8080 \
+            --memory=512Mi
+
+      - name: URL du frontend
+        id: frontend-url
+        run: |
+          gcloud config set project "${{ steps.proj.outputs.project_id }}"
+          URL="$(gcloud run services describe "${{ env.FRONTEND_SERVICE }}" \
+            --region="${{ env.REGION }}" \
+            --format='value(status.url)')"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+  align-backend-cors:
+    needs: [deploy-backend, deploy-frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Project ID
+        id: proj
+        run: |
+          python3 <<'PY'
+          import json, os
+          pid = json.loads(os.environ["GCP_SA_KEY_JSON"])["project_id"]
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"project_id={pid}\n")
+          PY
+        env:
+          GCP_SA_KEY_JSON: ${{ secrets.GCP_SA_KEY }}
+
+      - name: CORS + SITE_URL alignés sur le frontend
+        env:
+          FE_URL: ${{ needs.deploy-frontend.outputs.url }}
+        run: |
+          gcloud config set project "${{ steps.proj.outputs.project_id }}"
+          gcloud run services update "${{ env.BACKEND_SERVICE }}" \
+            --region="${{ env.REGION }}" \
+            --update-env-vars="^|^CORS_ORIGINS=${FE_URL}^|^SITE_URL=${FE_URL}"

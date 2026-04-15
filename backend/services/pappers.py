@@ -1,0 +1,415 @@
+"""
+Connecteur API Pappers — enrichissement (dirigeants, finances).
+
+Deux modes selon ``PAPPERS_BASE_URL`` :
+- **International** (``api.pappers.in``) : en-tête ``api-key``, routes ``/search`` et ``/company``.
+- **France** (``api.pappers.fr``) : paramètre ``api_token``, routes v2 ``/recherche`` et ``/entreprise``.
+"""
+
+from __future__ import annotations
+
+import httpx
+from models.schemas import CompanyResult
+from config import settings
+from utils.pipeline_log import plog
+
+BASE_URL = settings.PAPPERS_BASE_URL.rstrip("/")
+
+
+def _is_available() -> bool:
+    return bool(settings.PAPPERS_API_KEY)
+
+
+def _is_international() -> bool:
+    return "pappers.in" in (settings.PAPPERS_BASE_URL or "").lower()
+
+
+def _intl_headers() -> dict[str, str]:
+    return {"api-key": settings.PAPPERS_API_KEY}
+
+
+def _intl_country(params: dict) -> str:
+    return (params.get("country_code") or settings.PAPPERS_COUNTRY_CODE or "FR").upper()
+
+
+def _safe_float(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _first_activity_intl(r: dict) -> tuple[str | None, str | None]:
+    activities = r.get("activities")
+    if isinstance(activities, list) and activities:
+        a0 = activities[0]
+        if isinstance(a0, dict):
+            code = a0.get("code") or a0.get("nace_code") or a0.get("activity_code")
+            label = a0.get("label") or a0.get("name") or a0.get("description")
+            return (str(code) if code is not None else None, str(label) if label is not None else None)
+    fields = r.get("fields_of_activity")
+    if isinstance(fields, list) and fields:
+        return (str(fields[0]), None)
+    return (None, None)
+
+
+def _head_office_intl(r: dict) -> dict:
+    ho = r.get("head_office")
+    return ho if isinstance(ho, dict) else {}
+
+
+def _officer_to_representant_fr(o: dict) -> dict:
+    """Normalise un dirigeant API International vers le format attendu par ``api_engine``."""
+    last = o.get("last_name") or o.get("nom") or o.get("family_name")
+    first = o.get("first_name") or o.get("prenom") or o.get("given_name")
+    full = o.get("name") or o.get("full_name") or o.get("nom_complet")
+    role = (
+        o.get("role")
+        or o.get("function")
+        or o.get("position")
+        or o.get("title")
+        or o.get("mandate")
+        or o.get("qualite")
+        or ""
+    )
+    nom = last or full or ""
+    prenom = first or ""
+    return {
+        "nom": nom,
+        "prenom": prenom,
+        "nom_complet": full or (f"{prenom} {nom}".strip() if (prenom or nom) else ""),
+        "qualite": str(role) if role else "",
+    }
+
+
+def _financial_year_key(row: dict) -> int:
+    for k in ("year", "fiscal_year", "exercise_year", "annee"):
+        v = row.get(k)
+        if v is not None:
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                pass
+    return 0
+
+
+def _financial_ca_result(row: dict) -> tuple[float | None, float | None]:
+    ca = _safe_float(
+        row.get("chiffre_affaires")
+        or row.get("turnover")
+        or row.get("revenue")
+        or row.get("ca")
+        or row.get("sales")
+    )
+    res = _safe_float(
+        row.get("resultat")
+        or row.get("net_result")
+        or row.get("net_income")
+        or row.get("profit")
+        or row.get("resultat_net")
+    )
+    return ca, res
+
+
+def _company_result_from_intl(r: dict) -> CompanyResult | None:
+    num = r.get("company_number") or r.get("siren") or ""
+    if not num:
+        return None
+    ho = _head_office_intl(r)
+    code, label = _first_activity_intl(r)
+    workforce = r.get("workforce_range") or r.get("workforce")
+    eff_label = str(workforce) if workforce is not None else None
+
+    officers = r.get("officers") if isinstance(r.get("officers"), list) else []
+    dir_nom, dir_prenom, dir_fonction = "", "", ""
+    for o in officers:
+        if not isinstance(o, dict):
+            continue
+        rep = _officer_to_representant_fr(o)
+        q = (rep.get("qualite") or "").lower()
+        if any(k in q for k in ["président", "president", "directeur", "gérant", "gerant", "ceo", "manager"]):
+            dir_nom = rep.get("nom_complet") or rep.get("nom") or ""
+            dir_prenom = rep.get("prenom") or ""
+            dir_fonction = rep.get("qualite") or ""
+            break
+    if not dir_nom and officers and isinstance(officers[0], dict):
+        rep = _officer_to_representant_fr(officers[0])
+        dir_nom = rep.get("nom_complet") or rep.get("nom") or ""
+        dir_prenom = rep.get("prenom") or ""
+        dir_fonction = rep.get("qualite") or ""
+
+    ca, rn = None, None
+    fins = r.get("financials")
+    if isinstance(fins, list) and fins:
+        rows = [x for x in fins if isinstance(x, dict)]
+        rows.sort(key=_financial_year_key, reverse=True)
+        if rows:
+            ca, rn = _financial_ca_result(rows[0])
+
+    return CompanyResult(
+        siren=str(num).replace(" ", ""),
+        siret=None,
+        nom=r.get("name") or r.get("trade_name") or "",
+        activite_principale=code,
+        libelle_activite=label,
+        adresse=ho.get("address_line_1"),
+        code_postal=ho.get("postal_code"),
+        ville=ho.get("city"),
+        tranche_effectif=eff_label,
+        effectif_label=eff_label,
+        date_creation=r.get("date_of_creation") or r.get("date_creation"),
+        forme_juridique=r.get("local_legal_form_name") or r.get("legal_form_code"),
+        dirigeant_nom=dir_nom or None,
+        dirigeant_prenom=dir_prenom or None,
+        dirigeant_fonction=dir_fonction or None,
+        chiffre_affaires=ca,
+        resultat_net=rn,
+        site_web=None,
+    )
+
+
+async def _search_international(params: dict) -> list[CompanyResult]:
+    q = (params.get("q") or "").strip()
+    if not q:
+        plog("pappers_intl_skip", reason="param q vide")
+        return []
+
+    country = _intl_country(params)
+    search_params: dict[str, str | int] = {
+        "country_code": country,
+        "q": q,
+        "page": int(params.get("page", 1)),
+        "per_page": min(int(params.get("per_page", 25)), 100),
+    }
+    if params.get("code_naf"):
+        search_params["activity_code"] = str(params["code_naf"])
+    if params.get("date_creation_min"):
+        search_params["date_of_creation_min"] = str(params["date_creation_min"])
+    if params.get("date_creation_max"):
+        search_params["date_of_creation_max"] = str(params["date_creation_max"])
+
+    results: list[CompanyResult] = []
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        try:
+            resp = await client.get(
+                f"{BASE_URL}/search",
+                params=search_params,
+                headers=_intl_headers(),
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            plog("pappers_intl_search_failed", error=repr(e))
+            return []
+
+    for r in data.get("results") or []:
+        if isinstance(r, dict):
+            row = _company_result_from_intl(r)
+            if row:
+                results.append(row)
+    plog("pappers_intl_search_ok", nb=len(results))
+    return results
+
+
+async def _search_france(params: dict) -> list[CompanyResult]:
+    search_params: dict[str, str | int] = {"api_token": settings.PAPPERS_API_KEY}
+
+    if "q" in params:
+        search_params["q"] = params["q"]
+    if "code_naf" in params:
+        search_params["code_naf"] = params["code_naf"]
+    if "departement" in params:
+        search_params["departement"] = params["departement"]
+    if "region" in params:
+        search_params["region"] = params["region"]
+    if "ville" in params:
+        search_params["ville_siege"] = params["ville"]
+    if "ca_min" in params:
+        search_params["chiffre_affaires_min"] = int(params["ca_min"])
+    if "ca_max" in params:
+        search_params["chiffre_affaires_max"] = int(params["ca_max"])
+    if "effectif_min" in params:
+        search_params["effectif_min"] = int(params["effectif_min"])
+    if "effectif_max" in params:
+        search_params["effectif_max"] = int(params["effectif_max"])
+    if "date_creation_min" in params:
+        search_params["date_creation_min"] = params["date_creation_min"]
+    if "date_creation_max" in params:
+        search_params["date_creation_max"] = params["date_creation_max"]
+
+    search_params["par_page"] = min(params.get("per_page", 25), 100)
+    search_params["page"] = params.get("page", 1)
+
+    safe_params = {k: v for k, v in search_params.items() if k != "api_token"}
+    plog("pappers_recherche_request", params=safe_params)
+
+    results: list[CompanyResult] = []
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            resp = await client.get(f"{BASE_URL}/recherche", params=search_params)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            plog("pappers_recherche_failed", error=repr(e))
+            return []
+
+        for r in data.get("resultats", []):
+            siege = r.get("siege", {})
+            dirigeants = r.get("representants", [])
+
+            dir_nom, dir_prenom, dir_fonction = "", "", ""
+            for d in dirigeants:
+                qualite = (d.get("qualite") or "").lower()
+                if any(k in qualite for k in ["président", "directeur", "gérant"]):
+                    dir_nom = d.get("nom_complet") or d.get("nom") or ""
+                    dir_prenom = d.get("prenom") or ""
+                    dir_fonction = d.get("qualite") or ""
+                    break
+            if not dir_nom and dirigeants:
+                d = dirigeants[0]
+                dir_nom = d.get("nom_complet") or d.get("nom") or ""
+                dir_prenom = d.get("prenom") or ""
+                dir_fonction = d.get("qualite") or ""
+
+            finances = r.get("finances", {})
+            ca = None
+            rn = None
+            if finances:
+                last_year = finances.get(sorted(finances.keys())[-1]) if isinstance(finances, dict) else None
+                if isinstance(last_year, dict):
+                    ca = last_year.get("chiffre_affaires")
+                    rn = last_year.get("resultat")
+
+            results.append(
+                CompanyResult(
+                    siren=r.get("siren", ""),
+                    siret=siege.get("siret") if siege else None,
+                    nom=r.get("nom_entreprise") or r.get("denomination") or "",
+                    activite_principale=r.get("code_naf"),
+                    libelle_activite=r.get("libelle_code_naf"),
+                    adresse=siege.get("adresse_ligne_1") if siege else None,
+                    code_postal=siege.get("code_postal") if siege else None,
+                    ville=siege.get("ville") if siege else None,
+                    date_creation=r.get("date_creation"),
+                    dirigeant_nom=dir_nom or None,
+                    dirigeant_prenom=dir_prenom or None,
+                    dirigeant_fonction=dir_fonction or None,
+                    chiffre_affaires=ca,
+                    resultat_net=rn,
+                    site_web=r.get("site_web"),
+                )
+            )
+
+    plog("pappers_recherche_ok", nb=len(results))
+    return results
+
+
+async def search_pappers(params: dict) -> list[CompanyResult]:
+    """Recherche d'entreprises via Pappers (International ou France selon l'URL)."""
+    if not _is_available():
+        plog("pappers_skip", reason="PAPPERS_API_KEY manquant ou vide")
+        return []
+    if _is_international():
+        plog("pappers_mode", mode="international", base_url=BASE_URL)
+        return await _search_international(params)
+    plog("pappers_mode", mode="france", base_url=BASE_URL)
+    return await _search_france(params)
+
+
+async def _get_company_intl(siren: str, fields: str) -> dict | None:
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        try:
+            resp = await client.get(
+                f"{BASE_URL}/company",
+                params={
+                    "country_code": settings.PAPPERS_COUNTRY_CODE or "FR",
+                    "company_number": siren.strip(),
+                    "fields": fields,
+                },
+                headers=_intl_headers(),
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except Exception:
+            return None
+
+
+async def get_company_dirigeants(siren: str) -> dict:
+    """Dirigeants / représentants pour un SIREN (France) ou numéro d'immatriculation."""
+    if not _is_available():
+        return {}
+
+    if _is_international():
+        data = await _get_company_intl(siren, "officers,ubos")
+        if not data:
+            return {}
+        reps = [_officer_to_representant_fr(o) for o in (data.get("officers") or []) if isinstance(o, dict)]
+        ubos = data.get("ubos") if isinstance(data.get("ubos"), list) else []
+        return {"siren": siren, "representants": reps, "beneficiaires": ubos}
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            resp = await client.get(
+                f"{BASE_URL}/entreprise",
+                params={"api_token": settings.PAPPERS_API_KEY, "siren": siren},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception:
+            return {}
+
+    return {
+        "siren": siren,
+        "representants": data.get("representants", []),
+        "beneficiaires": data.get("beneficiaires_effectifs", []),
+    }
+
+
+async def get_company_finances(siren: str) -> dict:
+    """Données financières agrégées pour l'affichage / fusion dans les résultats."""
+    if not _is_available():
+        return {}
+
+    if _is_international():
+        data = await _get_company_intl(siren, "financials")
+        if not data:
+            return {"siren": siren, "denomination": None, "finances": []}
+        fins = [x for x in (data.get("financials") or []) if isinstance(x, dict)]
+        fins.sort(key=_financial_year_key, reverse=True)
+        normalized: list[dict] = []
+        for row in fins:
+            ca, rn = _financial_ca_result(row)
+            y = _financial_year_key(row)
+            merged = dict(row)
+            if ca is not None:
+                merged["chiffre_affaires"] = ca
+            if rn is not None:
+                merged["resultat"] = rn
+            merged["annee"] = y or merged.get("annee")
+            normalized.append(merged)
+        return {
+            "siren": siren,
+            "denomination": data.get("name"),
+            "finances": normalized,
+        }
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            resp = await client.get(
+                f"{BASE_URL}/entreprise",
+                params={"api_token": settings.PAPPERS_API_KEY, "siren": siren},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception:
+            return {}
+
+    finances = data.get("finances", [])
+    return {
+        "siren": siren,
+        "denomination": data.get("denomination"),
+        "finances": finances,
+    }

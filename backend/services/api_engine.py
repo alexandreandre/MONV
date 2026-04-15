@@ -1,0 +1,177 @@
+"""
+Couche 3 — Moteur d'exécution API
+Exécute le plan de l'orchestrateur, agrège et déduplique les résultats.
+"""
+
+from config import settings
+from models.schemas import ExecutionPlan, CompanyResult, SearchResults
+from services.sirene import search_sirene
+from services.pappers import search_pappers, get_company_dirigeants, get_company_finances
+from services.google_places import search_google_places
+from utils.pipeline_log import plog
+
+MAX_TOTAL_RESULTS = settings.MAX_RESULTS_PER_QUERY * 4
+
+
+def _dedup_key(r: CompanyResult) -> str:
+    """Clé de déduplication : SIREN si disponible, sinon nom+ville normalisés."""
+    if r.siren:
+        return f"siren:{r.siren}"
+    return f"name:{(r.nom or '').lower().strip()}|{(r.ville or '').lower().strip()}"
+
+
+async def execute_plan(plan: ExecutionPlan) -> SearchResults:
+    """Execute all API calls from the plan and merge results."""
+    all_results: list[CompanyResult] = []
+    seen_keys: set[str] = set()
+
+    sorted_calls = sorted(plan.api_calls, key=lambda c: c.priority)
+
+    for call in sorted_calls:
+        if len(all_results) >= MAX_TOTAL_RESULTS and call.action == "search":
+            plog("execute_plan_cap_reached", total=len(all_results),
+                 skipped_source=call.source, skipped_action=call.action)
+            continue
+
+        if call.source == "google_places" and call.action == "search":
+            plog("api_call_start", source=call.source, action=call.action, params=call.params)
+            results = await search_google_places(
+                query=call.params.get("query", ""),
+                location=call.params.get("location"),
+            )
+            plog("api_call_end", source=call.source, action=call.action, nb=len(results))
+            for r in results:
+                key = _dedup_key(r)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    all_results.append(r)
+
+        elif call.source == "sirene" and call.action == "search":
+            plog("api_call_start", source=call.source, action=call.action, params=call.params)
+            results = await search_sirene(call.params)
+            plog("api_call_end", source=call.source, action=call.action, nb=len(results))
+            for r in results:
+                key = _dedup_key(r)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    all_results.append(r)
+                else:
+                    _merge_result(all_results, r)
+
+        elif call.source == "pappers" and call.action == "search":
+            plog("api_call_start", source=call.source, action=call.action, params=call.params)
+            results = await search_pappers(call.params)
+            plog("api_call_end", source=call.source, action=call.action, nb=len(results))
+            for r in results:
+                key = _dedup_key(r)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    all_results.append(r)
+                else:
+                    _merge_result(all_results, r)
+
+        elif call.source == "pappers" and call.action == "get_dirigeants":
+            plog("api_call_start", source=call.source, action=call.action, nb_targets=min(50, len(all_results)))
+            for result in all_results[:50]:
+                dir_data = await get_company_dirigeants(result.siren)
+                reps = dir_data.get("representants", [])
+                if reps:
+                    first = reps[0]
+                    if not result.dirigeant_nom:
+                        result.dirigeant_nom = first.get("nom") or first.get("nom_complet", "")
+                        result.dirigeant_prenom = first.get("prenom", "")
+                        result.dirigeant_fonction = first.get("qualite", "")
+            plog("api_call_end", source=call.source, action=call.action)
+
+        elif call.source == "pappers" and call.action == "get_finances":
+            plog("api_call_start", source=call.source, action=call.action, nb_targets=min(50, len(all_results)))
+            for result in all_results[:50]:
+                fin_data = await get_company_finances(result.siren)
+                finances = fin_data.get("finances", [])
+                if finances and isinstance(finances, list) and finances:
+                    last = finances[0]
+                    if isinstance(last, dict):
+                        if not result.chiffre_affaires:
+                            result.chiffre_affaires = last.get("chiffre_affaires")
+                        if not result.resultat_net:
+                            result.resultat_net = last.get("resultat")
+            plog("api_call_end", source=call.source, action=call.action)
+
+    if len(all_results) < 5:
+        for call in sorted_calls:
+            if call.source != "sirene" or call.action != "search" or not call.params.get("q"):
+                continue
+            has_filter = (
+                call.params.get("activite_principale")
+                or call.params.get("section_activite_principale")
+                or call.params.get("region")
+                or call.params.get("departement")
+                or call.params.get("code_commune")
+            )
+            if not has_filter:
+                continue
+            broadened = {k: v for k, v in call.params.items() if k != "q"}
+            plog("sirene_broaden_retry", original_q=call.params["q"], params=broadened)
+            results = await search_sirene(broadened, max_pages=5)
+            plog("sirene_broaden_result", nb=len(results))
+            for r in results:
+                key = _dedup_key(r)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    all_results.append(r)
+
+    return SearchResults(
+        total=len(all_results),
+        results=all_results,
+        columns=plan.columns,
+        credits_required=plan.estimated_credits,
+    )
+
+
+def _merge_result(results: list[CompanyResult], new: CompanyResult) -> None:
+    """Merge enriched data from a secondary source into existing results."""
+    for existing in results:
+        if existing.siren and new.siren and existing.siren == new.siren:
+            _merge_fields(existing, new)
+            break
+        if (
+            not existing.siren
+            and (existing.nom or "").lower().strip() == (new.nom or "").lower().strip()
+            and (existing.ville or "").lower().strip() == (new.ville or "").lower().strip()
+        ):
+            _merge_fields(existing, new)
+            break
+
+
+def _merge_fields(existing: CompanyResult, new: CompanyResult) -> None:
+    if new.siren and not existing.siren:
+        existing.siren = new.siren
+    if new.siret and not existing.siret:
+        existing.siret = new.siret
+    if new.activite_principale and not existing.activite_principale:
+        existing.activite_principale = new.activite_principale
+    if new.libelle_activite and not existing.libelle_activite:
+        existing.libelle_activite = new.libelle_activite
+    if new.chiffre_affaires and not existing.chiffre_affaires:
+        existing.chiffre_affaires = new.chiffre_affaires
+    if new.resultat_net and not existing.resultat_net:
+        existing.resultat_net = new.resultat_net
+    if new.dirigeant_nom and not existing.dirigeant_nom:
+        existing.dirigeant_nom = new.dirigeant_nom
+        existing.dirigeant_prenom = new.dirigeant_prenom
+        existing.dirigeant_fonction = new.dirigeant_fonction
+    if new.site_web and not existing.site_web:
+        existing.site_web = new.site_web
+    if new.email and not existing.email:
+        existing.email = new.email
+    if new.telephone and not existing.telephone:
+        existing.telephone = new.telephone
+    if new.google_maps_url and not existing.google_maps_url:
+        existing.google_maps_url = new.google_maps_url
+    if new.tranche_effectif and not existing.tranche_effectif:
+        existing.tranche_effectif = new.tranche_effectif
+        existing.effectif_label = new.effectif_label
+    if new.date_creation and not existing.date_creation:
+        existing.date_creation = new.date_creation
+    if new.lien_annuaire and not existing.lien_annuaire:
+        existing.lien_annuaire = new.lien_annuaire
