@@ -21,6 +21,7 @@ MONV est une application **full stack** : un chat guide la recherche, des modèl
 - [Script autonome `prospection_pme.py`](#script-autonome-prospection_pmepy)
 - [Stack technique](#stack-technique)
 
+
 ---
 
 ## Architecture du dépôt
@@ -47,13 +48,16 @@ MONV/
 │   │   ├── guard.py         # Couche 1 — intent + entités
 │   │   ├── conversationalist.py  # QCM de clarification
 │   │   ├── orchestrator.py  # Couche 2 — plan d’exécution API + coût crédits
-│   │   ├── api_engine.py    # Couche 3 — SIRENE / Pappers, fusion résultats
+│   │   ├── api_engine.py    # Couche 3 — SIRENE / Pappers / Google Places, fusion résultats
 │   │   ├── sirene.py        # Recherche Entreprises (data.gouv.fr)
 │   │   ├── pappers.py       # Enrichissement (clé optionnelle)
+│   │   ├── google_places.py # Commerces de niche + recoupement SIRENE (clé optionnelle)
 │   │   └── export.py        # Génération Excel / CSV
 │   └── utils/
 │       ├── llm.py           # Client OpenAI-compatible → OpenRouter
-│       └── pipeline_log.py  # Traces optionnelles [MONV.pipeline]
+│       ├── pipeline_log.py  # Traces optionnelles [MONV.pipeline]
+│       ├── cache.py         # Cache clé/valeur via table Supabase `cache`
+│       └── credits_policy.py  # Comptes « crédits illimités » (liste e-mails config)
 ├── frontend/                # Next.js 15 (App Router)
 │   ├── next.config.js         # Rewrite /api/* → backend :8000
 │   └── src/
@@ -102,6 +106,7 @@ Fichier modèle : `backend/.env.example`. Copie-le en `backend/.env` et complèt
 | `GUARD_MODEL` | Non | Modèle guard / clarification (défaut : `anthropic/claude-3.5-haiku`) |
 | `ORCHESTRATOR_MODEL` | Non | Modèle orchestrateur (défaut : `anthropic/claude-3.5-sonnet`) |
 | `PAPPERS_API_KEY` | Non | Enrichissement Pappers |
+| `GOOGLE_PLACES_API_KEY` | Non | Découverte commerces (Places API) + lien SIRENE |
 | `SITE_URL` | Non | Référent OpenRouter (défaut : `http://localhost:3000`) |
 | `JWT_SECRET` | Fortement conseillé en prod | Secret de signature des JWT |
 | `PIPELINE_DEBUG` | Non | `true` → logs détaillés `[MONV.pipeline]` sur stderr |
@@ -169,7 +174,7 @@ Le flux principal est dans `routers/chat.py` :
 2. **Couche 1 — Guard** (`services/guard`) : intention structurée, entités, besoin de clarification.
 3. **Couche 1b — Conversationalist** : génération d’un **QCM** si clarification nécessaire.
 4. **Couche 2 — Orchestrateur** (`services/orchestrator`) : plan d’appels (SIRENE / Pappers), colonnes, **crédits estimés** ; peut redemander une clarification.
-5. **Couche 3 — API Engine** (`services/api_engine`) : exécution déterministe, déduplication par SIREN, enrichissements ciblés (dirigeants, finances).
+5. **Couche 3 — API Engine** (`services/api_engine`) : exécution déterministe, déduplication par SIREN, appels SIRENE / Pappers / **Google Places** selon le plan, enrichissements ciblés (dirigeants, finances, liens Maps).
 6. Persistance : conversation, messages, ligne dans `search_history` avec `results_json` pour l’export ultérieur.
 
 Les appels LLM passent par `utils/llm.py` (client **OpenAI** pointant sur **OpenRouter**).
@@ -181,9 +186,10 @@ Les appels LLM passent par `utils/llm.py` (client **OpenAI** pointant sur **Open
 | Source | Rôle |
 |--------|------|
 | **Recherche Entreprises** (`recherche-entreprises.api.gouv.fr`, paramétrée via `SIRENE_BASE_URL`) | Recherche gratuite : SIREN, NAF, localisation, effectifs, etc. |
+| **Google Places (New)** | Optionnel (`GOOGLE_PLACES_API_KEY`) : commerces / points d’intérêt, fusion avec SIRENE pour SIREN officiel |
 | **Pappers** | Optionnel : recherche enrichie, dirigeants, finances, signaux « contacts » selon le plan |
 
-Sans clé Pappers, une grande partie des cas reste couverte par la base SIRENE / Recherche Entreprises.
+Sans clé Pappers ni Google Places, une grande partie des cas reste couverte par la base SIRENE / Recherche Entreprises.
 
 ---
 
@@ -237,3 +243,5 @@ python prospection_pme.py
 ---
 
 *MONV — prospection B2B conversationnelle sur données France.*
+
+**Dernière mise à jour :** avril 2026.
