@@ -413,7 +413,7 @@ export default function Home() {
                     onClick={() => openAuth("register")}
                     className="inline-flex items-center gap-2 bg-white text-gray-950 px-6 py-2.5 rounded-lg font-semibold hover:bg-gray-200 transition-colors text-sm"
                   >
-                    S&apos;inscrire
+                    S&apos;inscrire — 5 crédits offerts
                     <ArrowRight size={15} />
                   </button>
                   <button
