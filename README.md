@@ -7,7 +7,7 @@ MONV est une application **full stack** : un chat guide la recherche, des modèl
 
 ---
 
-## Sommaire 
+## Sommaire :
 
 - [Architecture du dépôt](#architecture-du-dépôt)
 - [Prérequis](#prérequis)
