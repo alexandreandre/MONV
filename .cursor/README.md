@@ -2,7 +2,7 @@
 
 Ce dossier contient la **configuration Cursor** propre au dépôt : règles que l’agent et l’IA utilisent pour rester alignés avec la stack et les conventions du projet.
 
-Il complète (sans les remplacer) les fichiers à la racine comme [`AGENTS.md`](../AGENTS.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md) et les README de `backend/` et `frontend/`.
+Il complète (sans les remplacer) le [`README.md`](../README.md) à la racine ; d’autres guides (`AGENTS.md`, `CONTRIBUTING.md`, README par app) peuvent être ajoutés par l’équipe s’ils existent.
 
 ---
 
@@ -29,10 +29,12 @@ Il complète (sans les remplacer) les fichiers à la racine comme [`AGENTS.md`](
 └── skills/                 ← skills Agent (fichiers SKILL.md par dossier)
     ├── begin/
     ├── check-feature/
+    ├── commit/
     ├── debug/
     ├── etat/
     ├── frontend-design/
     ├── merge-dev-to-main/
+    ├── propose-fonctionnality/
     ├── push/
     └── test/
 ```
@@ -59,7 +61,7 @@ Il complète (sans les remplacer) les fichiers à la racine comme [`AGENTS.md`](
 | | |
 |--|--|
 | **Nature** | Règle projet au format **`.mdc`** (YAML + Markdown). Contient les conventions Python / FastAPI pour tout ce qui est sous `backend/`. |
-| **Contenu actuel (résumé)** | Point d’entrée `app.main:app`, couches et imports, style et logging, pas de refactor hors scope, français pour les messages utilisateur, pas de migration SQL hors processus (aligné `AGENTS.md`). |
+| **Contenu actuel (résumé)** | Point d’entrée `main:app`, dossiers `routers/` / `services/` / `models/` / `utils/`, logging pipeline (`pipeline_log`), tests pytest + CI sans Supabase réel, français pour les messages utilisateur, migrations sous `supabase/migrations/`. |
 | **Frontmatter actuel** | `globs: backend/**`, `alwaysApply: false`. |
 
 **Comment Cursor l’utilise**
@@ -74,7 +76,7 @@ Il complète (sans les remplacer) les fichiers à la racine comme [`AGENTS.md`](
 
 **Ce que vous ne faites pas**
 
-- Ne pas dupliquer tout `AGENTS.md` dans ce fichier : la règle reste un **rappel ciblé** ; le détail architectural reste dans `backend/app/README.md` et `AGENTS.md`.
+- Ne pas dupliquer tout le README racine dans ce fichier : la règle reste un **rappel ciblé** ; le détail d’architecture est dans le [`README.md`](../README.md) du dépôt.
 
 **Quand modifier ce fichier**
 
@@ -88,7 +90,7 @@ Il complète (sans les remplacer) les fichiers à la racine comme [`AGENTS.md`](
 | | |
 |--|--|
 | **Nature** | Règle projet **`.mdc`** pour tout ce qui est sous `frontend/`. |
-| **Contenu actuel (résumé)** | React, Vite, TypeScript, UI (Radix / shadcn selon le code), Supabase si déjà le pattern du fichier, imports, pas de gros refactors hors demande, textes UI en français, `npm run lint` et captures pour PR UI. |
+| **Contenu actuel (résumé)** | Next.js 15 App Router, React 19, TypeScript, Tailwind, imports, pas de gros refactors hors demande, textes UI en français ; qualité via `npm run build` (pas de script `lint` npm actuellement). |
 | **Frontmatter actuel** | `globs: frontend/**`, `alwaysApply: false`. |
 
 **Comment Cursor l’utilise**
@@ -152,7 +154,7 @@ Corps en Markdown.
 2. Renseigner `description`, `globs` (et `alwaysApply: true` seulement si vraiment transverse).
 3. Rédiger le corps : rappels actionnables + liens vers la doc du dépôt.
 4. **Mettre à jour ce `README.md`** : ajouter une sous-section « Fichier par fichier » pour le nouveau fichier.
-5. Vérifier la cohérence avec [`AGENTS.md`](../AGENTS.md).
+5. Vérifier la cohérence avec le [`README.md`](../README.md) racine et les règles jumelles sous `.claude/rules/` si elles existent.
 
 ---
 
@@ -160,8 +162,7 @@ Corps en Markdown.
 
 | Fichier / zone | Rôle |
 |----------------|------|
-| [`AGENTS.md`](../AGENTS.md) | Vue d’ensemble ; les `.mdc` résument ou ciblent par dossier. |
-| [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Commits et branches ; rarement dupliqué ici. |
+| [`README.md`](../README.md) | Vue d’ensemble du dépôt MONV ; les `.mdc` résument les conventions par dossier. |
 | `.github/` | Workflows et prompts GitHub Actions ; indépendant des règles Cursor locales. |
 
 ---
@@ -172,7 +173,7 @@ Corps en Markdown.
 |----------|--------|
 | La règle backend/frontend ne semble pas suivie | Vérifier que des fichiers sous `backend/` ou `frontend/` sont bien dans le contexte ; référencer explicitement `@.cursor/rules/<fichier>.mdc` ou un fichier du bon dossier. |
 | `globs` incorrect | Les chemins sont relatifs à la **racine du workspace** (souvent la racine du repo). |
-| Contradiction entre règles et doc | Mettre à jour la doc canonique (`AGENTS.md`, README) **et** le `.mdc` concerné. |
+| Contradiction entre règles et doc | Mettre à jour le README canonique **et** le `.mdc` concerné (ainsi que `.claude/rules/` en miroir). |
 
 ---
 
@@ -185,4 +186,4 @@ Corps en Markdown.
 | **`rules/frontend.mdc`** | S’applique au contexte `frontend/**` ; idem pour le front. |
 | **`skills/*/`** | Workflows Agent (Git, tests, debug, design…) : consulter ou attacher le `SKILL.md` du dossier concerné. |
 
-Pour toute évolution majeure des conventions : mettre à jour **`AGENTS.md` / README des apps** et les **`.mdc`** correspondants.
+Pour toute évolution majeure des conventions : mettre à jour le **README** (racine ou apps) et les **`.mdc`** correspondants (`.cursor` et `.claude` en parallèle).

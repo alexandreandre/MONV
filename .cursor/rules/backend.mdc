@@ -1,0 +1,16 @@
+---
+description: Conventions Python/FastAPI pour backend/ (MONV)
+globs: backend/**
+alwaysApply: false
+---
+
+# Backend (`backend/`)
+
+- **Point d’entrée** : `main:app` dans `backend/main.py` ; lancer avec `uvicorn main:app --reload --port 8000` **depuis le répertoire `backend/`** pour que `.env` et la résolution des chemins (`EXPORTS_DIR`, etc.) restent correctes.
+- **Structure** : `routers/` (auth, chat, search, credits), `services/` (filtre, guard, orchestrateur, SIRENE, Pappers, Google Places, export…), `models/` (client Supabase, schémas Pydantic), `utils/` (`llm`, `pipeline_log`, `cache`, politique crédits).
+- **Imports** : suivre le style existant (`from config`, `from models`, `from services`…). Pas de refactors transverses non demandés.
+- **Logging** : pipeline via `utils.pipeline_log` (`configure_pipeline_logging`, `plog`) ; éviter les `print` en logique durable.
+- **Portée** : chaque ligne du diff doit servir la tâche ; pas de « drive-by » hors demande.
+- **Messages utilisateur** : chaînes exposées au client en **français** (cohérent avec le produit).
+- **Base de données** : schéma dans `backend/supabase/migrations/` ; pas de migration SQL improvisée hors processus (revue + RLS si exposition client).
+- **Tests / CI** : `backend/tests/` avec `TestClient` ; en CI, `SKIP_DB_VERIFY_ON_STARTUP` et placeholders `SUPABASE_*` comme dans `tests/test_health.py` (voir `.github/workflows/ci.yml` — pas de projet Supabase réel requis pour pytest).
