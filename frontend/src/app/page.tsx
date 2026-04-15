@@ -29,6 +29,14 @@ type Page = "chat" | "dashboard" | "credits";
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [showAuth, setShowAuth] = useState(false);
+  const [authInitialMode, setAuthInitialMode] = useState<"login" | "register">(
+    "register"
+  );
+
+  const openAuth = useCallback((mode: "login" | "register" = "register") => {
+    setAuthInitialMode(mode);
+    setShowAuth(true);
+  }, []);
   const [page, setPage] = useState<Page>("chat");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -165,7 +173,7 @@ export default function Home() {
   const handleSend = useCallback(
     async (text: string) => {
       if (!user) {
-        setShowAuth(true);
+        openAuth("register");
         return;
       }
 
@@ -222,7 +230,7 @@ export default function Home() {
       cleanupProgress();
       setSending(false);
     },
-    [user, currentConvId, loadConversations, addToast]
+    [user, currentConvId, loadConversations, addToast, openAuth]
   );
 
   const handleQcmSubmit = useCallback(
@@ -293,7 +301,7 @@ export default function Home() {
 
   const handleTemplateSelect = (query: string) => {
     if (!user) {
-      setShowAuth(true);
+      openAuth("register");
       return;
     }
     handleSend(query);
@@ -399,13 +407,23 @@ export default function Home() {
               </div>
 
               {!user && (
-                <button
-                  onClick={() => setShowAuth(true)}
-                  className="mt-6 inline-flex items-center gap-2 bg-white text-gray-950 px-6 py-2.5 rounded-lg font-semibold hover:bg-gray-200 transition-colors text-sm"
-                >
-                  Commencer — 5 crédits offerts
-                  <ArrowRight size={15} />
-                </button>
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => openAuth("register")}
+                    className="inline-flex items-center gap-2 bg-white text-gray-950 px-6 py-2.5 rounded-lg font-semibold hover:bg-gray-200 transition-colors text-sm"
+                  >
+                    S&apos;inscrire
+                    <ArrowRight size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openAuth("login")}
+                    className="inline-flex items-center justify-center px-6 py-2.5 rounded-lg font-semibold text-sm text-white border border-gray-700 hover:bg-white/[0.06] hover:border-gray-600 transition-colors"
+                  >
+                    Se connecter
+                  </button>
+                </div>
               )}
             </div>
 
@@ -462,7 +480,11 @@ export default function Home() {
       </div>
 
       {showAuth && (
-        <AuthModal onAuth={handleAuth} onClose={() => setShowAuth(false)} />
+        <AuthModal
+          initialMode={authInitialMode}
+          onAuth={handleAuth}
+          onClose={() => setShowAuth(false)}
+        />
       )}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>

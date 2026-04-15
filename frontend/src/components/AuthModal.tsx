@@ -7,10 +7,16 @@ import { X } from "lucide-react";
 interface Props {
   onAuth: (user: AuthResponse["user"]) => void;
   onClose: () => void;
+  /** Ouverture depuis la landing : inscription ou connexion */
+  initialMode?: "login" | "register";
 }
 
-export default function AuthModal({ onAuth, onClose }: Props) {
-  const [mode, setMode] = useState<"login" | "register">("register");
+export default function AuthModal({
+  onAuth,
+  onClose,
+  initialMode = "register",
+}: Props) {
+  const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -56,7 +62,7 @@ export default function AuthModal({ onAuth, onClose }: Props) {
           </h2>
           <p className="mt-1 text-sm text-gray-500">
             {mode === "register"
-              ? "5 crédits offerts à l'inscription"
+              ? "Inscription rapide, sans engagement"
               : "Content de vous revoir"}
           </p>
         </div>
@@ -119,7 +125,7 @@ export default function AuthModal({ onAuth, onClose }: Props) {
             {loading
               ? "Chargement..."
               : mode === "register"
-                ? "Créer mon compte"
+                ? "S'inscrire"
                 : "Se connecter"}
           </button>
         </form>
