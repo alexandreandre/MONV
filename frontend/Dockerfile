@@ -9,6 +9,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Next.js peut fonctionner sans assets dans public ; le dossier doit exister pour le COPY runner.
+RUN mkdir -p public
+
 ARG BACKEND_INTERNAL_URL=http://127.0.0.1:8000
 ENV BACKEND_INTERNAL_URL=${BACKEND_INTERNAL_URL}
 
