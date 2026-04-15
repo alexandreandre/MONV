@@ -59,6 +59,31 @@ OUT_OF_SCOPE_MESSAGE = (
     "- *\"Quels sont les fournisseurs d'emballage en Île-de-France ?\"*"
 )
 
+GREETING_MESSAGE = (
+    "Bonjour ! Je suis **MONV**, ton assistant de prospection B2B.\n\n"
+    "Dis-moi quel type d'entreprise tu cherches et où, et je lance la recherche pour toi.\n\n"
+    "Par exemple :\n"
+    "- *\"Je cherche des PME du BTP à Lyon\"*\n"
+    "- *\"Restaurants japonais à Bordeaux\"*\n"
+    "- *\"Cabinets comptables à Paris\"*"
+)
+
+META_QUESTION_MESSAGE = (
+    "**MONV** est un outil de recherche d'entreprises en France.\n\n"
+    "**Comment ça marche :**\n"
+    "1. Décris ta cible (secteur, zone, taille...)\n"
+    "2. Je lance la recherche sur les bases officielles (SIRENE, Pappers, Google Places)\n"
+    "3. Tu obtiens un aperçu des résultats\n"
+    "4. Tu peux exporter la liste complète (Excel / CSV) en utilisant tes crédits\n\n"
+    "**Ce que je sais chercher :** clients, prestataires, fournisseurs, partenaires, "
+    "concurrents, dirigeants — dans tous les secteurs et toutes les régions de France.\n\n"
+    "Essaie par exemple : *\"Trouve-moi des ESN en Île-de-France\"*"
+)
+
+THANKS_MESSAGE = (
+    "Avec plaisir ! N'hésite pas si tu as une autre recherche à lancer."
+)
+
 
 @router.post("/send")
 async def send_message(
@@ -125,12 +150,24 @@ async def send_message(
         missing=guard_result.missing_criteria,
     )
 
-    if guard_result.intent == "hors_scope":
+    if guard_result.intent in ("hors_scope", "salutation", "meta_question"):
+        if guard_result.intent == "salutation":
+            reply = GREETING_MESSAGE
+        elif guard_result.intent == "meta_question":
+            reply = META_QUESTION_MESSAGE
+        else:
+            reply = OUT_OF_SCOPE_MESSAGE
+
+        # "Merci" détecté
+        lower_msg = req.message.strip().lower()
+        if any(w in lower_msg for w in ("merci", "thanks", "super", "parfait", "génial")):
+            reply = THANKS_MESSAGE
+
         msg = Message(
             id=gen_uuid(),
             conversation_id=conv.id,
             role="assistant",
-            content=OUT_OF_SCOPE_MESSAGE,
+            content=reply,
             message_type="text",
             metadata_json=None,
             created_at=datetime.now(timezone.utc),

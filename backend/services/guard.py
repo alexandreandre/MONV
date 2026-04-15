@@ -34,11 +34,14 @@ INTENTS POSSIBLES :
 - "recherche_entreprise" : l'utilisateur cherche des entreprises (clients, prestataires, fournisseurs, partenaires, concurrents...)
 - "recherche_dirigeant" : l'utilisateur cherche des dirigeants/contacts de sociétés
 - "enrichissement" : l'utilisateur veut enrichir des données existantes (emails, téléphones, CA)
-- "hors_scope" : uniquement si VRAIMENT rien à voir (ne devrait quasi jamais arriver)
+- "salutation" : salutation, remerciement, politesse ("Bonjour", "Merci", "Salut", "Au revoir")
+- "meta_question" : question sur MONV lui-même ("Comment ça marche ?", "Combien de crédits ?", "Que peux-tu faire ?")
+- "hors_scope" : uniquement si VRAIMENT rien à voir avec la recherche d'entreprises ni avec MONV (poèmes, blagues, code, culture générale...)
 
 CODES NAF fréquents (2 premiers chiffres) :
-- 10-33: Industrie (10=alimentaire, 20=chimie, 25=métallurgie, 26=électronique, 28=machines, 29=auto, 41-43=BTP)
-- 45-47: Commerce
+- 10-33: Industrie (10=alimentaire, 20=chimie, 25=métallurgie, 26=électronique, 28=machines, 29=auto)
+- 41-43: BTP / Construction
+- 45-47: Commerce (45=auto, 46=gros, 47=détail) — pour "commerce" en général utilise "45" ET les sous-secteurs
 - 49-53: Transport
 - 55-56: Hébergement/Restauration
 - 58-63: Information/Communication (58=édition, 62=informatique, 63=services info)
@@ -91,7 +94,8 @@ RÈGLES :
 - Si la requête est TROP vague pour lancer une recherche (ni secteur, ni zone, ni mots-clés) → mets clarification_needed=true et remplis missing_criteria
 - Dès qu'il y a un secteur ET une zone, OU des mots-clés précis → clarification_needed=false (on lance la recherche, pas besoin de demander taille ou CA)
 - Ne demande JAMAIS la taille ou le CA si le secteur et la zone sont déjà connus — fais preuve de bon sens
-- Sois intelligent sur les secteurs : "BTP" → codes NAF 41-43, "tech" → 62, "SaaS" → 58/62
+- Sois intelligent sur les secteurs : "BTP" → codes NAF 41-43, "tech" → 62, "SaaS" → 58/62, "commerce" → 45-47 (utilise le range), "industrie" → 10-33 (utilise le range)
+- Pour les grands secteurs couvrant plusieurs codes NAF, utilise le range (ex. "10-33" pour industrie, "45-47" pour commerce, "41-43" pour BTP)
 - Si l'utilisateur dit "PME" sans préciser la taille → taille_min=10, taille_max=249
 - "startup" → taille_min=1, taille_max=49, date_creation_apres=date récente
 

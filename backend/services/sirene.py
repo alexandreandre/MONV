@@ -62,6 +62,21 @@ _REGION_NAME_TO_CODE: dict[str, str] = {
     "provence-alpes-cote d'azur": "93",
     "provence alpes cote d'azur": "93",
     "corse": "94",
+    # Appellations colloquiales multi-régions
+    "sud-est": "93",       # PACA principalement
+    "sud est": "93",
+    "sud-ouest": "75",     # Nouvelle-Aquitaine principalement
+    "sud ouest": "75",
+    "nord-est": "44",      # Grand Est
+    "nord est": "44",
+    "nord-ouest": "53",    # Bretagne
+    "nord ouest": "53",
+    "grand-ouest": "52",   # Pays de la Loire
+    "grand ouest": "52",
+    "grand-sud": "76",     # Occitanie
+    "grand sud": "76",
+    "centre": "24",
+    "centre-val-de-loire": "24",
 }
 
 def _codes_marseille_arrondissements() -> str:
@@ -369,6 +384,17 @@ def normalize_recherche_entreprises_params(params: dict) -> dict:
             p.pop("region", None)
 
     _sanitize_activite_principale_param(p)
+
+    # ── tranche_effectif_salarie : ne garder que les codes INSEE valides ─
+    _VALID_TRANCHES = {"00", "01", "02", "03", "11", "12", "21", "22", "31", "32", "41", "42", "51", "52", "53"}
+    if "tranche_effectif_salarie" in p:
+        raw_tranches = str(p["tranche_effectif_salarie"]).split(",")
+        valid = [t.strip() for t in raw_tranches if t.strip() in _VALID_TRANCHES]
+        if valid:
+            p["tranche_effectif_salarie"] = ",".join(valid)
+        else:
+            plog("sirene_invalid_tranches_removed", raw=p["tranche_effectif_salarie"])
+            p.pop("tranche_effectif_salarie")
 
     # ── q : retirer les mots-clés sectoriels si un filtre NAF est déjà actif ─
     has_naf = bool(

@@ -99,26 +99,58 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
 
     if len(all_results) < 5:
         for call in sorted_calls:
-            if call.source != "sirene" or call.action != "search" or not call.params.get("q"):
+            if call.source != "sirene" or call.action != "search":
                 continue
-            has_filter = (
-                call.params.get("activite_principale")
-                or call.params.get("section_activite_principale")
-                or call.params.get("region")
-                or call.params.get("departement")
-                or call.params.get("code_commune")
-            )
-            if not has_filter:
-                continue
-            broadened = {k: v for k, v in call.params.items() if k != "q"}
-            plog("sirene_broaden_retry", original_q=call.params["q"], params=broadened)
-            results = await search_sirene(broadened, max_pages=5)
-            plog("sirene_broaden_result", nb=len(results))
-            for r in results:
-                key = _dedup_key(r)
-                if key not in seen_keys:
-                    seen_keys.add(key)
-                    all_results.append(r)
+
+            # Stratégie 1 : retirer "q" si d'autres filtres existent
+            if call.params.get("q"):
+                has_filter = (
+                    call.params.get("activite_principale")
+                    or call.params.get("section_activite_principale")
+                    or call.params.get("region")
+                    or call.params.get("departement")
+                    or call.params.get("code_commune")
+                )
+                if has_filter:
+                    broadened = {k: v for k, v in call.params.items() if k != "q"}
+                    plog("sirene_broaden_retry", original_q=call.params["q"], params=broadened)
+                    results = await search_sirene(broadened, max_pages=5)
+                    plog("sirene_broaden_result", nb=len(results))
+                    for r in results:
+                        key = _dedup_key(r)
+                        if key not in seen_keys:
+                            seen_keys.add(key)
+                            all_results.append(r)
+
+            # Stratégie 2 : élargir code_commune → departement
+            if len(all_results) < 5 and call.params.get("code_commune"):
+                cc = str(call.params["code_commune"])
+                dept = cc[:2] if not cc.startswith("97") else cc[:3]
+                broadened = {k: v for k, v in call.params.items() if k != "code_commune"}
+                broadened["departement"] = dept
+                plog("sirene_broaden_geo", from_commune=cc, to_dept=dept)
+                results = await search_sirene(broadened, max_pages=5)
+                plog("sirene_broaden_geo_result", nb=len(results))
+                for r in results:
+                    key = _dedup_key(r)
+                    if key not in seen_keys:
+                        seen_keys.add(key)
+                        all_results.append(r)
+
+            # Stratégie 3 : élargir departement → region
+            if len(all_results) < 5 and call.params.get("departement") and not call.params.get("code_commune"):
+                broadened = {k: v for k, v in call.params.items() if k != "departement"}
+                if call.params.get("region"):
+                    pass
+                else:
+                    plog("sirene_broaden_dept_drop", dept=call.params["departement"])
+                    results = await search_sirene(broadened, max_pages=5)
+                    plog("sirene_broaden_dept_result", nb=len(results))
+                    for r in results:
+                        key = _dedup_key(r)
+                        if key not in seen_keys:
+                            seen_keys.add(key)
+                            all_results.append(r)
 
     return SearchResults(
         total=len(all_results),

@@ -48,6 +48,10 @@ MAPPING codes NAF → section lettre :
 10-33→C, 41-43→F, 45-47→G, 49-53→H, 55-56→I, 58-63→J,
 64-66→K, 68→L, 69-75→M, 77-82→N, 85→P, 86-88→Q
 
+IMPORTANT — Quand le Guard fournit un code NAF range (ex. "10-33", "45-47") :
+- Utilise section_activite_principale avec la lettre correspondante (C, G, etc.)
+- NE JAMAIS envoyer un range comme "10-33" dans activite_principale
+
 RÈGLES DE COÛT (crédits) :
 - Recherche SIRENE seule (<100 résultats) : 1 crédit
 - Recherche SIRENE + Pappers (<500 résultats) : 3 crédits
@@ -121,11 +125,13 @@ EXEMPLE — « boutiques de padel en PACA » :
     ],
     "estimated_credits": 3,
     "description": "Multi-source padel PACA : Google Places + clubs (93.12Z) + installations (93.11Z) + détaillants sport (47.64Z) + recherche nom",
-    "columns": ["nom", "siren", "siret", "activite_principale", "libelle_activite", "adresse", "code_postal", "ville", "tranche_effectif", "date_creation", "telephone", "site_web", "google_maps_url"]
+    "columns": ["nom", "siren", "siret", "activite_principale", "libelle_activite", "adresse", "code_postal", "ville", "departement", "region", "forme_juridique", "tranche_effectif", "effectif_label", "date_creation", "telephone", "site_web", "google_maps_url"]
 }
 
 RÈGLES GÉNÉRALES :
-- Si l'utilisateur demande des dirigeants ou du CA, ajoute une étape Pappers APRÈS la recherche principale
+- Si l'utilisateur demande des dirigeants ou du CA, ajoute une étape Pappers APRÈS la recherche SIRENE principale
+- Mets TOUJOURS une recherche SIRENE en priority=1 comme source principale, même si Pappers est utilisé pour l'enrichissement
+- Si ca_min / ca_max est demandé : SIRENE d'abord (priority=1), puis Pappers get_finances (priority=2) pour filtrer par CA
 - Limite la recherche SIRENE : utilise les filtres de tranche d'effectif pour réduire les résultats
 - Si pas de tranche spécifiée et requête dit "PME" → tranche "11,12,21,22,31,32" (10-499 salariés)
 - Maximum 500 résultats par requête (20 pages de 25)
@@ -271,15 +277,33 @@ async def run_orchestrator(guard_result: GuardResult) -> ExecutionPlan:
 
     api_calls = []
     for call in result.get("api_calls", []):
+        params = call.get("params", {})
+        # Normaliser activite_principale : un range comme "10-33" ou une division
+        # seule ne sont pas acceptés par l'API SIRENE
+        ap = params.get("activite_principale")
+        if ap and isinstance(ap, str) and "-" in ap:
+            section = _naf_range_to_section(ap)
+            if section:
+                params.pop("activite_principale")
+                params["section_activite_principale"] = section
         api_calls.append(APICall(
             source=call.get("source", "sirene"),
             action=call.get("action", "search"),
-            params=call.get("params", {}),
+            params=params,
             priority=call.get("priority", 1),
         ))
 
     if not api_calls:
         return _build_fallback_plan(guard_result)
+
+    # S'assurer qu'il y a au moins un appel SIRENE ou Google Places pour la source primaire
+    has_search = any(c.action == "search" and c.source in ("sirene", "google_places") for c in api_calls)
+    if not has_search:
+        fb = _build_fallback_plan(guard_result)
+        sirene_calls = [c for c in fb.api_calls if c.source == "sirene" and c.action == "search"]
+        for sc in sirene_calls:
+            sc.priority = 1
+            api_calls.insert(0, sc)
 
     has_gp = any(c.source == "google_places" for c in api_calls)
     default_cols = _default_columns(guard_result.intent, with_google_places=has_gp)
@@ -297,6 +321,34 @@ async def run_orchestrator(guard_result: GuardResult) -> ExecutionPlan:
         clarification_needed=result.get("clarification_needed", False),
         clarification_question=result.get("clarification_question"),
     )
+
+
+def _normalize_naf_code(code_naf: str | None) -> str | None:
+    """Normalise un code NAF extrait par le Guard.
+    
+    Transforme les ranges (ex. '10-33') en None (on utilise la section lettre à la place)
+    et les codes à 2 chiffres simples sont renvoyés tels quels.
+    """
+    if not code_naf:
+        return None
+    code_naf = str(code_naf).strip()
+    if "-" in code_naf:
+        return None
+    if code_naf.isdigit() and len(code_naf) <= 2:
+        return code_naf.zfill(2)
+    return code_naf
+
+
+def _naf_range_to_section(code_naf: str | None) -> str | None:
+    """Convertit un range NAF (ex. '10-33', '45-47') en section lettre."""
+    if not code_naf or "-" not in str(code_naf):
+        return None
+    parts = str(code_naf).split("-")
+    if len(parts) != 2:
+        return None
+    start = parts[0].strip()
+    section = NAF_TO_SECTION.get(start)
+    return section
 
 
 def _build_fallback_plan(guard_result: GuardResult) -> ExecutionPlan:
@@ -367,10 +419,14 @@ def _build_fallback_plan(guard_result: GuardResult) -> ExecutionPlan:
     else:
         params = {"per_page": 25, "etat_administratif": "A"}
         params.update(geo_params)
-        if e.code_naf:
-            section = NAF_TO_SECTION.get(e.code_naf)
+        normalized_naf = _normalize_naf_code(e.code_naf)
+        range_section = _naf_range_to_section(e.code_naf)
+        if normalized_naf:
+            section = NAF_TO_SECTION.get(normalized_naf)
             if section:
                 params["section_activite_principale"] = section
+        elif range_section:
+            params["section_activite_principale"] = range_section
         if tranche_param:
             params["tranche_effectif_salarie"] = tranche_param
         if e.mots_cles:
@@ -382,6 +438,11 @@ def _build_fallback_plan(guard_result: GuardResult) -> ExecutionPlan:
     if guard_result.intent == "recherche_dirigeant":
         api_calls.append(APICall(
             source="pappers", action="get_dirigeants", params={}, priority=3,
+        ))
+
+    if e.ca_min or e.ca_max:
+        api_calls.append(APICall(
+            source="pappers", action="get_finances", params={}, priority=3,
         ))
 
     credits = 1
@@ -411,8 +472,22 @@ def _has_google_places_key() -> bool:
 
 
 def _default_columns(intent: str, *, with_google_places: bool = False) -> list[str]:
-    base = ["nom", "siren", "siret", "activite_principale", "libelle_activite",
-            "adresse", "code_postal", "ville", "tranche_effectif", "date_creation"]
+    base = [
+        "nom",
+        "siren",
+        "siret",
+        "activite_principale",
+        "libelle_activite",
+        "adresse",
+        "code_postal",
+        "ville",
+        "departement",
+        "region",
+        "forme_juridique",
+        "tranche_effectif",
+        "effectif_label",
+        "date_creation",
+    ]
     if with_google_places:
         base.extend(["telephone", "site_web", "google_maps_url"])
     if intent == "recherche_dirigeant":
