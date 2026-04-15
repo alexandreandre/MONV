@@ -86,7 +86,13 @@ async def export_results(
     if req.format == "csv":
         filepath = generate_csv(search_results)
     else:
-        filepath = generate_excel(search_results, search.query_text)
+        filepath = generate_excel(
+            search_results,
+            query_text=search.query_text or "",
+            intent=search.intent or "recherche_entreprise",
+            entities=entities,
+            credits_used=search.credits_used,
+        )
 
     await search_history_update(
         supabase,
@@ -120,8 +126,22 @@ def _infer_columns(
     entities: dict,
     results: list[CompanyResult] | None = None,
 ) -> list[str]:
-    base = ["nom", "siren", "siret", "activite_principale", "libelle_activite",
-            "adresse", "code_postal", "ville", "effectif_label", "date_creation"]
+    base = [
+        "nom",
+        "siren",
+        "siret",
+        "activite_principale",
+        "libelle_activite",
+        "adresse",
+        "code_postal",
+        "ville",
+        "departement",
+        "region",
+        "forme_juridique",
+        "tranche_effectif",
+        "effectif_label",
+        "date_creation",
+    ]
     if intent == "recherche_dirigeant":
         base.extend(["dirigeant_nom", "dirigeant_prenom", "dirigeant_fonction"])
     if entities.get("ca_min") or entities.get("ca_max"):
@@ -130,6 +150,8 @@ def _infer_columns(
         base.append("telephone")
     if results and any(r.site_web for r in results):
         base.append("site_web")
+    if results and any(r.email for r in results):
+        base.append("email")
     base.append("lien_annuaire")
     if results and any(r.google_maps_url for r in results):
         base.append("google_maps_url")
