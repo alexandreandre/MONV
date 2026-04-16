@@ -1,0 +1,273 @@
+"""Tests du service Atelier — fonctions pures, sans LLM ni Supabase."""
+
+from __future__ import annotations
+
+import os
+
+import pytest
+
+os.environ.setdefault("SKIP_DB_VERIFY_ON_STARTUP", "true")
+os.environ.setdefault("SUPABASE_URL", "https://placeholder.supabase.co")
+os.environ.setdefault("SUPABASE_SERVICE_KEY", "placeholder-service-key")
+
+
+from services.agent import (  # noqa: E402
+    ATELIER_MODE_LABEL,
+    _FALLBACK_ATELIER_QUESTIONS,
+    _parse_qcm_raw,
+    build_brief_metadata,
+    coerce_dossier,
+    dossier_metadata_json,
+)
+from models.schemas import (  # noqa: E402
+    AgentSynthesis,
+    BusinessCanvas,
+    BusinessDossier,
+    FlowMap,
+    ProjectBrief,
+    SegmentResult,
+)
+
+
+# ── Constantes & labels ─────────────────────────────────────────────────────
+
+def test_atelier_mode_label_is_atelier():
+    assert ATELIER_MODE_LABEL == "atelier"
+
+
+def test_fallback_questions_cover_core_topics():
+    """Le fallback doit toujours couvrir les 4 topics stratégiques."""
+    ids = {q.id for q in _FALLBACK_ATELIER_QUESTIONS}
+    assert {"cible", "modele_revenus", "budget", "ambition"} <= ids
+    for q in _FALLBACK_ATELIER_QUESTIONS:
+        assert any(opt.free_text for opt in q.options), (
+            f"Question {q.id} devrait proposer 'Autre' (free_text)"
+        )
+
+
+# ── Parsing QCM LLM ─────────────────────────────────────────────────────────
+
+def test_parse_qcm_adds_autre_when_missing():
+    raw = {
+        "intro": "Hop :",
+        "questions": [
+            {
+                "id": "cible",
+                "question": "Cible ?",
+                "options": [{"id": "b2c", "label": "B2C"}],
+                "multiple": False,
+            }
+        ],
+    }
+    intro, qs = _parse_qcm_raw(raw)
+    assert intro == "Hop :"
+    assert len(qs) == 1
+    assert any(o.free_text for o in qs[0].options), (
+        "Une option 'Autre' free_text doit être ajoutée automatiquement"
+    )
+
+
+def test_parse_qcm_keeps_existing_autre():
+    raw = {
+        "intro": "Questions :",
+        "questions": [
+            {
+                "id": "budget",
+                "question": "Budget ?",
+                "options": [
+                    {"id": "lt20k", "label": "Moins de 20 k€"},
+                    {"id": "autre", "label": "Autre", "free_text": True},
+                ],
+            }
+        ],
+    }
+    _, qs = _parse_qcm_raw(raw)
+    assert sum(1 for o in qs[0].options if o.free_text) == 1
+
+
+def test_parse_qcm_tolerates_empty_payload():
+    intro, qs = _parse_qcm_raw({})
+    assert intro
+    assert qs == []
+
+
+# ── Coercion du dossier LLM ─────────────────────────────────────────────────
+
+_VALID_RAW_DOSSIER = {
+    "brief": {
+        "nom": "Sushi Lyon",
+        "tagline": "Restaurant japonais haut de gamme avec sakés en ligne",
+        "secteur": "Restauration japonaise premium",
+        "localisation": "Lyon",
+        "cible": "B2C",
+        "budget": "250 k€ – 1 M€",
+        "modele_revenus": "Vente sur place + livraison + e-commerce sakés",
+        "ambition": "1 restaurant flagship + 500 clients e-commerce mensuels",
+    },
+    "canvas": {
+        "proposition_valeur": ["Cuisine authentique", "Sakés rares"],
+        "segments_clients": ["CSP+ lyonnais", "Amateurs de saké"],
+        "canaux": ["Boutique physique", "Boutique en ligne"],
+        "relation_client": ["Service à table", "Newsletter"],
+        "sources_revenus": ["Ventes restaurant", "Ventes en ligne"],
+        "ressources_cles": ["Chef sushi", "Cave à saké"],
+        "activites_cles": ["Production", "Logistique"],
+        "partenaires_cles": ["Importateurs japonais"],
+        "structure_couts": ["Loyer", "Matières premières"],
+    },
+    "flows": {
+        "acteurs": ["Client", "Restaurant", "Importateur"],
+        "flux_valeur": [
+            {"origine": "Importateur", "destination": "Restaurant", "label": "Sakés"},
+            {"origine": "Restaurant", "destination": "Client", "label": "Repas"},
+        ],
+        "flux_financiers": [
+            {"origine": "Client", "destination": "Restaurant", "label": "Paiement"}
+        ],
+        "flux_information": [
+            {"origine": "Restaurant", "destination": "Client", "label": "Menu"}
+        ],
+    },
+    "segments": [
+        {
+            "key": "fournisseurs",
+            "label": "Fournisseurs",
+            "description": "Importateurs de produits japonais",
+            "mode": "sous_traitant",
+            "query": "Fournisseurs de produits japonais à Lyon",
+            "icon": "truck",
+        },
+        {
+            "key": "concurrents",
+            "label": "Concurrents",
+            "description": "Restaurants japonais haut de gamme Lyon",
+            "mode": "prospection",
+            "query": "Restaurants japonais haut de gamme à Lyon",
+            "icon": "target",
+        },
+    ],
+    "synthesis": {
+        "forces": ["Positionnement premium", "Double canal"],
+        "risques": ["Coût du loyer", "Approvisionnement"],
+        "prochaines_etapes": ["Étude marché", "Business plan", "Local"],
+        "kpis": ["CA mensuel", "Panier moyen"],
+        "budget_estimatif": "400 k€ sur 12 mois",
+    },
+}
+
+
+def test_coerce_dossier_parses_full_payload():
+    brief, canvas, flows, segments, synthesis = coerce_dossier(_VALID_RAW_DOSSIER)
+    assert isinstance(brief, ProjectBrief)
+    assert brief.nom == "Sushi Lyon"
+    assert isinstance(canvas, BusinessCanvas)
+    assert "Cuisine authentique" in canvas.proposition_valeur
+    assert isinstance(flows, FlowMap)
+    assert len(flows.flux_valeur) == 2
+    assert len(segments) == 2
+    assert {s.mode for s in segments} <= {"prospection", "sous_traitant", "rachat"}
+    assert isinstance(synthesis, AgentSynthesis)
+    assert synthesis.budget_estimatif == "400 k€ sur 12 mois"
+
+
+def test_coerce_dossier_rejects_invalid_segment_mode():
+    """Un segment avec mode 'client' ou 'atelier' doit retomber sur prospection."""
+    bad = dict(_VALID_RAW_DOSSIER)
+    bad = {
+        **bad,
+        "segments": [
+            {**bad["segments"][0], "mode": "atelier"},
+            {**bad["segments"][1], "mode": "client"},
+        ],
+    }
+    _, _, _, segments, _ = coerce_dossier(bad)
+    assert all(s.mode in {"prospection", "sous_traitant", "rachat"} for s in segments)
+    assert all(s.mode == "prospection" for s in segments)
+
+
+def test_coerce_dossier_drops_segments_without_query():
+    bad = {**_VALID_RAW_DOSSIER, "segments": [{"key": "x", "mode": "prospection"}]}
+    _, _, _, segments, _ = coerce_dossier(bad)
+    assert segments == []
+
+
+def test_coerce_dossier_caps_segments_at_five():
+    many = {
+        **_VALID_RAW_DOSSIER,
+        "segments": [
+            {
+                "key": f"seg_{i}",
+                "label": f"Segment {i}",
+                "mode": "prospection",
+                "query": f"requête {i}",
+            }
+            for i in range(12)
+        ],
+    }
+    _, _, _, segments, _ = coerce_dossier(many)
+    assert len(segments) <= 5
+
+
+def test_coerce_dossier_survives_partial_payload():
+    """Un payload très incomplet produit un dossier par défaut, pas un crash."""
+    brief, canvas, flows, segments, synthesis = coerce_dossier({})
+    assert brief.nom == "Mon projet"
+    assert canvas.proposition_valeur == []
+    assert flows.flux_valeur == []
+    assert segments == []
+    assert synthesis.forces == []
+
+
+def test_coerce_dossier_dedupes_segment_keys():
+    dup = {
+        **_VALID_RAW_DOSSIER,
+        "segments": [
+            {"key": "fournisseurs", "label": "A", "mode": "sous_traitant", "query": "q1"},
+            {"key": "fournisseurs", "label": "B", "mode": "prospection", "query": "q2"},
+        ],
+    }
+    _, _, _, segments, _ = coerce_dossier(dup)
+    assert len(segments) == 1
+    assert segments[0].label == "A"
+
+
+# ── Sérialisation metadata_json ─────────────────────────────────────────────
+
+def test_dossier_metadata_json_embeds_mode_atelier():
+    brief, canvas, flows, segments_brief, synthesis = coerce_dossier(_VALID_RAW_DOSSIER)
+    dossier = BusinessDossier(
+        brief=brief,
+        canvas=canvas,
+        flows=flows,
+        segments=[
+            SegmentResult(
+                key=s.key,
+                label=s.label,
+                description=s.description,
+                mode=s.mode,
+                icon=s.icon,
+                query=s.query,
+                total=0,
+                credits_required=0,
+                columns=[],
+                preview=[],
+                map_points=[],
+            )
+            for s in segments_brief
+        ],
+        synthesis=synthesis,
+    )
+    raw = dossier_metadata_json(dossier)
+    import json as _json
+    payload = _json.loads(raw)
+    assert payload["mode"] == ATELIER_MODE_LABEL
+    assert payload["brief"]["nom"] == "Sushi Lyon"
+    assert isinstance(payload["segments"], list)
+
+
+def test_build_brief_metadata_carries_pitch():
+    raw = build_brief_metadata("Mon pitch secret")
+    import json as _json
+    payload = _json.loads(raw)
+    assert payload["pitch"] == "Mon pitch secret"
+    assert payload["mode"] == ATELIER_MODE_LABEL

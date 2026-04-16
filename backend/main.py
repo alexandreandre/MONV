@@ -17,7 +17,7 @@ def _cors_allow_origins() -> list[str]:
     if site and site not in origins:
         origins.append(site)
     return origins
-from routers import auth, chat, search, credits
+from routers import agent, auth, chat, credits, search
 from utils.pipeline_log import configure_pipeline_logging
 
 
@@ -47,6 +47,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(agent.router)
 app.include_router(search.router)
 app.include_router(credits.router)
 

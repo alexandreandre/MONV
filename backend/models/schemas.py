@@ -231,3 +231,120 @@ class ExportResponse(BaseModel):
     download_url: str
     filename: str
     credits_used: int
+
+
+# --- Agent "Atelier" ---------------------------------------------------------
+#
+# L'Atelier est un agent supérieur aux 4 modes : il orchestre *plusieurs*
+# recherches MONV (une par segment d'entreprise pertinent pour un projet de
+# création) et produit un dossier structuré (identité, canvas, flux, synthèse).
+# Les livrables sont stockés dans `Message.metadata_json` avec le
+# message_type="business_dossier". Le QCM de clarification réutilise le
+# message_type="agent_brief" (variante du QCM existant) afin de ne pas
+# perturber le flux `/api/chat/send` classique.
+
+class AgentRequest(BaseModel):
+    """Point d'entrée unifié pour le flow Atelier.
+
+    - Premier tour : `pitch` seul → déclenche un QCM de clarification.
+    - Second tour : `conversation_id` + `answers` → déclenche la génération
+      du dossier complet.
+    """
+    conversation_id: str | None = None
+    pitch: str | None = None
+    answers: str | None = None
+
+
+class BusinessCanvas(BaseModel):
+    """Business Model Canvas — 9 cases, chacune une liste de bullets courts."""
+    proposition_valeur: list[str] = []
+    segments_clients: list[str] = []
+    canaux: list[str] = []
+    relation_client: list[str] = []
+    sources_revenus: list[str] = []
+    ressources_cles: list[str] = []
+    activites_cles: list[str] = []
+    partenaires_cles: list[str] = []
+    structure_couts: list[str] = []
+
+
+class FlowEdge(BaseModel):
+    """Arc d'un diagramme de flux : `from` → `to`, étiqueté."""
+    origine: str
+    destination: str
+    label: str
+
+
+class FlowMap(BaseModel):
+    """Cartographie à 3 couches — valeur, financier, information."""
+    acteurs: list[str] = []
+    flux_valeur: list[FlowEdge] = []
+    flux_financiers: list[FlowEdge] = []
+    flux_information: list[FlowEdge] = []
+
+
+class SegmentBrief(BaseModel):
+    """Une catégorie d'entreprises à chercher via le pipeline MONV.
+
+    `mode` est l'un des 4 modes existants (jamais "atelier").
+    `query` est la requête en langage naturel passée au Guard.
+    """
+    key: str           # identifiant technique (ex: "fournisseurs")
+    label: str         # libellé UI (ex: "Fournisseurs clés")
+    description: str   # explication courte du segment pour l'utilisateur
+    mode: str          # "prospection" | "sous_traitant" | "rachat"
+    query: str         # requête qui sera passée au pipeline MONV
+    icon: str = "building"  # nom Lucide pour l'UI
+
+
+class SegmentResult(BaseModel):
+    """Résultat d'un appel pipeline pour un segment — identique au rendu
+    d'un message `results` classique, enrichi d'une étiquette UI."""
+    key: str
+    label: str
+    description: str
+    mode: str
+    icon: str
+    query: str
+    search_id: str | None = None
+    total: int = 0
+    credits_required: int = 0
+    columns: list[str] = []
+    preview: list[dict] = []
+    map_points: list[dict] = []
+    error: str | None = None
+
+
+class ProjectBrief(BaseModel):
+    """Brief structuré extrait du pitch + QCM."""
+    nom: str              # nom court généré pour le projet
+    tagline: str          # accroche 1 ligne
+    secteur: str          # description textuelle du secteur
+    localisation: str     # ville, département ou région
+    cible: str            # "B2B" | "B2C" | "B2B2C" | "Les deux"
+    budget: str           # fourchette en français
+    modele_revenus: str   # modèle de revenus pressenti
+    ambition: str         # taille visée à 2-3 ans
+
+
+class AgentSynthesis(BaseModel):
+    """Synthèse produite à la fin du parcours Atelier."""
+    forces: list[str] = []
+    risques: list[str] = []
+    prochaines_etapes: list[str] = []
+    kpis: list[str] = []
+    budget_estimatif: str | None = None
+
+
+class BusinessDossier(BaseModel):
+    """Livrable final de l'Atelier — sérialisé dans metadata_json."""
+    brief: ProjectBrief
+    canvas: BusinessCanvas
+    flows: FlowMap
+    segments: list[SegmentResult]
+    synthesis: AgentSynthesis
+
+
+class AgentResponse(BaseModel):
+    conversation_id: str
+    messages: list[MessageOut]
