@@ -18,6 +18,7 @@ import {
   type Conversation,
   type ChatResponse,
   type ExportResponse,
+  type AgentSendResponse,
 } from "@/lib/api";
 import { LANDING_TEMPLATES } from "@/lib/landingTemplates";
 import {
@@ -26,12 +27,15 @@ import {
   normalizeMode,
   type Mode,
 } from "@/lib/modes";
+import { ATELIER_MODE_LABEL } from "@/lib/agents";
 import AuthModal from "@/components/AuthModal";
 import Sidebar from "@/components/Sidebar";
 import ChatInput from "@/components/ChatInput";
 import ChatMessage from "@/components/ChatMessage";
 import TemplateCards from "@/components/TemplateCards";
 import ModeSelector from "@/components/ModeSelector";
+import AgentCard from "@/components/AgentCard";
+import AgentWelcome from "@/components/AgentWelcome";
 import Dashboard from "@/components/Dashboard";
 import CreditsPage from "@/components/CreditsPage";
 import ToastContainer, { type ToastData } from "@/components/Toast";
@@ -39,7 +43,7 @@ import MobileHeader from "@/components/MobileHeader";
 import PipelineProgress, { type PipelineStep } from "@/components/PipelineProgress";
 import { ArrowRight } from "lucide-react";
 
-type Page = "chat" | "dashboard" | "credits";
+type Page = "chat" | "dashboard" | "credits" | "atelier";
 
 function isAbortError(e: unknown): boolean {
   return (
@@ -86,6 +90,9 @@ export default function Home() {
   const [selectedMode, setSelectedMode] = useState<Mode>(DEFAULT_MODE);
   /** Mode de la conversation actuellement chargée (utilisé pour le badge des messages). */
   const [activeConversationMode, setActiveConversationMode] = useState<Mode | null>(null);
+  /** True si la conversation chargée a été créée par l'agent Atelier
+   *  (mode="atelier" côté DB). Priorité sur `activeConversationMode`. */
+  const [isAtelierConversation, setIsAtelierConversation] = useState(false);
   const templates = useMemo(
     () => LANDING_TEMPLATES.filter((t) => normalizeMode(t.mode) === selectedMode),
     [selectedMode]
@@ -201,7 +208,21 @@ export default function Home() {
     setCurrentConvId(null);
     setMessages([]);
     setActiveConversationMode(null);
+    setIsAtelierConversation(false);
     setPage("chat");
+  };
+
+  const handleOpenAtelier = () => {
+    if (!user) {
+      if (sessionHint) return;
+      openAuth("register");
+      return;
+    }
+    setCurrentConvId(null);
+    setMessages([]);
+    setActiveConversationMode(null);
+    setIsAtelierConversation(false);
+    setPage("atelier");
   };
 
   const handleSelectConversation = async (id: string) => {
@@ -212,10 +233,11 @@ export default function Home() {
         `/chat/conversations/${id}`
       );
       setMessages(conv.messages);
+      const rawMode = conv.mode != null ? String(conv.mode).trim() : "";
+      const atelier = rawMode === ATELIER_MODE_LABEL;
+      setIsAtelierConversation(atelier);
       setActiveConversationMode(
-        conv.mode != null && String(conv.mode).trim() !== ""
-          ? normalizeMode(conv.mode)
-          : null
+        atelier || rawMode === "" ? null : normalizeMode(rawMode)
       );
     } catch {
       addToast("error", "Impossible de charger la conversation.");
@@ -276,6 +298,7 @@ export default function Home() {
         if (!currentConvId) {
           setCurrentConvId(res.conversation_id);
           setActiveConversationMode(modeForRequest);
+          setIsAtelierConversation(false);
         }
 
         setMessages((prev) => {
@@ -332,6 +355,65 @@ export default function Home() {
   const handleQcmSubmit = useCallback(
     async (text: string) => {
       if (!user) return;
+
+      // ── Cas Atelier : le QCM → /agent/send avec { conversation_id, answers }
+      //    Produit un dossier (business_dossier) plutôt qu'un results classique.
+      if (isAtelierConversation && currentConvId) {
+        setSending(true);
+        const cleanupProgress = simulatePipelineProgress();
+
+        sendAbortRef.current?.abort();
+        const controller = new AbortController();
+        sendAbortRef.current = controller;
+
+        try {
+          const res = await apiPost<AgentSendResponse>(
+            "/agent/send",
+            {
+              conversation_id: currentConvId,
+              answers: text,
+            },
+            { signal: controller.signal }
+          );
+          if (controller.signal.aborted) return;
+
+          setMessages((prev) => [...prev, ...res.messages]);
+
+          const updatedUser = await apiGet<User>(
+            "/auth/me?token=" + localStorage.getItem("monv_token")
+          );
+          setUser(updatedUser);
+          await loadConversations();
+        } catch (err: any) {
+          if (isAbortError(err)) {
+            addToast("info", "Requête annulée.");
+            return;
+          }
+          const errorMsg: Message = {
+            id: "err-" + Date.now(),
+            role: "assistant",
+            content:
+              "L'Atelier n'a pas pu générer le dossier. Réessaie dans quelques instants.",
+            message_type: "error",
+            metadata_json: null,
+            created_at: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, errorMsg]);
+          addToast(
+            "error",
+            err.message || "Erreur de communication avec l'Atelier."
+          );
+        } finally {
+          if (sendAbortRef.current === controller) {
+            sendAbortRef.current = null;
+          }
+          cleanupProgress();
+          setSending(false);
+        }
+        return;
+      }
+
+      // ── Cas modes classiques : /chat/send ─────────────────────────────────
       setSending(true);
       const cleanupProgress = simulatePipelineProgress();
 
@@ -357,6 +439,7 @@ export default function Home() {
         if (!currentConvId) {
           setCurrentConvId(res.conversation_id);
           setActiveConversationMode(modeForRequest);
+          setIsAtelierConversation(false);
         }
 
         setMessages((prev) => [...prev, ...res.messages]);
@@ -396,7 +479,90 @@ export default function Home() {
       addToast,
       selectedMode,
       activeConversationMode,
+      isAtelierConversation,
     ]
+  );
+
+  const handleAgentStart = useCallback(
+    async (pitch: string) => {
+      if (!user) {
+        if (sessionHint) return;
+        openAuth("register");
+        return;
+      }
+      setSending(true);
+      const cleanupProgress = simulatePipelineProgress();
+
+      sendAbortRef.current?.abort();
+      const controller = new AbortController();
+      sendAbortRef.current = controller;
+
+      const optimisticMsg: Message = {
+        id: "temp-" + Date.now(),
+        role: "user",
+        content: pitch,
+        message_type: "text",
+        metadata_json: JSON.stringify({ mode: ATELIER_MODE_LABEL }),
+        created_at: new Date().toISOString(),
+      };
+
+      // Bascule immédiate vers la vue chat avec le pitch affiché, sans
+      // attendre le retour serveur pour une perception de réactivité.
+      setMessages([optimisticMsg]);
+      setIsAtelierConversation(true);
+      setActiveConversationMode(null);
+      setCurrentConvId(null);
+      setPage("chat");
+
+      try {
+        const res = await apiPost<AgentSendResponse>(
+          "/agent/send",
+          { pitch },
+          { signal: controller.signal }
+        );
+        if (controller.signal.aborted) return;
+
+        setCurrentConvId(res.conversation_id);
+        setMessages((prev) => {
+          const filtered = prev.filter((m) => m.id !== optimisticMsg.id);
+          return [
+            ...filtered,
+            { ...optimisticMsg, id: "user-" + Date.now() },
+            ...res.messages,
+          ];
+        });
+        await loadConversations();
+      } catch (err: any) {
+        if (isAbortError(err)) {
+          addToast("info", "Requête annulée.");
+          setMessages([]);
+          setIsAtelierConversation(false);
+          setPage("atelier");
+          return;
+        }
+        const errorMsg: Message = {
+          id: "err-" + Date.now(),
+          role: "assistant",
+          content:
+            "L'Atelier n'a pas pu démarrer. Réessaie dans quelques instants.",
+          message_type: "error",
+          metadata_json: null,
+          created_at: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+        addToast(
+          "error",
+          err.message || "Erreur de communication avec l'Atelier."
+        );
+      } finally {
+        if (sendAbortRef.current === controller) {
+          sendAbortRef.current = null;
+        }
+        cleanupProgress();
+        setSending(false);
+      }
+    },
+    [user, sessionHint, openAuth, addToast, loadConversations]
   );
 
   const handleExport = async (searchId: string, format: "xlsx" | "csv") => {
@@ -486,6 +652,30 @@ export default function Home() {
     );
   }
 
+  if (page === "atelier" && (user || sessionHint)) {
+    return (
+      <div className="flex h-screen bg-surface-0">
+        {showAuthenticatedChrome && <Sidebar {...sidebarProps} />}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {showAuthenticatedChrome && (
+            <MobileHeader
+              user={user}
+              onMenuOpen={() => setSidebarMobileOpen(true)}
+              onNavigateCredits={() => setPage("credits")}
+            />
+          )}
+          <AgentWelcome
+            onBack={handleNewChat}
+            onSubmit={handleAgentStart}
+            disabled={!user || sending}
+            loading={sending}
+          />
+        </div>
+        <ToastContainer toasts={toasts} onRemove={removeToast} />
+      </div>
+    );
+  }
+
   if (page === "credits" && user) {
     return (
       <div className="flex h-screen bg-surface-0">
@@ -545,7 +735,7 @@ export default function Home() {
                   {CAPABILITIES.map((cap) => (
                     <span
                       key={cap}
-                      className="text-xs text-gray-500 border border-gray-800 rounded-full px-3 py-1"
+                      className="text-xs text-gray-400 border border-white/[0.08] rounded-full px-3 py-1"
                     >
                       {cap}
                     </span>
@@ -574,7 +764,19 @@ export default function Home() {
               </div>
 
               {(user || sessionHint) && (
+                <div className="w-full max-w-2xl mb-3">
+                  <AgentCard onOpen={handleOpenAtelier} disabled={sending || !user} />
+                </div>
+              )}
+
+              {(user || sessionHint) && (
                 <div className="w-full max-w-2xl mb-4">
+                  <div className="flex items-center gap-2 mb-2 px-1">
+                    <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-gray-500">
+                      Ou choisis un mode de recherche
+                    </span>
+                    <span className="flex-1 h-px bg-white/[0.06]" />
+                  </div>
                   <ModeSelector
                     value={selectedMode}
                     onChange={setSelectedMode}
@@ -626,6 +828,7 @@ export default function Home() {
                     exporting={exporting}
                     onQcmSubmit={handleQcmSubmit}
                     conversationMode={activeConversationMode}
+                    isAtelierConversation={isAtelierConversation}
                   />
                 ))}
 
@@ -635,29 +838,50 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="border-t border-gray-800/60 px-4 py-3 bg-surface-0">
-              <div className="max-w-3xl mx-auto">
-                <ChatInput
-                  onSend={handleSend}
-                  disabled={sending}
-                  loading={sending}
-                  onStop={handleStopSend}
-                  placeholder={
-                    MODE_META[activeConversationMode ?? selectedMode].placeholder
-                  }
-                />
-                <p className="text-center text-[11px] text-gray-600 mt-2">
-                  {activeConversationMode && activeConversationMode !== "prospection" ? (
-                    <>
-                      Mode <span className="text-gray-400">{MODE_META[activeConversationMode].label}</span>
-                      {" "}— données publiques INSEE & RCS, résultats indicatifs
-                    </>
-                  ) : (
-                    "Données publiques INSEE & RCS — résultats indicatifs"
-                  )}
-                </p>
+            {isAtelierConversation ? (
+              // Dans une session Atelier, l'utilisateur n'interagit qu'avec le
+              // QCM puis consulte son dossier. Le « + Nouveau chat » permet de
+              // repartir sur une recherche classique ou un nouvel Atelier.
+              <div className="border-t border-gray-800/60 px-4 py-3 bg-surface-0">
+                <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+                  <p className="text-[11px] text-gray-500">
+                    Session <span className="text-fuchsia-300">Atelier</span>{" "}
+                    — démarre un nouveau chat pour une recherche classique.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleNewChat}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-surface-1 px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:border-white/[0.18] transition-colors"
+                  >
+                    Nouveau chat
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="border-t border-gray-800/60 px-4 py-3 bg-surface-0">
+                <div className="max-w-3xl mx-auto">
+                  <ChatInput
+                    onSend={handleSend}
+                    disabled={sending}
+                    loading={sending}
+                    onStop={handleStopSend}
+                    placeholder={
+                      MODE_META[activeConversationMode ?? selectedMode].placeholder
+                    }
+                  />
+                  <p className="text-center text-[11px] text-gray-600 mt-2">
+                    {activeConversationMode && activeConversationMode !== "prospection" ? (
+                      <>
+                        Mode <span className="text-gray-400">{MODE_META[activeConversationMode].label}</span>
+                        {" "}— données publiques INSEE & RCS, résultats indicatifs
+                      </>
+                    ) : (
+                      "Données publiques INSEE & RCS — résultats indicatifs"
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

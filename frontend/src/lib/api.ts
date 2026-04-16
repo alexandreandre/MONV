@@ -94,7 +94,14 @@ export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  message_type: "text" | "results" | "clarification" | "qcm" | "error";
+  message_type:
+    | "text"
+    | "results"
+    | "clarification"
+    | "qcm"
+    | "error"
+    | "agent_brief"
+    | "business_dossier";
   metadata_json: string | null;
   created_at: string;
 }
@@ -144,4 +151,86 @@ export interface ExportResponse {
   download_url: string;
   filename: string;
   credits_used: number;
+}
+
+// --- Agent « Atelier » -------------------------------------------------------
+
+export interface AgentSendRequest {
+  conversation_id?: string | null;
+  pitch?: string;
+  answers?: string;
+}
+
+export interface AgentSendResponse {
+  conversation_id: string;
+  messages: Message[];
+}
+
+export interface ProjectBrief {
+  nom: string;
+  tagline: string;
+  secteur: string;
+  localisation: string;
+  cible: string;
+  budget: string;
+  modele_revenus: string;
+  ambition: string;
+}
+
+export interface BusinessCanvas {
+  proposition_valeur: string[];
+  segments_clients: string[];
+  canaux: string[];
+  relation_client: string[];
+  sources_revenus: string[];
+  ressources_cles: string[];
+  activites_cles: string[];
+  partenaires_cles: string[];
+  structure_couts: string[];
+}
+
+export interface FlowEdge {
+  origine: string;
+  destination: string;
+  label: string;
+}
+
+export interface FlowMap {
+  acteurs: string[];
+  flux_valeur: FlowEdge[];
+  flux_financiers: FlowEdge[];
+  flux_information: FlowEdge[];
+}
+
+export interface SegmentResult {
+  key: string;
+  label: string;
+  description: string;
+  mode: string;
+  icon: string;
+  query: string;
+  search_id: string | null;
+  total: number;
+  credits_required: number;
+  columns: string[];
+  preview: Record<string, unknown>[];
+  map_points: Record<string, unknown>[];
+  error?: string | null;
+}
+
+export interface AgentSynthesis {
+  forces: string[];
+  risques: string[];
+  prochaines_etapes: string[];
+  kpis: string[];
+  budget_estimatif: string | null;
+}
+
+export interface BusinessDossierPayload {
+  mode: "atelier";
+  brief: ProjectBrief;
+  canvas: BusinessCanvas;
+  flows: FlowMap;
+  segments: SegmentResult[];
+  synthesis: AgentSynthesis;
 }
