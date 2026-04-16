@@ -74,20 +74,6 @@ export interface QcmQuestion {
   question: string;
   options: QcmOption[];
   multiple?: boolean;
-  /** Libellé court pour le récap côté assistant (ex. « Zone ciblée ») */
-  recap_label?: string | null;
-}
-
-/** Ligne envoyée avec la validation du QCM (corps POST `qcm_answers`). */
-export interface QcmAnswerLine {
-  recap_label: string;
-  values: string[];
-}
-
-/** Payload de validation du QCM (chat + affichage). */
-export interface QcmSubmitPayload {
-  guardMessage: string;
-  qcm_answers: QcmAnswerLine[];
 }
 
 export interface QcmPayload {

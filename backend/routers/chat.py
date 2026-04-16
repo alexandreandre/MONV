@@ -30,12 +30,8 @@ from models.db import (
 )
 from models.entities import User, Conversation, Message, SearchHistory, gen_uuid
 from models.schemas import (
-    ChatRequest,
-    ChatResponse,
-    ConversationOut,
-    MessageOut,
-    QcmAnswerLine,
-    SearchResults,
+    ChatRequest, ChatResponse, MessageOut,
+    ConversationOut, SearchResults,
 )
 from services.filter import run_filter
 from services.guard import run_guard
@@ -89,14 +85,6 @@ THANKS_MESSAGE = (
 )
 
 
-def _qcm_plaintext_for_guard(answers: list[QcmAnswerLine]) -> str:
-    return "\n".join(f"{a.recap_label} : {', '.join(a.values)}" for a in answers)
-
-
-def _qcm_recap_markdown(answers: list[QcmAnswerLine]) -> str:
-    return "\n".join(f"**{a.recap_label}** : {', '.join(a.values)}" for a in answers)
-
-
 @router.post("/send")
 async def send_message(
     req: ChatRequest,
@@ -105,13 +93,6 @@ async def send_message(
 ):
   try:
     now = datetime.now(timezone.utc)
-    qcm_answers_list = req.qcm_answers
-    has_qcm_submit = bool(qcm_answers_list)
-    effective_message = (
-        _qcm_plaintext_for_guard(qcm_answers_list)
-        if qcm_answers_list
-        else req.message
-    )
 
     if req.conversation_id:
         conv = await conversation_get(supabase, req.conversation_id, user.id)
@@ -131,13 +112,9 @@ async def send_message(
         id=gen_uuid(),
         conversation_id=conv.id,
         role="user",
-        content="Choix validés" if has_qcm_submit else req.message,
+        content=req.message,
         message_type="text",
-        metadata_json=(
-            json.dumps({"qcm_choice_submit": True}, ensure_ascii=False)
-            if has_qcm_submit
-            else None
-        ),
+        metadata_json=None,
         created_at=now,
     )
     await message_insert(supabase, user_msg)
@@ -145,7 +122,7 @@ async def send_message(
     response_messages: list[Message] = []
 
     # ── Couche 0 — Filtre scope (modèle cheap) ─────────────────────
-    filter_result = await run_filter(effective_message)
+    filter_result = await run_filter(req.message)
 
     if not filter_result.in_scope:
         msg = Message(
@@ -163,7 +140,7 @@ async def send_message(
 
     # ── Couche 1 — Guard extraction (modèle moyen) ─────────────────
     history = await _get_conversation_history(supabase, conv.id)
-    guard_result = await run_guard(effective_message, history)
+    guard_result = await run_guard(req.message, history)
 
     plog(
         "guard",
@@ -182,7 +159,7 @@ async def send_message(
             reply = OUT_OF_SCOPE_MESSAGE
 
         # "Merci" détecté
-        lower_msg = effective_message.strip().lower()
+        lower_msg = req.message.strip().lower()
         if any(w in lower_msg for w in ("merci", "thanks", "super", "parfait", "génial")):
             reply = THANKS_MESSAGE
 
@@ -209,19 +186,6 @@ async def send_message(
              original_missing=guard_result.missing_criteria)
         guard_result.clarification_needed = False
         guard_result.missing_criteria = []
-
-    if has_qcm_submit and qcm_answers_list:
-        recap_msg = Message(
-            id=gen_uuid(),
-            conversation_id=conv.id,
-            role="assistant",
-            content=_qcm_recap_markdown(qcm_answers_list),
-            message_type="text",
-            metadata_json=None,
-            created_at=datetime.now(timezone.utc),
-        )
-        await message_insert(supabase, recap_msg)
-        response_messages.append(recap_msg)
 
     # ── Couche 1b — QCM de clarification (modèle moyen) ────────────
     if guard_result.clarification_needed:
@@ -327,7 +291,7 @@ async def send_message(
         id=search_id,
         user_id=user.id,
         conversation_id=conv.id,
-        query_text=effective_message,
+        query_text=req.message,
         intent=guard_result.intent,
         entities_json=guard_result.entities.model_dump_json(),
         results_count=search_results.total,

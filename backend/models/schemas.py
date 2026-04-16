@@ -47,17 +47,9 @@ class TokenOut(BaseModel):
 
 # --- Chat ---
 
-class QcmAnswerLine(BaseModel):
-    """Une ligne de réponse au QCM (libellé court + valeurs choisies)."""
-
-    recap_label: str
-    values: list[str]
-
-
 class ChatRequest(BaseModel):
     conversation_id: str | None = None
     message: str
-    qcm_answers: list[QcmAnswerLine] | None = None
 
 
 class MessageOut(BaseModel):
@@ -122,7 +114,6 @@ class QcmQuestion(BaseModel):
     question: str      # texte affiché
     options: list[QcmOption]
     multiple: bool = False  # sélection multiple autorisée
-    recap_label: str | None = None  # libellé court pour le récap assistant (ex. « Zone ciblée »)
 
 
 # --- Orchestrator (Layer 2) ---

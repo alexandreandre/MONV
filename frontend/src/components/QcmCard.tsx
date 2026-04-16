@@ -2,23 +2,13 @@
 
 import { useState } from "react";
 import { Check, ChevronRight, PenLine } from "lucide-react";
-import type { QcmAnswerLine, QcmPayload, QcmSubmitPayload } from "@/lib/api";
+import type { QcmPayload } from "@/lib/api";
 
 interface Props {
   payload: QcmPayload;
-  onSubmit: (payload: QcmSubmitPayload) => void;
+  onSubmit: (answers: string) => void;
   disabled?: boolean;
 }
-
-/** Si le backend / LLM n’a pas fourni recap_label */
-const RECAP_FALLBACK: Record<string, string> = {
-  secteur: "Secteur visé",
-  zone_geo: "Zone ciblée",
-  taille: "Taille d'entreprise",
-  ca: "Chiffre d'affaires",
-  type_resultat: "Type de résultat",
-  date_creation: "Ancienneté",
-};
 
 type Answers = Record<string, { selected: string[]; freeText: string }>;
 
@@ -71,7 +61,7 @@ export default function QcmCard({ payload, onSubmit, disabled }: Props) {
     if (!canSubmit || disabled || submitted) return;
     setSubmitted(true);
 
-    const qcm_answers: QcmAnswerLine[] = [];
+    const lines: string[] = [];
     for (const q of payload.questions) {
       const a = answers[q.id];
       const labels: string[] = [];
@@ -84,20 +74,11 @@ export default function QcmCard({ payload, onSubmit, disabled }: Props) {
         }
       }
       if (labels.length > 0) {
-        const recap_label =
-          (q.recap_label && q.recap_label.trim()) ||
-          RECAP_FALLBACK[q.id] ||
-          q.question.replace(/\?/g, "").trim() ||
-          "Critère";
-        qcm_answers.push({ recap_label, values: labels });
+        lines.push(`${q.question} ${labels.join(", ")}`);
       }
     }
 
-    const guardMessage = qcm_answers
-      .map((line) => `${line.recap_label} : ${line.values.join(", ")}`)
-      .join("\n");
-
-    onSubmit({ guardMessage, qcm_answers });
+    onSubmit(lines.join("\n"));
   };
 
   return (

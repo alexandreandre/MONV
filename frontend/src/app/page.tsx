@@ -17,7 +17,6 @@ import {
   type Conversation,
   type ChatResponse,
   type ExportResponse,
-  type QcmSubmitPayload,
 } from "@/lib/api";
 import { LANDING_TEMPLATES } from "@/lib/landingTemplates";
 import AuthModal from "@/components/AuthModal";
@@ -264,40 +263,22 @@ export default function Home() {
   );
 
   const handleQcmSubmit = useCallback(
-    async (payload: QcmSubmitPayload) => {
+    async (text: string) => {
       if (!user) return;
       setSending(true);
       const cleanupProgress = simulatePipelineProgress();
 
-      const optimisticUserMsg: Message = {
-        id: "temp-qcm-" + Date.now(),
-        role: "user",
-        content: "Choix validés",
-        message_type: "text",
-        metadata_json: JSON.stringify({ qcm_choice_submit: true }),
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, optimisticUserMsg]);
-
       try {
         const res = await apiPost<ChatResponse>("/chat/send", {
           conversation_id: currentConvId,
-          message: payload.guardMessage,
-          qcm_answers: payload.qcm_answers,
+          message: text,
         });
 
         if (!currentConvId) {
           setCurrentConvId(res.conversation_id);
         }
 
-        setMessages((prev) => {
-          const rest = prev.filter((m) => m.id !== optimisticUserMsg.id);
-          const userPersisted: Message = {
-            ...optimisticUserMsg,
-            id: "user-qcm-" + Date.now(),
-          };
-          return [...rest, userPersisted, ...res.messages];
-        });
+        setMessages((prev) => [...prev, ...res.messages]);
 
         const updatedUser = await apiGet<User>(
           "/auth/me?token=" + localStorage.getItem("monv_token")

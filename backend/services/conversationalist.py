@@ -37,8 +37,6 @@ RÈGLES STRICTES :
 4. Adapte les options au contexte de la requête utilisateur
 5. Maximum 3 questions à la fois
 6. "multiple": true UNIQUEMENT si ça a du sens (ex: plusieurs secteurs)
-7. Chaque question DOIT inclure "recap_label" : libellé TRÈS court (2-4 mots, sans point d'interrogation)
-   pour un récapitulatif côté assistant, ex. "Zone ciblée", "Secteur visé", "Taille ciblée"
 
 Réponds UNIQUEMENT avec un JSON valide :
 {
@@ -47,7 +45,6 @@ Réponds UNIQUEMENT avec un JSON valide :
         {
             "id": "secteur",
             "question": "Quel secteur d'activité ?",
-            "recap_label": "Secteur visé",
             "options": [
                 {"id": "btp", "label": "BTP / Construction", "free_text": false},
                 {"id": "tech", "label": "Tech / Informatique", "free_text": false},
@@ -149,15 +146,11 @@ def _parse_questions(raw: dict) -> tuple[str, list[QcmQuestion]]:
         if not has_autre:
             options.append(QcmOption(id="autre", label="Autre", free_text=True))
 
-        rl = q.get("recap_label")
-        recap_label = str(rl).strip() if rl else None
-
         questions.append(QcmQuestion(
             id=str(q.get("id", "")),
             question=str(q.get("question", "")),
             options=options,
             multiple=bool(q.get("multiple", False)),
-            recap_label=recap_label or None,
         ))
 
     return intro, questions
@@ -167,7 +160,6 @@ _FALLBACK_QUESTIONS: dict[str, QcmQuestion] = {
     "secteur": QcmQuestion(
         id="secteur",
         question="Quel secteur d'activité t'intéresse ?",
-        recap_label="Secteur visé",
         options=[
             QcmOption(id="btp", label="BTP / Construction"),
             QcmOption(id="tech", label="Tech / Informatique"),
@@ -181,7 +173,6 @@ _FALLBACK_QUESTIONS: dict[str, QcmQuestion] = {
     "zone_geo": QcmQuestion(
         id="zone_geo",
         question="Quelle zone géographique ?",
-        recap_label="Zone ciblée",
         options=[
             QcmOption(id="idf", label="Paris / Île-de-France"),
             QcmOption(id="aura", label="Lyon / Auvergne-Rhône-Alpes"),
@@ -195,7 +186,6 @@ _FALLBACK_QUESTIONS: dict[str, QcmQuestion] = {
     "taille": QcmQuestion(
         id="taille",
         question="Quelle taille d'entreprise ?",
-        recap_label="Taille d'entreprise",
         options=[
             QcmOption(id="tpe", label="TPE (1-9 salariés)"),
             QcmOption(id="pme", label="PME (10-249 salariés)"),
