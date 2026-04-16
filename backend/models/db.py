@@ -13,7 +13,7 @@ from supabase import Client, create_client
 
 from config import settings
 from gotrue.types import AuthResponse
-from models.entities import Conversation, Message, SearchHistory, User
+from models.entities import Conversation, Message, ProjectFolder, SearchHistory, User
 
 T = TypeVar("T")
 
@@ -209,6 +209,104 @@ async def conversations_list_for_user(client: Client, user_id: str) -> list[Conv
 
     rows = await sb_run(q)
     return [Conversation.from_row(x) for x in rows]
+
+
+async def conversation_update_folder(
+    client: Client, conversation_id: str, user_id: str, folder_id: str | None
+) -> bool:
+    """Met à jour `folder_id` si la conversation appartient à l'utilisateur."""
+    now = _iso_now()
+
+    def q():
+        r = (
+            client.table("conversations")
+            .update({"folder_id": folder_id, "updated_at": now})
+            .eq("id", conversation_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return r.data or []
+
+    rows = await sb_run(q)
+    return bool(rows)
+
+
+async def project_folders_list_for_user(client: Client, user_id: str) -> list[ProjectFolder]:
+    def q():
+        r = (
+            client.table("project_folders")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("sort_position", desc=False)
+            .execute()
+        )
+        return r.data or []
+
+    rows = await sb_run(q)
+    folders = [ProjectFolder.from_row(x) for x in rows]
+    folders.sort(key=lambda f: (f.sort_position, -f.updated_at.timestamp()))
+    return folders
+
+
+async def project_folder_get(
+    client: Client, folder_id: str, user_id: str
+) -> ProjectFolder | None:
+    def q():
+        r = (
+            client.table("project_folders")
+            .select("*")
+            .eq("id", folder_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        return r.data or []
+
+    rows = await sb_run(q)
+    return ProjectFolder.from_row(rows[0]) if rows else None
+
+
+async def project_folder_insert(client: Client, folder: ProjectFolder) -> ProjectFolder:
+    def q():
+        r = client.table("project_folders").insert(folder.to_insert_row()).execute()
+        return r.data or []
+
+    rows = await sb_run(q)
+    return ProjectFolder.from_row(rows[0])
+
+
+async def project_folder_update(client: Client, folder_id: str, user_id: str, patch: dict) -> bool:
+    if not patch:
+        return True
+    patch = {**patch, "updated_at": _iso_now()}
+
+    def q():
+        r = (
+            client.table("project_folders")
+            .update(patch)
+            .eq("id", folder_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return r.data or []
+
+    rows = await sb_run(q)
+    return bool(rows)
+
+
+async def project_folder_delete(client: Client, folder_id: str, user_id: str) -> bool:
+    def q():
+        r = (
+            client.table("project_folders")
+            .delete()
+            .eq("id", folder_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return r.data or []
+
+    rows = await sb_run(q)
+    return bool(rows)
 
 
 async def messages_list_asc(client: Client, conv_id: str) -> list[Message]:

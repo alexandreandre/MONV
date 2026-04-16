@@ -22,16 +22,29 @@ from models.db import (
     get_supabase,
     conversation_get,
     conversation_insert,
+    conversation_update_folder,
     conversations_list_for_user,
     message_insert,
     messages_list_asc,
     messages_recent_for_llm,
+    project_folder_delete,
+    project_folder_get,
+    project_folder_insert,
+    project_folder_update,
+    project_folders_list_for_user,
     search_history_insert,
 )
-from models.entities import User, Conversation, Message, SearchHistory, gen_uuid
+from models.entities import User, Conversation, Message, ProjectFolder, SearchHistory, gen_uuid
 from models.schemas import (
-    ChatRequest, ChatResponse, MessageOut,
-    ConversationOut, SearchResults,
+    ChatRequest,
+    ChatResponse,
+    MessageOut,
+    ConversationOut,
+    ConversationFolderPatch,
+    ProjectFolderCreate,
+    ProjectFolderOut,
+    ProjectFolderPatch,
+    SearchResults,
 )
 from services.filter import run_filter
 from services.guard import run_guard
@@ -110,6 +123,12 @@ async def send_message(
         active_mode: Mode = normalize_mode(conv.mode) if conv.mode else requested_mode
     else:
         active_mode = requested_mode
+        new_folder_id: str | None = None
+        if req.folder_id:
+            fld = await project_folder_get(supabase, req.folder_id, user.id)
+            if not fld:
+                raise HTTPException(400, "Projet invalide ou inaccessible.")
+            new_folder_id = req.folder_id
         conv = Conversation(
             id=gen_uuid(),
             user_id=user.id,
@@ -117,6 +136,7 @@ async def send_message(
             created_at=now,
             updated_at=now,
             mode=active_mode,
+            folder_id=new_folder_id,
         )
         await conversation_insert(supabase, conv)
 
@@ -364,9 +384,11 @@ async def send_message(
             f"**Exporter tout = {credits_needed} crédits** (tu en as {solde})."
         )
 
-    # Cadre d'analyse pour le mode Rachat — sans recommandation personnalisée.
+    # Cadres d'analyse — sans recommandation personnalisée ni valorisation.
     if active_mode == "rachat":
         preview_text += "\n\n" + _build_rachat_framing(search_results.results)
+    elif active_mode == "benchmark":
+        preview_text += "\n\n" + _build_benchmark_framing(search_results.results)
 
     map_points = [
         {
@@ -458,6 +480,7 @@ async def list_conversations(
             created_at=c.created_at,
             updated_at=c.updated_at,
             mode=c.mode,
+            folder_id=c.folder_id,
             messages=[],
         )
         for c in convs
@@ -482,6 +505,7 @@ async def get_conversation(
         created_at=conv.created_at,
         updated_at=conv.updated_at,
         mode=conv.mode,
+        folder_id=conv.folder_id,
         messages=[
             MessageOut(
                 id=m.id, role=m.role, content=m.content,
@@ -490,6 +514,135 @@ async def get_conversation(
             )
             for m in messages
         ],
+    )
+
+
+@router.get("/project-folders", response_model=list[ProjectFolderOut])
+async def list_project_folders(
+    user: User = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+):
+    folders = await project_folders_list_for_user(supabase, user.id)
+    return [
+        ProjectFolderOut(
+            id=f.id,
+            name=f.name,
+            sort_position=f.sort_position,
+            created_at=f.created_at,
+            updated_at=f.updated_at,
+        )
+        for f in folders
+    ]
+
+
+@router.post("/project-folders", response_model=ProjectFolderOut)
+async def create_project_folder(
+    body: ProjectFolderCreate,
+    user: User = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+):
+    name = (body.name or "").strip() or "Nouveau projet"
+    existing = await project_folders_list_for_user(supabase, user.id)
+    next_pos = max((f.sort_position for f in existing), default=-1) + 1
+    now = datetime.now(timezone.utc)
+    folder = ProjectFolder(
+        id=gen_uuid(),
+        user_id=user.id,
+        name=name[:160],
+        sort_position=next_pos,
+        created_at=now,
+        updated_at=now,
+    )
+    created = await project_folder_insert(supabase, folder)
+    return ProjectFolderOut(
+        id=created.id,
+        name=created.name,
+        sort_position=created.sort_position,
+        created_at=created.created_at,
+        updated_at=created.updated_at,
+    )
+
+
+@router.patch("/project-folders/{folder_id}", response_model=ProjectFolderOut)
+async def patch_project_folder(
+    folder_id: str,
+    body: ProjectFolderPatch,
+    user: User = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+):
+    current = await project_folder_get(supabase, folder_id, user.id)
+    if not current:
+        raise HTTPException(404, "Projet non trouvé")
+
+    patch: dict = {}
+    if body.name is not None:
+        n = body.name.strip()
+        if not n:
+            raise HTTPException(400, "Le nom du projet ne peut pas être vide.")
+        patch["name"] = n[:160]
+    if body.sort_position is not None:
+        patch["sort_position"] = body.sort_position
+
+    if patch:
+        ok = await project_folder_update(supabase, folder_id, user.id, patch)
+        if not ok:
+            raise HTTPException(404, "Projet non trouvé")
+
+    updated = await project_folder_get(supabase, folder_id, user.id)
+    assert updated is not None
+    return ProjectFolderOut(
+        id=updated.id,
+        name=updated.name,
+        sort_position=updated.sort_position,
+        created_at=updated.created_at,
+        updated_at=updated.updated_at,
+    )
+
+
+@router.delete("/project-folders/{folder_id}")
+async def delete_project_folder(
+    folder_id: str,
+    user: User = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+):
+    ok = await project_folder_delete(supabase, folder_id, user.id)
+    if not ok:
+        raise HTTPException(404, "Projet non trouvé")
+    return {"ok": True}
+
+
+@router.patch("/conversations/{conversation_id}/folder", response_model=ConversationOut)
+async def patch_conversation_folder(
+    conversation_id: str,
+    body: ConversationFolderPatch,
+    user: User = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+):
+    conv = await conversation_get(supabase, conversation_id, user.id)
+    if not conv:
+        raise HTTPException(404, "Conversation non trouvée")
+
+    if body.folder_id is not None:
+        fld = await project_folder_get(supabase, body.folder_id, user.id)
+        if not fld:
+            raise HTTPException(400, "Projet invalide ou inaccessible.")
+
+    ok = await conversation_update_folder(
+        supabase, conversation_id, user.id, body.folder_id
+    )
+    if not ok:
+        raise HTTPException(404, "Conversation non trouvée")
+
+    conv2 = await conversation_get(supabase, conversation_id, user.id)
+    assert conv2 is not None
+    return ConversationOut(
+        id=conv2.id,
+        title=conv2.title,
+        created_at=conv2.created_at,
+        updated_at=conv2.updated_at,
+        mode=conv2.mode,
+        folder_id=conv2.folder_id,
+        messages=[],
     )
 
 
@@ -549,5 +702,58 @@ def _build_rachat_framing(results: list) -> str:  # results: list[CompanyResult]
         "_Ce cadre est purement indicatif. Il ne constitue ni un conseil "
         "juridique, ni un conseil financier, ni une valorisation. Toute "
         "décision d'acquisition doit s'appuyer sur un audit professionnel._",
+    ]
+    return "\n".join(lines)
+
+
+def _build_benchmark_framing(results: list) -> str:
+    """Livrable secteur / marché : couverture des chiffres, pas d'agrégat inventé."""
+    if not results:
+        return ""
+
+    sample = results[:50]
+    nb = len(sample)
+
+    nb_with_ca = sum(1 for r in sample if getattr(r, "chiffre_affaires", None))
+    nb_with_ca_n1 = sum(1 for r in sample if getattr(r, "ca_n_minus_1", None))
+    nb_with_var = sum(
+        1 for r in sample if getattr(r, "variation_ca_pct", None) is not None
+    )
+    nb_with_eff = sum(1 for r in sample if getattr(r, "effectif_label", None))
+    nb_with_rn = sum(1 for r in sample if getattr(r, "resultat_net", None) is not None)
+    nb_with_ebe = sum(1 for r in sample if getattr(r, "ebe", None) is not None)
+    nb_with_ape = sum(1 for r in sample if getattr(r, "libelle_activite", None))
+
+    lines = [
+        "---",
+        "**Livrable — mode Benchmark (secteur / marché)**",
+        "",
+        f"Échantillon affiché : **{nb}** entreprises.",
+        "",
+        "**Couverture des données (indicateurs utiles consultant / banque / entrepreneur)** :",
+        f"- {nb_with_ape}/{nb} avec libellé d'activité (lecture homogène du périmètre)",
+        f"- {nb_with_eff}/{nb} avec effectif (tranche ou effectif financier)",
+        f"- {nb_with_ca}/{nb} avec dernier CA connu",
+        f"- {nb_with_ca_n1}/{nb} avec CA de l'exercice précédent (comparaison N / N-1)",
+        f"- {nb_with_var}/{nb} avec variation de CA % (quand N et N-1 sont disponibles)",
+        f"- {nb_with_rn}/{nb} avec résultat net",
+        f"- {nb_with_ebe}/{nb} avec EBE",
+        "",
+        "**Lecture recommandée** :",
+        "1. **Consultant** : segmenter par tranche d'effectif et par zone, puis "
+        "exporter pour tableaux croisés (structure de coûts implicite via RN / CA).",
+        "2. **Banque / risque** : vérifier la dispersion du CA et du RN (concentration "
+        "vs médiane à calculer hors outil), l'ancienneté (`date_creation`) et la forme "
+        "juridique.",
+        "3. **Entrepreneur** : comparer ton projet aux fiches du même code APE / même "
+        "zone pour calibrer taille et dynamique, sans inférer une « taille de marché » "
+        "non sourcée.",
+        "",
+        "**Export** : les colonnes incluent CA, exercices, variation, effectifs et "
+        "rentabilité lorsque Pappers a pu enrichir — prêt pour slide ou annexe Excel.",
+        "",
+        "_Les chiffres sont issus de sources publiques et peuvent être incomplets. "
+        "Ce bloc ne remplace pas une étude de marché commandée, une due diligence ni "
+        "un conseil en investissement._",
     ]
     return "\n".join(lines)

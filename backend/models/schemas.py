@@ -50,9 +50,11 @@ class TokenOut(BaseModel):
 class ChatRequest(BaseModel):
     conversation_id: str | None = None
     message: str
-    # 4 modes d'usage : prospection (défaut), sous_traitant, client, rachat.
+    # 4 modes d'usage : prospection (défaut), sous_traitant, benchmark, rachat.
     # Voir backend/services/modes.py. Validation tolérante côté serveur.
     mode: str | None = None
+    # Nouvelle conversation rattachée à un projet (vue PROJETS).
+    folder_id: str | None = None
 
 
 class MessageOut(BaseModel):
@@ -70,7 +72,29 @@ class ConversationOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     mode: str | None = None
+    folder_id: str | None = None
     messages: list[MessageOut] = []
+
+
+class ProjectFolderCreate(BaseModel):
+    name: str = "Nouveau projet"
+
+
+class ProjectFolderPatch(BaseModel):
+    name: str | None = None
+    sort_position: int | None = None
+
+
+class ProjectFolderOut(BaseModel):
+    id: str
+    name: str
+    sort_position: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ConversationFolderPatch(BaseModel):
+    folder_id: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -249,10 +273,15 @@ class AgentRequest(BaseModel):
     - Premier tour : `pitch` seul → déclenche un QCM de clarification.
     - Second tour : `conversation_id` + `answers` → déclenche la génération
       du dossier complet.
+
+    Premier tour — `folder_id` :
+    - absent / null : crée un **nouveau** projet PROJETS et rattache la conversation ;
+    - renseigné : rattache la conversation à ce projet (doit appartenir à l'utilisateur).
     """
     conversation_id: str | None = None
     pitch: str | None = None
     answers: str | None = None
+    folder_id: str | None = None
 
 
 class BusinessCanvas(BaseModel):
@@ -348,3 +377,5 @@ class BusinessDossier(BaseModel):
 class AgentResponse(BaseModel):
     conversation_id: str
     messages: list[MessageOut]
+    # Projet PROJETS lié (créé ou existant) — renvoyé au premier tour pour la sidebar.
+    folder_id: str | None = None

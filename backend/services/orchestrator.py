@@ -566,7 +566,7 @@ def _build_fallback_plan(
 
     # Mode rachat ou client : ajouter automatiquement l'enrichissement Pappers
     # si une clé est configurée. Sans clé, l'API engine ignore l'appel.
-    if mode in ("rachat", "client") and settings.PAPPERS_API_KEY:
+    if mode in ("rachat", "benchmark") and settings.PAPPERS_API_KEY:
         if not any(c.source == "pappers" and c.action == "get_finances" for c in api_calls):
             api_calls.append(APICall(
                 source="pappers", action="get_finances", params={}, priority=3,

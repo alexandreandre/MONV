@@ -64,6 +64,14 @@ def test_normalize_mode_legacy_fournisseurs_alias():
     assert normalize_mode("fournisseurs") == "sous_traitant"
 
 
+def test_normalize_mode_legacy_client_alias():
+    assert normalize_mode("client") == "benchmark"
+
+
+def test_normalize_mode_legacy_achat_alias():
+    assert normalize_mode("achat") == "benchmark"
+
+
 def test_default_mode_is_prospection():
     assert DEFAULT_MODE == "prospection"
 
@@ -75,7 +83,7 @@ def test_prospection_has_no_addendum():
     assert addendum_for_mode("prospection") == ""
 
 
-@pytest.mark.parametrize("mode", ["sous_traitant", "client", "rachat"])
+@pytest.mark.parametrize("mode", ["sous_traitant", "benchmark", "rachat"])
 def test_other_modes_have_distinct_addendum(mode):
     addendum = addendum_for_mode(mode)
     assert addendum != ""
@@ -88,6 +96,12 @@ def test_rachat_addendum_includes_safety_clause():
     addendum = addendum_for_mode("rachat")
     assert "valorisation" in addendum.lower()
     assert "conseil" in addendum.lower()
+
+
+def test_benchmark_addendum_includes_safety_clause():
+    addendum = addendum_for_mode("benchmark")
+    assert "valorisation" in addendum.lower()
+    assert "secteur" in addendum.lower() or "marché" in addendum.lower()
 
 
 # ── Réordonnancement des colonnes ────────────────────────────────────────────
@@ -109,6 +123,9 @@ BASE_COLUMNS = [
     "date_creation",
     "categorie_entreprise",
     "chiffre_affaires",
+    "ca_n_minus_1",
+    "annee_dernier_ca",
+    "annee_n_minus_1",
     "resultat_net",
     "variation_ca_pct",
     "ebe",
@@ -146,11 +163,17 @@ def test_reorder_rachat_promotes_financial_columns():
     assert set(cols) == set(BASE_COLUMNS)
 
 
-def test_reorder_client_promotes_account_columns():
-    cols = reorder_columns_for_mode(BASE_COLUMNS, "client")
-    head = cols[:7]
-    for c in ("siren", "effectif_label", "chiffre_affaires", "dirigeant_nom"):
-        assert c in head, f"{c} attendu dans le top 7 du mode client"
+def test_reorder_benchmark_promotes_sector_financial_columns():
+    cols = reorder_columns_for_mode(BASE_COLUMNS, "benchmark")
+    head = cols[:12]
+    for c in (
+        "libelle_activite",
+        "effectif_label",
+        "chiffre_affaires",
+        "ca_n_minus_1",
+        "variation_ca_pct",
+    ):
+        assert c in head, f"{c} attendu dans le top 12 du mode benchmark"
 
 
 def test_reorder_is_stable_when_priority_columns_absent():
@@ -165,7 +188,7 @@ def test_reorder_is_stable_when_priority_columns_absent():
 def test_credits_floor_per_mode():
     assert credits_floor_for_mode("prospection") == 1
     assert credits_floor_for_mode("sous_traitant") == 1
-    assert credits_floor_for_mode("client") == 3
+    assert credits_floor_for_mode("benchmark") == 3
     assert credits_floor_for_mode("rachat") == 3
 
 

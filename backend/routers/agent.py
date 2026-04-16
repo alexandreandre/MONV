@@ -3,9 +3,11 @@ Router de l'agent « Atelier ».
 
 Expérience en deux tours :
 
-  Tour 1 — POST /api/agent/send avec `{ pitch }`
-    → crée une conversation (mode="atelier"), persiste le pitch utilisateur,
-      génère un QCM de clarification et renvoie un message_type="agent_brief".
+  Tour 1 — POST /api/agent/send avec `{ pitch }` et optionnellement `folder_id`
+    → crée un projet PROJETS (sauf si `folder_id` pointe vers un projet existant),
+      crée une conversation (mode="atelier") rattachée à ce projet, persiste le
+      pitch utilisateur, génère un QCM de clarification et renvoie un
+      message_type="agent_brief".
 
   Tour 2 — POST /api/agent/send avec `{ conversation_id, answers }`
     → récupère le pitch initial depuis la conversation, combine avec les
@@ -21,6 +23,7 @@ l'export disponible via le bouton Excel/CSV classique.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import traceback
 from datetime import datetime, timezone
@@ -35,9 +38,12 @@ from models.db import (
     get_supabase,
     message_insert,
     messages_list_asc,
+    project_folder_get,
+    project_folder_insert,
+    project_folders_list_for_user,
     search_history_insert,
 )
-from models.entities import Conversation, Message, SearchHistory, gen_uuid
+from models.entities import Conversation, Message, ProjectFolder, SearchHistory, gen_uuid
 from models.schemas import (
     AgentRequest,
     AgentResponse,
@@ -53,11 +59,21 @@ from services.agent import (
     generate_atelier_qcm,
     generate_dossier_skeleton,
     run_segment_searches,
+    suggest_atelier_conversation_title,
+    suggest_atelier_project_folder_name,
 )
 from utils.pipeline_log import plog
 
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
+
+
+def _atelier_project_name_from_pitch(pitch: str) -> str:
+    line = " ".join(pitch.split())
+    if not line:
+        return "Projet Atelier"
+    name = line[:80].strip()
+    return name or "Projet Atelier"
 
 
 AGENT_WELCOME_COPY = (
@@ -82,13 +98,45 @@ async def agent_send(
             if not pitch:
                 raise HTTPException(400, "Décris ton projet en quelques phrases.")
 
+            target_folder_id: str | None = None
+            existing_folder_id = (req.folder_id or "").strip() or None
+            if existing_folder_id:
+                fld = await project_folder_get(supabase, existing_folder_id, user.id)
+                if not fld:
+                    raise HTTPException(400, "Projet invalide ou inaccessible.")
+                target_folder_id = existing_folder_id
+
+            project_folder_name, smart_title, (intro, questions) = await asyncio.gather(
+                suggest_atelier_project_folder_name(pitch),
+                suggest_atelier_conversation_title(pitch),
+                generate_atelier_qcm(pitch),
+            )
+
+            if not existing_folder_id:
+                existing_pf = await project_folders_list_for_user(supabase, user.id)
+                next_pos = max((f.sort_position for f in existing_pf), default=-1) + 1
+                folder_label = (
+                    project_folder_name or _atelier_project_name_from_pitch(pitch)
+                )[:160]
+                pf = ProjectFolder(
+                    id=gen_uuid(),
+                    user_id=user.id,
+                    name=folder_label,
+                    sort_position=next_pos,
+                    created_at=now,
+                    updated_at=now,
+                )
+                created_pf = await project_folder_insert(supabase, pf)
+                target_folder_id = created_pf.id
+
             conv = Conversation(
                 id=gen_uuid(),
                 user_id=user.id,
-                title=f"Atelier — {pitch[:48]}",
+                title=f"Atelier — {smart_title}"[:255],
                 created_at=now,
                 updated_at=now,
                 mode=ATELIER_MODE_LABEL,
+                folder_id=target_folder_id,
             )
             await conversation_insert(supabase, conv)
 
@@ -102,8 +150,6 @@ async def agent_send(
                 created_at=now,
             )
             await message_insert(supabase, user_msg)
-
-            intro, questions = await generate_atelier_qcm(pitch)
             qcm_payload = {
                 "intro": intro,
                 "questions": [q.model_dump() for q in questions],
@@ -119,7 +165,7 @@ async def agent_send(
                 created_at=datetime.now(timezone.utc),
             )
             await message_insert(supabase, qcm_msg)
-            return _build_response(conv.id, [qcm_msg])
+            return _build_response(conv.id, [qcm_msg], folder_id=target_folder_id)
 
         # ── Tour 2 — on reçoit des réponses, on produit le dossier ────────
         conv = await conversation_get(supabase, req.conversation_id, user.id)
@@ -230,7 +276,7 @@ async def agent_send(
         )
         await message_insert(supabase, dossier_msg)
 
-        return _build_response(conv.id, [answer_msg, dossier_msg])
+        return _build_response(conv.id, [answer_msg, dossier_msg], folder_id=conv.folder_id)
 
     except HTTPException:
         raise
@@ -244,9 +290,14 @@ async def agent_send(
         )
 
 
-def _build_response(conv_id: str, messages: list[Message]) -> AgentResponse:
+def _build_response(
+    conv_id: str,
+    messages: list[Message],
+    folder_id: str | None = None,
+) -> AgentResponse:
     return AgentResponse(
         conversation_id=conv_id,
+        folder_id=folder_id,
         messages=[
             MessageOut(
                 id=m.id,

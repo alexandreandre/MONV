@@ -14,10 +14,12 @@ os.environ.setdefault("SUPABASE_SERVICE_KEY", "placeholder-service-key")
 from services.agent import (  # noqa: E402
     ATELIER_MODE_LABEL,
     _FALLBACK_ATELIER_QUESTIONS,
+    _finalize_atelier_qcm,
     _parse_qcm_raw,
     build_brief_metadata,
     coerce_dossier,
     dossier_metadata_json,
+    heuristic_atelier_conversation_title,
 )
 from models.schemas import (  # noqa: E402
     AgentSynthesis,
@@ -25,6 +27,8 @@ from models.schemas import (  # noqa: E402
     BusinessDossier,
     FlowMap,
     ProjectBrief,
+    QcmOption,
+    QcmQuestion,
     SegmentResult,
 )
 
@@ -33,6 +37,24 @@ from models.schemas import (  # noqa: E402
 
 def test_atelier_mode_label_is_atelier():
     assert ATELIER_MODE_LABEL == "atelier"
+
+
+def test_heuristic_atelier_title_strips_greeting_and_truncates():
+    pitch = (
+        "Bonjour je veux lancer une marketplace de matériaux de construction "
+        "recyclés en Bretagne avec focus artisans du second œuvre"
+    )
+    t = heuristic_atelier_conversation_title(pitch, max_len=50)
+    assert not t.lower().startswith("bonjour")
+    assert len(t) <= 52
+    assert "…" in t or len(" ".join(pitch.split())) <= 50
+
+
+def test_heuristic_atelier_title_uses_first_sentence_when_short():
+    pitch = "Food truck de tacos fusion à Rennes. Le reste est du détail."
+    t = heuristic_atelier_conversation_title(pitch, max_len=80)
+    assert "tacos" in t.lower()
+    assert "rennes" in t.lower()
 
 
 def test_fallback_questions_cover_core_topics():
@@ -89,6 +111,60 @@ def test_parse_qcm_tolerates_empty_payload():
     intro, qs = _parse_qcm_raw({})
     assert intro
     assert qs == []
+
+
+def test_finalize_injects_validation_when_no_questions():
+    intro, qs = _finalize_atelier_qcm("", [])
+    assert len(qs) == 1
+    assert qs[0].id == "validation_dossier"
+    assert "clair" in intro.lower()
+
+    intro2, qs2 = _finalize_atelier_qcm("  Pitch nickel.  ", [])
+    assert qs2[0].id == "validation_dossier"
+    assert "Pitch nickel" in intro2
+
+
+def test_finalize_sorts_canonical_ids_and_caps():
+    raw = [
+        QcmQuestion(
+            id="budget",
+            question="Budget ?",
+            options=[QcmOption(id="a", label="A"), QcmOption(id="autre", label="Autre", free_text=True)],
+        ),
+        QcmQuestion(
+            id="cible",
+            question="Cible ?",
+            options=[QcmOption(id="b", label="B"), QcmOption(id="autre", label="Autre", free_text=True)],
+        ),
+    ]
+    intro, qs = _finalize_atelier_qcm("Hi", raw)
+    assert [q.id for q in qs] == ["cible", "budget"]
+
+
+def test_finalize_dedupes_question_ids():
+    q = QcmQuestion(
+        id="cible",
+        question="Une",
+        options=[QcmOption(id="x", label="X"), QcmOption(id="autre", label="Autre", free_text=True)],
+    )
+    intro, qs = _finalize_atelier_qcm("x", [q, q])
+    assert len(qs) == 1
+
+
+def test_finalize_drops_sixth_question():
+    qs_in = [
+        QcmQuestion(
+            id=f"q{i}",
+            question=f"Q{i} ?",
+            options=[
+                QcmOption(id="o", label="O"),
+                QcmOption(id="autre", label="Autre", free_text=True),
+            ],
+        )
+        for i in range(6)
+    ]
+    _, qs = _finalize_atelier_qcm("intro", qs_in)
+    assert len(qs) == 5
 
 
 # ── Coercion du dossier LLM ─────────────────────────────────────────────────

@@ -69,6 +69,7 @@ class Conversation:
     created_at: datetime
     updated_at: datetime
     mode: str | None = None
+    folder_id: str | None = None
 
     @classmethod
     def from_row(cls, row: dict) -> Conversation:
@@ -79,6 +80,7 @@ class Conversation:
             created_at=parse_timestamp(row.get("created_at")),
             updated_at=parse_timestamp(row.get("updated_at")),
             mode=row.get("mode"),
+            folder_id=row.get("folder_id"),
         )
 
     def to_insert_row(self) -> dict:
@@ -91,7 +93,40 @@ class Conversation:
         }
         if self.mode is not None:
             d["mode"] = self.mode
+        if self.folder_id is not None:
+            d["folder_id"] = self.folder_id
         return d
+
+
+@dataclass
+class ProjectFolder:
+    id: str
+    user_id: str
+    name: str
+    sort_position: int
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_row(cls, row: dict) -> ProjectFolder:
+        return cls(
+            id=row["id"],
+            user_id=row["user_id"],
+            name=row.get("name") or "Nouveau projet",
+            sort_position=int(row.get("sort_position", 0)),
+            created_at=parse_timestamp(row.get("created_at")),
+            updated_at=parse_timestamp(row.get("updated_at")),
+        )
+
+    def to_insert_row(self) -> dict:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "name": self.name,
+            "sort_position": self.sort_position,
+            "created_at": _iso(self.created_at),
+            "updated_at": _iso(self.updated_at),
+        }
 
 
 @dataclass

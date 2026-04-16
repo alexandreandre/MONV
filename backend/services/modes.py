@@ -14,9 +14,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-Mode = Literal["prospection", "sous_traitant", "client", "rachat"]
+Mode = Literal["prospection", "sous_traitant", "benchmark", "rachat"]
 
-VALID_MODES: tuple[Mode, ...] = ("prospection", "sous_traitant", "client", "rachat")
+VALID_MODES: tuple[Mode, ...] = ("prospection", "sous_traitant", "benchmark", "rachat")
 DEFAULT_MODE: Mode = "prospection"
 
 
@@ -24,7 +24,8 @@ def _legacy_alias(value: str | None) -> str | None:
     """Compatibilité ascendante : anciens identifiants acceptés."""
     _ALIASES: dict[str, str] = {
         "fournisseurs": "sous_traitant",
-        "achat": "client",
+        "achat": "benchmark",
+        "client": "benchmark",
     }
     if value in _ALIASES:
         return _ALIASES[value]
@@ -45,7 +46,7 @@ def normalize_mode(value: str | None) -> Mode:
 MODE_LABELS: dict[Mode, str] = {
     "prospection": "Prospection",
     "sous_traitant": "Sous-traitant",
-    "client": "Client",
+    "benchmark": "Benchmark",
     "rachat": "Rachat",
 }
 
@@ -70,14 +71,24 @@ MODE_PRIORITY_COLUMNS: dict[Mode, list[str]] = {
         "site_web",
         "telephone",
     ],
-    "client": [
-        # Compte existant : on veut identifier vite + signaux d'évolution.
-        "siren",
+    "benchmark": [
+        # Panneau représentatif : lecture secteur / marché (CA N et N-1, effectifs, rentabilité).
+        "libelle_activite",
+        "activite_principale",
+        "categorie_entreprise",
         "effectif_label",
         "chiffre_affaires",
+        "ca_n_minus_1",
+        "annee_dernier_ca",
+        "annee_n_minus_1",
         "variation_ca_pct",
-        "dirigeant_nom",
-        "site_web",
+        "resultat_net",
+        "ebe",
+        "date_creation",
+        "forme_juridique",
+        "siren",
+        "ville",
+        "region",
     ],
     "rachat": [
         # Repreneur : focus financier + transmission.
@@ -115,16 +126,25 @@ MODE_ORCHESTRATOR_ADDENDUM: dict[Mode, str] = {
         "categorie_entreprise, numero_tva, site_web, telephone.\n"
         "- Ne propose pas Pappers sauf si l'utilisateur demande explicitement CA / dirigeants."
     ),
-    "client": (
-        "\n\nMODE ACTIF : CLIENT (analyse portefeuille).\n"
-        "L'utilisateur veut analyser ou enrichir des comptes qu'il connaît déjà.\n"
-        "- Si la requête contient un ou plusieurs SIREN à 9 chiffres, génère un "
-        "appel `pappers` action `search` par SIREN (params={\"siren\": \"...\"}) "
-        "puis un `get_finances` et un `get_dirigeants` (priority croissants).\n"
-        "- Sinon, fais une recherche SIRENE classique.\n"
-        "- Inclure dans `columns` : siren, effectif_label, chiffre_affaires, "
-        "variation_ca_pct, dirigeant_nom, site_web.\n"
-        "- Coût plancher : 3 crédits (enrichissement requis)."
+    "benchmark": (
+        "\n\nMODE ACTIF : BENCHMARK (secteur / marché).\n"
+        "L'utilisateur veut un panorama chiffré et comparable d'un secteur, d'un "
+        "marché ou d'un périmètre NAF/géographique — pour un livrable type "
+        "note consultant, mémo banque ou pitch fondateur (données publiques, pas de "
+        "conseil personnalisé ni de valorisation).\n"
+        "- Construire un panneau d'entreprises représentatif (tailles et zones variées "
+        "si la requête est large ; sinon respecter strictement les filtres).\n"
+        "- Si la clé Pappers est disponible : après la recherche principale, ajouter "
+        "`pappers` `get_finances` (et `get_dirigeants` si la requête évoque gouvernance "
+        "ou transmission) pour obtenir CA sur au moins deux exercices, résultat, EBE.\n"
+        "- Inclure dans `columns` (dans cet esprit) : libelle_activite, "
+        "activite_principale, categorie_entreprise, effectif_label, chiffre_affaires, "
+        "ca_n_minus_1, annee_dernier_ca, annee_n_minus_1, variation_ca_pct, "
+        "resultat_net, ebe, date_creation, forme_juridique, siren, ville, region, "
+        "dirigeant_nom.\n"
+        "- Ne pas inventer de tendance de marché non vérifiable ; les agrégats "
+        "éventuels se déduisent des lignes exportées.\n"
+        "- Coût plancher : 3 crédits (enrichissement financier attendu)."
     ),
     "rachat": (
         "\n\nMODE ACTIF : RACHAT (cadre d'analyse business).\n"
@@ -149,7 +169,7 @@ MODE_ORCHESTRATOR_ADDENDUM: dict[Mode, str] = {
 MODE_CREDITS_FLOOR: dict[Mode, int] = {
     "prospection": 1,
     "sous_traitant": 1,
-    "client": 3,
+    "benchmark": 3,
     "rachat": 3,
 }
 

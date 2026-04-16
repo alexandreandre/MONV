@@ -152,11 +152,11 @@ async def get_templates():
             "mode": "sous_traitant",
         },
         {
-            "id": "client-portefeuille-siren",
-            "title": "Mes clients existants",
-            "description": "Colle des SIREN pour enrichir tes comptes (CA, dirigeants, signaux)",
-            "query": "J'ai ces SIREN dans mon portefeuille, enrichis-moi les fiches : 552032534, 552081317, 542065479",
-            "icon": "briefcase",
-            "mode": "client",
+            "id": "benchmark-logiciel-idf",
+            "title": "Benchmark SaaS / logiciel IDF",
+            "description": "PME éditeurs et ESN en IDF — CA, effectifs, dynamique",
+            "query": "Je veux un benchmark des PME du logiciel en Île-de-France, 20 à 250 salariés, avec CA et variation sur deux exercices",
+            "icon": "chart",
+            "mode": "benchmark",
         },
     ]
