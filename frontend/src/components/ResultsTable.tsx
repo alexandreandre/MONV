@@ -72,6 +72,13 @@ const COL_LABELS: Record<string, string> = {
   capitaux_propres: "Capitaux propres (€)",
   effectif_financier: "Effectif (comptes)",
   capital_social: "Capital social (€)",
+  numero_tva: "N° TVA",
+  ca_n_minus_1: "CA N-1 (€)",
+  resultat_n_minus_1: "Résultat N-1 (€)",
+  annee_n_minus_1: "Année N-1",
+  variation_ca_pct: "Variation CA",
+  dirigeant_2_nom: "Dirigeant 2 — nom",
+  dirigeant_2_fonction: "Dirigeant 2 — fonction",
   signaux: "Signaux",
 };
 
@@ -82,6 +89,8 @@ const CURRENCY_COLS = new Set([
   "ebe",
   "capitaux_propres",
   "capital_social",
+  "ca_n_minus_1",
+  "resultat_n_minus_1",
 ]);
 
 const SIGNAL_STYLES: Record<string, { bg: string; text: string; border: string }> = {
@@ -144,10 +153,16 @@ function formatValue(col: string, val: any) {
     if (isNaN(num)) return String(val);
     return num === Math.floor(num) ? String(Math.floor(num)) : String(num);
   }
-  if (col === "annee_dernier_ca") {
+  if (col === "annee_dernier_ca" || col === "annee_n_minus_1") {
     const n = Number(val);
     if (!isNaN(n)) return String(Math.floor(n));
     return String(val);
+  }
+  if (col === "variation_ca_pct") {
+    const num = Number(val);
+    if (isNaN(num)) return String(val);
+    const sign = num >= 0 ? "+" : "";
+    return `${sign}${num.toFixed(1)}\u202f%`;
   }
   if (col === "date_creation" || col === "date_cloture_exercice") {
     if (typeof val === "string" && val.length >= 10) {
@@ -556,6 +571,10 @@ export default function ResultsTable({
                     >
                       {col === "signaux" ? (
                         <SignalBadges signals={row.signaux || []} />
+                      ) : col === "variation_ca_pct" && row[col] != null ? (
+                        <span className={Number(row[col]) >= 0 ? "text-emerald-400" : "text-amber-400"}>
+                          {formatValue(col, row[col])}
+                        </span>
                       ) : col === "site_web" && row[col] ? (
                         <a
                           href={

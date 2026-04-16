@@ -173,6 +173,13 @@ class CompanyResult(BaseModel):
     capitaux_propres: float | None = None
     effectif_financier: float | None = None  # effectif déclaré sur l'exercice (comptes)
     capital_social: float | None = None
+    numero_tva: str | None = None
+    ca_n_minus_1: float | None = None
+    resultat_n_minus_1: float | None = None
+    annee_n_minus_1: int | None = None
+    variation_ca_pct: float | None = None
+    dirigeant_2_nom: str | None = None
+    dirigeant_2_fonction: str | None = None
     email: str | None = None
     telephone: str | None = None
     site_web: str | None = None

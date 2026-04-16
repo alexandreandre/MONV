@@ -9,15 +9,22 @@ from models.schemas import GuardResult, ExecutionPlan, APICall
 # Colonnes financières / effectif (Pappers) — ajoutées à la liste affichée si Pappers est utilisé
 FINANCIAL_AND_SIZE_COLUMNS: list[str] = [
     "categorie_entreprise",
+    "numero_tva",
     "annee_dernier_ca",
     "date_cloture_exercice",
     "chiffre_affaires",
     "resultat_net",
+    "variation_ca_pct",
+    "ca_n_minus_1",
+    "resultat_n_minus_1",
+    "annee_n_minus_1",
     "marge_brute",
     "ebe",
     "capitaux_propres",
     "effectif_financier",
     "capital_social",
+    "dirigeant_2_nom",
+    "dirigeant_2_fonction",
 ]
 
 

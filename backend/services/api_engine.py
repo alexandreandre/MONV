@@ -24,6 +24,15 @@ def _safe_float(value: object) -> float | None:
         return None
 
 
+def _compute_tva(siren: str) -> str | None:
+    """N° TVA intracommunautaire français depuis un SIREN à 9 chiffres."""
+    s = siren.strip().replace(" ", "")
+    if not s.isdigit() or len(s) != 9:
+        return None
+    key = (12 + 3 * (int(s) % 97)) % 97
+    return f"FR{key:02d}{s}"
+
+
 def _apply_finance_row(result: CompanyResult, last: dict, capital_from_company: float | None) -> None:
     """Fusionne la ligne comptable la plus récente + capital issu de la fiche entreprise."""
     y = last.get("annee") or last.get("year")
@@ -53,6 +62,27 @@ def _apply_finance_row(result: CompanyResult, last: dict, capital_from_company: 
         )
     if capital_from_company is not None and result.capital_social is None:
         result.capital_social = capital_from_company
+
+
+def _apply_previous_year(result: CompanyResult, finances: list[dict]) -> None:
+    """Peuple les champs N-1 et la variation CA depuis l'historique financier."""
+    if len(finances) < 2:
+        return
+    prev = finances[1]
+    if result.ca_n_minus_1 is None:
+        result.ca_n_minus_1 = _safe_float(prev.get("chiffre_affaires"))
+    if result.resultat_n_minus_1 is None:
+        result.resultat_n_minus_1 = _safe_float(prev.get("resultat") or prev.get("resultat_net"))
+    ay = prev.get("annee") or prev.get("year")
+    if ay is not None and result.annee_n_minus_1 is None:
+        try:
+            result.annee_n_minus_1 = int(ay)
+        except (TypeError, ValueError):
+            pass
+    if result.chiffre_affaires is not None and result.ca_n_minus_1 is not None and result.ca_n_minus_1 != 0:
+        result.variation_ca_pct = round(
+            (result.chiffre_affaires - result.ca_n_minus_1) / abs(result.ca_n_minus_1) * 100, 1
+        )
 
 
 def _dedup_key(r: CompanyResult) -> str:
@@ -127,6 +157,10 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
                         result.dirigeant_nom = first.get("nom") or first.get("nom_complet", "")
                         result.dirigeant_prenom = first.get("prenom", "")
                         result.dirigeant_fonction = first.get("qualite", "")
+                    if len(reps) >= 2 and not result.dirigeant_2_nom:
+                        second = reps[1]
+                        result.dirigeant_2_nom = second.get("nom") or second.get("nom_complet", "")
+                        result.dirigeant_2_fonction = second.get("qualite", "")
             plog("api_call_end", source=call.source, action=call.action)
 
         elif call.source == "pappers" and call.action == "get_finances":
@@ -142,6 +176,7 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
                     last = finances[0]
                     if isinstance(last, dict):
                         _apply_finance_row(result, last, cap_co)
+                    _apply_previous_year(result, finances)
             plog("api_call_end", source=call.source, action=call.action)
 
     if len(all_results) < 5:
@@ -200,6 +235,8 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
                             all_results.append(r)
 
     for result in all_results:
+        if not result.numero_tva and result.siren:
+            result.numero_tva = _compute_tva(result.siren)
         result.signaux = detect_signals(
             result,
             finances=_finances_by_siren.get(result.siren, []),
@@ -283,6 +320,19 @@ def _merge_fields(existing: CompanyResult, new: CompanyResult) -> None:
         existing.effectif_label = new.effectif_label
     if new.date_creation and not existing.date_creation:
         existing.date_creation = new.date_creation
+    if new.numero_tva and not existing.numero_tva:
+        existing.numero_tva = new.numero_tva
+    if new.ca_n_minus_1 is not None and existing.ca_n_minus_1 is None:
+        existing.ca_n_minus_1 = new.ca_n_minus_1
+    if new.resultat_n_minus_1 is not None and existing.resultat_n_minus_1 is None:
+        existing.resultat_n_minus_1 = new.resultat_n_minus_1
+    if new.annee_n_minus_1 is not None and existing.annee_n_minus_1 is None:
+        existing.annee_n_minus_1 = new.annee_n_minus_1
+    if new.variation_ca_pct is not None and existing.variation_ca_pct is None:
+        existing.variation_ca_pct = new.variation_ca_pct
+    if new.dirigeant_2_nom and not existing.dirigeant_2_nom:
+        existing.dirigeant_2_nom = new.dirigeant_2_nom
+        existing.dirigeant_2_fonction = new.dirigeant_2_fonction
     if new.lien_annuaire and not existing.lien_annuaire:
         existing.lien_annuaire = new.lien_annuaire
     if new.signaux:

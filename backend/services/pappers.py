@@ -298,25 +298,35 @@ async def _search_france(params: dict) -> list[CompanyResult]:
             siege = r.get("siege", {})
             dirigeants = r.get("representants", [])
 
-            dir_nom, dir_prenom, dir_fonction = "", "", ""
+            important_dirs: list[dict] = []
+            other_dirs: list[dict] = []
             for d in dirigeants:
                 qualite = (d.get("qualite") or "").lower()
                 if any(k in qualite for k in ["président", "directeur", "gérant"]):
-                    dir_nom = d.get("nom_complet") or d.get("nom") or ""
-                    dir_prenom = d.get("prenom") or ""
-                    dir_fonction = d.get("qualite") or ""
-                    break
-            if not dir_nom and dirigeants:
-                d = dirigeants[0]
-                dir_nom = d.get("nom_complet") or d.get("nom") or ""
-                dir_prenom = d.get("prenom") or ""
-                dir_fonction = d.get("qualite") or ""
+                    important_dirs.append(d)
+                else:
+                    other_dirs.append(d)
+            ordered_dirs = important_dirs + other_dirs
+
+            dir_nom, dir_prenom, dir_fonction = "", "", ""
+            dir_2_nom, dir_2_fonction = None, None
+            if ordered_dirs:
+                d0 = ordered_dirs[0]
+                dir_nom = d0.get("nom_complet") or d0.get("nom") or ""
+                dir_prenom = d0.get("prenom") or ""
+                dir_fonction = d0.get("qualite") or ""
+            if len(ordered_dirs) >= 2:
+                d1 = ordered_dirs[1]
+                dir_2_nom = d1.get("nom_complet") or d1.get("nom") or ""
+                dir_2_fonction = d1.get("qualite") or ""
 
             fin_rows = _normalize_fr_finances(r.get("finances"))
             ca = rn = None
             annee_ca = None
             date_cloture = None
             marge = ebe_val = cap_prop = eff_fin = None
+            ca_n1, rn_n1, annee_n1 = None, None, None
+            variation_ca = None
             cap_soc = _capital_from_entreprise_payload(r) if isinstance(r, dict) else None
             if fin_rows:
                 ly = fin_rows[0]
@@ -338,6 +348,19 @@ async def _search_france(params: dict) -> list[CompanyResult]:
                 cap_prop = _safe_float(ly.get("capitaux_propres"))
                 eff_fin = _safe_float(ly.get("effectif") or ly.get("effectif_moyen"))
 
+            if len(fin_rows) >= 2:
+                prev = fin_rows[1]
+                ca_n1 = _safe_float(prev.get("chiffre_affaires"))
+                rn_n1 = _safe_float(prev.get("resultat") or prev.get("resultat_net"))
+                ay1 = prev.get("annee") or prev.get("year")
+                if ay1 is not None:
+                    try:
+                        annee_n1 = int(ay1)
+                    except (TypeError, ValueError):
+                        pass
+                if ca is not None and ca_n1 is not None and ca_n1 != 0:
+                    variation_ca = round((ca - ca_n1) / abs(ca_n1) * 100, 1)
+
             results.append(
                 CompanyResult(
                     siren=r.get("siren", ""),
@@ -352,10 +375,16 @@ async def _search_france(params: dict) -> list[CompanyResult]:
                     dirigeant_nom=dir_nom or None,
                     dirigeant_prenom=dir_prenom or None,
                     dirigeant_fonction=dir_fonction or None,
+                    dirigeant_2_nom=dir_2_nom,
+                    dirigeant_2_fonction=dir_2_fonction,
                     chiffre_affaires=ca,
                     resultat_net=rn,
                     annee_dernier_ca=annee_ca,
                     date_cloture_exercice=str(date_cloture) if date_cloture else None,
+                    ca_n_minus_1=ca_n1,
+                    resultat_n_minus_1=rn_n1,
+                    annee_n_minus_1=annee_n1,
+                    variation_ca_pct=variation_ca,
                     marge_brute=marge,
                     ebe=ebe_val,
                     capitaux_propres=cap_prop,
