@@ -50,6 +50,7 @@ COLUMN_LABELS = {
     "site_web": "Site web",
     "lien_annuaire": "Lien fiche entreprise (Annuaire des entreprises)",
     "google_maps_url": "Lien Google Maps",
+    "signaux": "Signaux business",
 }
 
 INTENT_LABELS_FR: dict[str, str] = {
@@ -104,12 +105,27 @@ def _entities_summary_lines(entities: dict[str, Any] | None) -> list[tuple[str, 
     return lines
 
 
+def _flatten_signals(val: object) -> str:
+    if not isinstance(val, list) or not val:
+        return ""
+    labels = []
+    for s in val:
+        if isinstance(s, dict):
+            label = s.get("label", "")
+            detail = s.get("detail")
+            labels.append(f"{label} ({detail})" if detail else label)
+    return ", ".join(labels)
+
+
 def _results_to_dataframe(results: SearchResults, *, rename: bool = True) -> pd.DataFrame:
     """Convertit les résultats en DataFrame (colonnes internes, renommage optionnel)."""
     data = [r.model_dump() for r in results.results]
     df = pd.DataFrame(data)
     if df.empty:
         return df
+
+    if "signaux" in df.columns:
+        df["signaux"] = df["signaux"].apply(_flatten_signals)
 
     cols_to_keep = [c for c in results.columns if c in df.columns]
     if "lien_annuaire" in df.columns and "lien_annuaire" not in cols_to_keep:

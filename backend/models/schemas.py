@@ -134,6 +134,15 @@ class ExecutionPlan(BaseModel):
     clarification_question: str | None = None
 
 
+# --- Signaux business ---
+
+class BusinessSignal(BaseModel):
+    type: str       # entreprise_recente, forte_croissance, ca_en_baisse, nouveau_dirigeant, augmentation_capital, resultat_negatif
+    label: str      # libellé affiché (français)
+    detail: str | None = None
+    severity: str   # positive, warning, info
+
+
 # --- Results ---
 
 class CompanyResult(BaseModel):
@@ -169,6 +178,7 @@ class CompanyResult(BaseModel):
     site_web: str | None = None
     lien_annuaire: str | None = None
     google_maps_url: str | None = None
+    signaux: list[BusinessSignal] = []
 
 
 class SearchResults(BaseModel):

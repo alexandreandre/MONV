@@ -11,7 +11,21 @@ import {
   ChevronRight,
   MapPin,
   Building,
+  TrendingUp,
+  TrendingDown,
+  Sparkles,
+  UserPlus,
+  CircleDollarSign,
+  AlertTriangle,
+  Filter,
 } from "lucide-react";
+
+interface Signal {
+  type: string;
+  label: string;
+  detail?: string | null;
+  severity: string;
+}
 
 interface Props {
   data: Record<string, any>[];
@@ -58,6 +72,7 @@ const COL_LABELS: Record<string, string> = {
   capitaux_propres: "Capitaux propres (€)",
   effectif_financier: "Effectif (comptes)",
   capital_social: "Capital social (€)",
+  signaux: "Signaux",
 };
 
 const CURRENCY_COLS = new Set([
@@ -68,6 +83,46 @@ const CURRENCY_COLS = new Set([
   "capitaux_propres",
   "capital_social",
 ]);
+
+const SIGNAL_STYLES: Record<string, { bg: string; text: string; border: string }> = {
+  positive: { bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/20" },
+  warning: { bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20" },
+  info: { bg: "bg-sky-500/10", text: "text-sky-400", border: "border-sky-500/20" },
+};
+
+const SIGNAL_ICONS: Record<string, typeof TrendingUp> = {
+  forte_croissance: TrendingUp,
+  ca_en_baisse: TrendingDown,
+  entreprise_recente: Sparkles,
+  nouveau_dirigeant: UserPlus,
+  augmentation_capital: CircleDollarSign,
+  resultat_negatif: AlertTriangle,
+};
+
+function SignalBadge({ signal }: { signal: Signal }) {
+  const style = SIGNAL_STYLES[signal.severity] || SIGNAL_STYLES.info;
+  const Icon = SIGNAL_ICONS[signal.type];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border whitespace-nowrap ${style.bg} ${style.text} ${style.border}`}
+      title={signal.detail || signal.label}
+    >
+      {Icon && <Icon size={10} />}
+      {signal.label}
+    </span>
+  );
+}
+
+function SignalBadges({ signals }: { signals: Signal[] }) {
+  if (!signals || signals.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {signals.map((s) => (
+        <SignalBadge key={s.type} signal={s} />
+      ))}
+    </div>
+  );
+}
 
 const PRIMARY_COLS = new Set(["nom", "ville", "libelle_activite", "effectif_label", "chiffre_affaires"]);
 
@@ -165,10 +220,16 @@ function MobileCard({
         </div>
       </div>
 
-      {primaryCols.filter((c) => c !== "nom" && c !== "ville").length > 0 && (
+      {row.signaux && row.signaux.length > 0 && (
+        <div className="mt-2">
+          <SignalBadges signals={row.signaux} />
+        </div>
+      )}
+
+      {primaryCols.filter((c) => c !== "nom" && c !== "ville" && c !== "signaux").length > 0 && (
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
           {primaryCols
-            .filter((c) => c !== "nom" && c !== "ville")
+            .filter((c) => c !== "nom" && c !== "ville" && c !== "signaux")
             .map((col) => (
               <div key={col} className="flex items-baseline gap-1.5">
                 <span className="text-[10px] text-gray-600 uppercase tracking-wider">
@@ -257,21 +318,43 @@ export default function ResultsTable({
   const [sortAsc, setSortAsc] = useState(true);
   const [filterText, setFilterText] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
+  const [signalFilter, setSignalFilter] = useState<string | null>(null);
 
   const visibleCols = columns.filter(
     (c) => c !== "lien_annuaire" && c !== "google_maps_url"
   );
 
+  const allSignalTypes = useMemo(() => {
+    const types = new Map<string, string>();
+    data.forEach((row) => {
+      (row.signaux || []).forEach((s: Signal) => {
+        if (!types.has(s.type)) types.set(s.type, s.label);
+      });
+    });
+    return types;
+  }, [data]);
+
+  const hasSignals = allSignalTypes.size > 0;
+
   const filtered = useMemo(() => {
-    if (!filterText.trim()) return data;
-    const q = filterText.toLowerCase();
-    return data.filter((row) =>
-      visibleCols.some((col) => {
-        const val = row[col];
-        return val != null && String(val).toLowerCase().includes(q);
-      })
-    );
-  }, [data, filterText, visibleCols]);
+    let result = data;
+    if (filterText.trim()) {
+      const q = filterText.toLowerCase();
+      result = result.filter((row) =>
+        visibleCols.some((col) => {
+          if (col === "signaux") return false;
+          const val = row[col];
+          return val != null && String(val).toLowerCase().includes(q);
+        })
+      );
+    }
+    if (signalFilter) {
+      result = result.filter((row) =>
+        (row.signaux || []).some((s: Signal) => s.type === signalFilter)
+      );
+    }
+    return result;
+  }, [data, filterText, visibleCols, signalFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -301,6 +384,39 @@ export default function ResultsTable({
     }
     setCurrentPage(0);
   };
+
+  const signalChips = hasSignals && (
+    <div className="px-3 pt-2 pb-1 flex flex-wrap gap-1.5">
+      <button
+        onClick={() => { setSignalFilter(null); setCurrentPage(0); }}
+        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+          signalFilter === null
+            ? "bg-white/[0.1] text-white border-white/[0.2]"
+            : "bg-transparent text-gray-500 border-white/[0.06] hover:text-gray-300 hover:border-white/[0.12]"
+        }`}
+      >
+        Tous
+      </button>
+      {Array.from(allSignalTypes.entries()).map(([type, label]) => {
+        const Icon = SIGNAL_ICONS[type];
+        const active = signalFilter === type;
+        return (
+          <button
+            key={type}
+            onClick={() => { setSignalFilter(active ? null : type); setCurrentPage(0); }}
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+              active
+                ? "bg-white/[0.1] text-white border-white/[0.2]"
+                : "bg-transparent text-gray-500 border-white/[0.06] hover:text-gray-300 hover:border-white/[0.12]"
+            }`}
+          >
+            {Icon && <Icon size={10} />}
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   const filterBar = data.length > 3 && (
     <div className="px-3 py-2 border-b border-white/[0.04]">
@@ -384,6 +500,7 @@ export default function ResultsTable({
 
   return (
     <div className="mt-3 rounded-xl border border-white/[0.06] bg-surface-1 overflow-hidden animate-fade-in">
+      {signalChips}
       {filterBar}
 
       {/* Desktop: table */}
@@ -432,12 +549,14 @@ export default function ResultsTable({
                   {visibleCols.map((col) => (
                     <td
                       key={col}
-                      className={`px-3 py-2 text-gray-400 whitespace-nowrap max-w-[220px] truncate ${
-                        col === "nom" ? "font-medium text-white" : ""
-                      }`}
-                      title={formatValue(col, row[col])}
+                      className={`px-3 py-2 text-gray-400 ${
+                        col === "signaux" ? "whitespace-normal" : "whitespace-nowrap max-w-[220px] truncate"
+                      } ${col === "nom" ? "font-medium text-white" : ""}`}
+                      title={col !== "signaux" ? formatValue(col, row[col]) : undefined}
                     >
-                      {col === "site_web" && row[col] ? (
+                      {col === "signaux" ? (
+                        <SignalBadges signals={row.signaux || []} />
+                      ) : col === "site_web" && row[col] ? (
                         <a
                           href={
                             String(row[col]).startsWith("http")

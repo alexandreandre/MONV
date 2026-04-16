@@ -9,6 +9,7 @@ from services.sirene import search_sirene
 from services.pappers import search_pappers, get_company_dirigeants, get_company_finances
 from services.google_places import search_google_places
 from services.orchestrator import extend_columns_for_plan
+from services.signals import detect_signals
 from utils.pipeline_log import plog
 
 MAX_TOTAL_RESULTS = settings.MAX_RESULTS_PER_QUERY * 4
@@ -66,6 +67,9 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
     all_results: list[CompanyResult] = []
     seen_keys: set[str] = set()
 
+    _finances_by_siren: dict[str, list[dict]] = {}
+    _dirigeants_by_siren: dict[str, list[dict]] = {}
+
     sorted_calls = sorted(plan.api_calls, key=lambda c: c.priority)
 
     for call in sorted_calls:
@@ -117,6 +121,7 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
                 dir_data = await get_company_dirigeants(result.siren)
                 reps = dir_data.get("representants", [])
                 if reps:
+                    _dirigeants_by_siren[result.siren] = reps
                     first = reps[0]
                     if not result.dirigeant_nom:
                         result.dirigeant_nom = first.get("nom") or first.get("nom_complet", "")
@@ -133,6 +138,7 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
                 if cap_co is not None:
                     cap_co = _safe_float(cap_co)
                 if finances and isinstance(finances, list) and finances:
+                    _finances_by_siren[result.siren] = finances
                     last = finances[0]
                     if isinstance(last, dict):
                         _apply_finance_row(result, last, cap_co)
@@ -193,7 +199,21 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
                             seen_keys.add(key)
                             all_results.append(r)
 
+    for result in all_results:
+        result.signaux = detect_signals(
+            result,
+            finances=_finances_by_siren.get(result.siren, []),
+            representants=_dirigeants_by_siren.get(result.siren, []),
+        )
+
     cols = extend_columns_for_plan(plan.columns, plan.api_calls)
+    if any(r.signaux for r in all_results) and "signaux" not in cols:
+        cols.insert(0, "signaux")
+
+    plog("signals_detected",
+         total_with_signals=sum(1 for r in all_results if r.signaux),
+         total_results=len(all_results))
+
     return SearchResults(
         total=len(all_results),
         results=all_results,
@@ -265,3 +285,9 @@ def _merge_fields(existing: CompanyResult, new: CompanyResult) -> None:
         existing.date_creation = new.date_creation
     if new.lien_annuaire and not existing.lien_annuaire:
         existing.lien_annuaire = new.lien_annuaire
+    if new.signaux:
+        existing_types = {s.type for s in existing.signaux}
+        for s in new.signaux:
+            if s.type not in existing_types:
+                existing.signaux.append(s)
+                existing_types.add(s.type)
