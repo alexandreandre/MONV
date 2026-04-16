@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useCallback,
+} from "react";
 import {
   apiPost,
   apiGet,
@@ -11,6 +17,7 @@ import {
   type Conversation,
   type ChatResponse,
   type ExportResponse,
+  type QcmSubmitPayload,
 } from "@/lib/api";
 import { LANDING_TEMPLATES } from "@/lib/landingTemplates";
 import AuthModal from "@/components/AuthModal";
@@ -27,8 +34,20 @@ import { ArrowRight } from "lucide-react";
 
 type Page = "chat" | "dashboard" | "credits";
 
+/** Premier mot du nom affiché comme prénom (donnée actuelle côté API : un seul champ `name`). */
+function displayFirstName(fullName: string): string | null {
+  const w = fullName.trim().split(/\s+/)[0];
+  if (!w) return null;
+  return (
+    w.charAt(0).toLocaleUpperCase("fr-FR") +
+    w.slice(1).toLocaleLowerCase("fr-FR")
+  );
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
+  /** Jeton présent : afficher sidebar / header tout de suite, avant /auth/me */
+  const [sessionHint, setSessionHint] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [authInitialMode, setAuthInitialMode] = useState<"login" | "register">(
     "register"
@@ -78,14 +97,22 @@ export default function Home() {
     }
   }, []);
 
+  useLayoutEffect(() => {
+    if (isLoggedIn()) setSessionHint(true);
+  }, []);
+
   useEffect(() => {
-    if (!isLoggedIn()) return;
+    if (!isLoggedIn()) {
+      setSessionHint(false);
+      return;
+    }
 
     let cancelled = false;
     setConversationsLoading(true);
     const token = localStorage.getItem("monv_token");
     if (!token) {
       setConversationsLoading(false);
+      setSessionHint(false);
       return;
     }
 
@@ -99,6 +126,7 @@ export default function Home() {
         if (meRes.status === "rejected") {
           clearToken();
           setUser(null);
+          setSessionHint(false);
           setConversations([]);
           return;
         }
@@ -136,6 +164,7 @@ export default function Home() {
 
   const handleLogout = () => {
     clearToken();
+    setSessionHint(false);
     setUser(null);
     setMessages([]);
     setCurrentConvId(null);
@@ -173,6 +202,7 @@ export default function Home() {
   const handleSend = useCallback(
     async (text: string) => {
       if (!user) {
+        if (sessionHint) return;
         openAuth("register");
         return;
       }
@@ -230,26 +260,44 @@ export default function Home() {
       cleanupProgress();
       setSending(false);
     },
-    [user, currentConvId, loadConversations, addToast, openAuth]
+    [user, sessionHint, currentConvId, loadConversations, addToast, openAuth]
   );
 
   const handleQcmSubmit = useCallback(
-    async (text: string) => {
+    async (payload: QcmSubmitPayload) => {
       if (!user) return;
       setSending(true);
       const cleanupProgress = simulatePipelineProgress();
 
+      const optimisticUserMsg: Message = {
+        id: "temp-qcm-" + Date.now(),
+        role: "user",
+        content: "Choix validés",
+        message_type: "text",
+        metadata_json: JSON.stringify({ qcm_choice_submit: true }),
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, optimisticUserMsg]);
+
       try {
         const res = await apiPost<ChatResponse>("/chat/send", {
           conversation_id: currentConvId,
-          message: text,
+          message: payload.guardMessage,
+          qcm_answers: payload.qcm_answers,
         });
 
         if (!currentConvId) {
           setCurrentConvId(res.conversation_id);
         }
 
-        setMessages((prev) => [...prev, ...res.messages]);
+        setMessages((prev) => {
+          const rest = prev.filter((m) => m.id !== optimisticUserMsg.id);
+          const userPersisted: Message = {
+            ...optimisticUserMsg,
+            id: "user-qcm-" + Date.now(),
+          };
+          return [...rest, userPersisted, ...res.messages];
+        });
 
         const updatedUser = await apiGet<User>(
           "/auth/me?token=" + localStorage.getItem("monv_token")
@@ -301,6 +349,7 @@ export default function Home() {
 
   const handleTemplateSelect = (query: string) => {
     if (!user) {
+      if (sessionHint) return;
       openAuth("register");
       return;
     }
@@ -314,6 +363,16 @@ export default function Home() {
     "Données INSEE & RCS",
   ];
 
+  const showAuthenticatedChrome = Boolean(user || sessionHint);
+
+  const chatLandingHeadline = (() => {
+    if (!user) return "MONV";
+    const first = displayFirstName(user.name);
+    return first
+      ? `Bonjour ${first}, bienvenue dans MONV`
+      : "Bienvenue dans MONV";
+  })();
+
   const sidebarProps = {
     user,
     conversations,
@@ -321,7 +380,10 @@ export default function Home() {
     currentConvId,
     onNewChat: handleNewChat,
     onSelectConversation: handleSelectConversation,
-    onNavigate: setPage,
+    onNavigate: (p: Page) => {
+      if (!user && p !== "chat") return;
+      setPage(p);
+    },
     onLogout: handleLogout,
     collapsed: sidebarCollapsed,
     onToggle: () => setSidebarCollapsed(!sidebarCollapsed),
@@ -375,10 +437,10 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-surface-0">
-      {user && <Sidebar {...sidebarProps} />}
+      {showAuthenticatedChrome && <Sidebar {...sidebarProps} />}
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {user && (
+        {showAuthenticatedChrome && (
           <MobileHeader
             user={user}
             onMenuOpen={() => setSidebarMobileOpen(true)}
@@ -386,62 +448,73 @@ export default function Home() {
           />
         )}
         {messages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 overflow-y-auto">
-            <div className="max-w-2xl w-full text-center mb-8 sm:mb-10">
-              <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white mb-3">
-                MONV
-              </h1>
-              <p className="text-base sm:text-lg text-gray-400 max-w-md mx-auto leading-relaxed">
-                Trouvez n&apos;importe quelle entreprise en France.
-                Décrivez ce que vous cherchez, récupérez votre liste.
-              </p>
+          <div className="flex-1 flex flex-col items-center px-4 sm:px-6 overflow-y-auto">
+            <div className="my-auto w-full flex flex-col items-center py-6 sm:py-10">
+              <div className="max-w-2xl w-full text-center mb-8 sm:mb-10">
+                <h1
+                  className={`font-extrabold tracking-tight text-white mb-3 text-balance ${
+                    user
+                      ? "text-2xl sm:text-4xl leading-tight"
+                      : "text-3xl sm:text-5xl"
+                  }`}
+                >
+                  {chatLandingHeadline}
+                </h1>
+                <p className="text-base sm:text-lg text-gray-400 max-w-md mx-auto leading-relaxed">
+                  Trouvez n&apos;importe quelle entreprise en France.
+                  Décrivez ce que vous cherchez, récupérez votre liste.
+                </p>
 
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-4 sm:mt-5">
-                {CAPABILITIES.map((cap) => (
-                  <span
-                    key={cap}
-                    className="text-xs text-gray-500 border border-gray-800 rounded-full px-3 py-1"
-                  >
-                    {cap}
-                  </span>
-                ))}
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-4 sm:mt-5">
+                  {CAPABILITIES.map((cap) => (
+                    <span
+                      key={cap}
+                      className="text-xs text-gray-500 border border-gray-800 rounded-full px-3 py-1"
+                    >
+                      {cap}
+                    </span>
+                  ))}
+                </div>
+
+                {!user && !sessionHint && (
+                  <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 px-2 sm:px-0">
+                    <button
+                      type="button"
+                      onClick={() => openAuth("register")}
+                      className="inline-flex items-center justify-center gap-2 bg-white text-gray-950 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 active:bg-gray-300 transition-colors text-sm w-full sm:w-auto min-h-[44px]"
+                    >
+                      S&apos;inscrire — 5 crédits offerts
+                      <ArrowRight size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openAuth("login")}
+                      className="inline-flex items-center justify-center px-6 py-3 rounded-lg font-semibold text-sm text-white border border-gray-700 hover:bg-white/[0.06] active:bg-white/[0.1] hover:border-gray-600 transition-colors w-full sm:w-auto min-h-[44px]"
+                    >
+                      Se connecter
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {!user && (
-                <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 px-2 sm:px-0">
-                  <button
-                    type="button"
-                    onClick={() => openAuth("register")}
-                    className="inline-flex items-center justify-center gap-2 bg-white text-gray-950 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 active:bg-gray-300 transition-colors text-sm w-full sm:w-auto min-h-[44px]"
-                  >
-                    S&apos;inscrire — 5 crédits offerts
-                    <ArrowRight size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openAuth("login")}
-                    className="inline-flex items-center justify-center px-6 py-3 rounded-lg font-semibold text-sm text-white border border-gray-700 hover:bg-white/[0.06] active:bg-white/[0.1] hover:border-gray-600 transition-colors w-full sm:w-auto min-h-[44px]"
-                  >
-                    Se connecter
-                  </button>
+              {(user || sessionHint) && (
+                <div className="w-full max-w-2xl mb-8">
+                  <ChatInput
+                    onSend={handleSend}
+                    disabled={sending || !user}
+                  />
                 </div>
               )}
-            </div>
 
-            {user && (
-              <div className="w-full max-w-2xl mb-8">
-                <ChatInput onSend={handleSend} disabled={sending} />
+              <div className="w-full max-w-3xl">
+                <p className="text-xs font-medium text-gray-600 uppercase tracking-wider text-center mb-3">
+                  Exemples de recherches
+                </p>
+                <TemplateCards
+                  templates={templates}
+                  onSelect={handleTemplateSelect}
+                />
               </div>
-            )}
-
-            <div className="w-full max-w-3xl">
-              <p className="text-xs font-medium text-gray-600 uppercase tracking-wider text-center mb-3">
-                Exemples de recherches
-              </p>
-              <TemplateCards
-                templates={templates}
-                onSelect={handleTemplateSelect}
-              />
             </div>
           </div>
         ) : (

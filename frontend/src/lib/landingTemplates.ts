@@ -8,16 +8,16 @@ export const LANDING_TEMPLATES: Template[] = [
     description:
       "Clubs et magasins de padel à contacter pour une offre de site web",
     query:
-      "Je cherche des boutiques de padel et clubs de padel en France pour leur proposer la création ou la refonte d'un site web",
+      "Je cherche des boutiques de padel et clubs de padel pour leur proposer la création ou la refonte d'un site web",
     icon: "activity",
   },
   {
     id: "hotel-3-etoiles-marseille-rachat",
-    title: "Hôtels 3 étoiles à Marseille",
+    title: "Hôtels 3 étoiles",
     description:
       "Établissements hôteliers 3★ pour étude de potentiel rachat",
     query:
-      "Je cherche des hôtels 3 étoiles à Marseille pour une analyse de potentiel rachat ou d'acquisition",
+      "Je cherche des hôtels 3 étoiles pour une analyse de potentiel rachat ou d'acquisition",
     icon: "hotel",
   },
   {

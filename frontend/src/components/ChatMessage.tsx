@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 import ResultsTable from "./ResultsTable";
 import QcmCard from "./QcmCard";
 import { AlertCircle } from "lucide-react";
-import type { Message, QcmPayload } from "@/lib/api";
+import type { Message, QcmPayload, QcmSubmitPayload } from "@/lib/api";
 
 interface Props {
   message: Message;
@@ -12,7 +12,7 @@ interface Props {
   creditsUnlimited?: boolean;
   onExport: (searchId: string, format: "xlsx" | "csv") => void;
   exporting: boolean;
-  onQcmSubmit?: (answers: string) => void;
+  onQcmSubmit?: (payload: QcmSubmitPayload) => void;
 }
 
 export default function ChatMessage({

@@ -4,7 +4,7 @@ import { Menu, CreditCard } from "lucide-react";
 import type { User } from "@/lib/api";
 
 interface Props {
-  user: User;
+  user: User | null;
   onMenuOpen: () => void;
   onNavigateCredits: () => void;
 }
@@ -32,8 +32,19 @@ export default function MobileHeader({
         aria-label="Crédits"
       >
         <CreditCard size={15} />
-        <span className="text-xs tabular-nums font-medium">
-          {user.credits_unlimited ? "∞" : user.credits}
+        <span className="text-xs tabular-nums font-medium min-w-[1.25rem] inline-flex justify-end">
+          {user ? (
+            user.credits_unlimited ? (
+              "∞"
+            ) : (
+              user.credits
+            )
+          ) : (
+            <span
+              className="h-3 w-7 rounded bg-white/[0.08] animate-pulse"
+              aria-hidden
+            />
+          )}
         </span>
       </button>
     </div>
