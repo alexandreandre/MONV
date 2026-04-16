@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-16T14:34:31.751450",
+  "timestamp": "2026-04-16T14:50:45.106293",
   "model": "openai/gpt-4o-mini",
   "threshold": 4,
   "results": [
@@ -8,153 +8,151 @@
       "query": "Boutiques de padel à Marseille",
       "mode": "prospection",
       "target": "commerces/clubs spécifiquement liés au padel",
-      "raw_count": 533,
-      "filtered_count": 51,
+      "raw_count": 214,
+      "filtered_count": 20,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 533,
-        "relevance_after": 51,
-        "relevance_removed": 482,
+        "relevance_before": 214,
+        "relevance_after": 20,
+        "relevance_removed": 194,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "5": 56,
-          "4": 8,
-          "3": 157,
-          "6": 1,
-          "1": 164,
-          "7": 31,
-          "9": 18,
-          "0": 97,
-          "8": 1
+          "5": 62,
+          "4": 4,
+          "7": 10,
+          "3": 71,
+          "1": 27,
+          "0": 30,
+          "9": 10
         },
-        "relevance_avg_score": 2.5
+        "relevance_avg_score": 3.4
       },
       "eval_scores": [
+        {
+          "nom": "NM PADEL",
+          "activite": null,
+          "score": 8,
+          "reason": "Club/boutique de padel à Marseille"
+        },
+        {
+          "nom": "YESYES PADEL",
+          "activite": null,
+          "score": 8,
+          "reason": "Club/boutique de padel à Marseille"
+        },
+        {
+          "nom": "TCP PADEL",
+          "activite": null,
+          "score": 8,
+          "reason": "Club/boutique de padel à Marseille"
+        },
+        {
+          "nom": "7 PADEL (CAP 7 PADEL)",
+          "activite": null,
+          "score": 8,
+          "reason": "Club/boutique de padel à Marseille"
+        },
+        {
+          "nom": "PADEL GENERATION",
+          "activite": null,
+          "score": 7,
+          "reason": "Entreprise liée au padel à Marseille"
+        },
+        {
+          "nom": "VIBORA PADEL",
+          "activite": null,
+          "score": 8,
+          "reason": "Club/boutique de padel à Marseille"
+        },
+        {
+          "nom": "O SPORTING PADEL (O SPORTING PADEL)",
+          "activite": null,
+          "score": 8,
+          "reason": "Club/boutique de padel à Marseille"
+        },
+        {
+          "nom": "LUCA TAMBURRO (MONITEUR PADEL)",
+          "activite": null,
+          "score": 6,
+          "reason": "Moniteur de padel à Marseille"
+        },
+        {
+          "nom": "DORIER",
+          "activite": null,
+          "score": 3,
+          "reason": "Pas clairement lié au padel"
+        },
+        {
+          "nom": "CYRIL PAQUET (PREMIUM COACH PADEL)",
+          "activite": null,
+          "score": 6,
+          "reason": "Coach de padel à Marseille"
+        },
         {
           "nom": "Padel Marseille",
           "activite": "Club de sport",
           "score": 9,
-          "reason": "Club de padel à Marseille, correspond exactement"
+          "reason": "Club de padel à Marseille"
         },
         {
-          "nom": "REGIS GALVEZ",
+          "nom": "ZOUHIR NASSIRI",
           "activite": null,
           "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
+          "reason": "Aucun lien avec le padel"
         },
         {
-          "nom": "SARL VIRAGE SUD",
+          "nom": "NEW CAMP",
           "activite": null,
           "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
+          "reason": "Aucun lien avec le padel"
         },
         {
-          "nom": "FUN BURN",
+          "nom": "AU VELO ELECTRIQUE",
           "activite": null,
           "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
+          "reason": "Aucun lien avec le padel"
         },
         {
-          "nom": "LIVE2RIDE",
+          "nom": "SARL POLO-MARINE",
           "activite": null,
           "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
+          "reason": "Aucun lien avec le padel"
         },
         {
-          "nom": "SUD PLAISANCE COTE D'AZUR (SPCA)",
+          "nom": "SUN BOAT",
           "activite": null,
           "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
+          "reason": "Aucun lien avec le padel"
         },
         {
-          "nom": "CPM SPORTS",
-          "activite": null,
-          "score": 2,
-          "reason": "Code APE commerce, potentiellement lié aux sports"
-        },
-        {
-          "nom": "WIZWEDGE",
+          "nom": "Z. NAUTIC",
           "activite": null,
           "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
+          "reason": "Aucun lien avec le padel"
         },
         {
-          "nom": "LUCALEX",
+          "nom": "CAP-RUNNING",
           "activite": null,
           "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
+          "reason": "Aucun lien avec le padel"
         },
         {
-          "nom": "MEDYACHT MARSEILLE",
+          "nom": "VENTS DES SENS (V.D.S)",
           "activite": null,
           "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
+          "reason": "Aucun lien avec le padel"
         },
         {
-          "nom": "LE CYCLE MARSEILLAIS",
+          "nom": "EURL ZERDAB",
           "activite": null,
           "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
-        },
-        {
-          "nom": "ALPINA SPORT",
-          "activite": null,
-          "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
-        },
-        {
-          "nom": "PEPPER SAILS",
-          "activite": null,
-          "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
-        },
-        {
-          "nom": "FUN BIKES",
-          "activite": null,
-          "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
-        },
-        {
-          "nom": "EVASION SPORT (L'ATELIER DE LA MER)",
-          "activite": null,
-          "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
-        },
-        {
-          "nom": "PECHE PASSION CHEZ CLAUDE",
-          "activite": null,
-          "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
-        },
-        {
-          "nom": "B.D.M.",
-          "activite": null,
-          "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
-        },
-        {
-          "nom": "MATOUG",
-          "activite": null,
-          "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
-        },
-        {
-          "nom": "PROFESSIONAL STORE",
-          "activite": null,
-          "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
-        },
-        {
-          "nom": "DICI",
-          "activite": null,
-          "score": 1,
-          "reason": "Code APE commerce, aucun lien avec padel"
+          "reason": "Aucun lien avec le padel"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 1.4,
-      "precision_at_10": 10.0,
-      "time_ms": 69369,
+      "avg_score_filtered": 4.4,
+      "precision_at_10": 90.0,
+      "time_ms": 36084,
       "error": null
     },
     {
@@ -162,153 +160,155 @@
       "query": "Restaurants japonais à Bordeaux",
       "mode": "prospection",
       "target": "restaurants de cuisine japonaise uniquement",
-      "raw_count": 383,
-      "filtered_count": 69,
+      "raw_count": 533,
+      "filtered_count": 72,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 383,
-        "relevance_after": 69,
-        "relevance_removed": 314,
+        "relevance_before": 533,
+        "relevance_after": 72,
+        "relevance_removed": 461,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "10": 30,
-          "7": 8,
-          "5": 8,
-          "4": 7,
+          "10": 28,
+          "6": 4,
+          "5": 27,
+          "7": 17,
+          "4": 8,
+          "2": 1,
+          "9": 8,
+          "1": 117,
+          "0": 225,
           "3": 83,
-          "1": 75,
-          "9": 7,
-          "0": 141,
-          "8": 24
+          "8": 15
         },
-        "relevance_avg_score": 2.6
+        "relevance_avg_score": 2.2
       },
       "eval_scores": [
         {
           "nom": "un soir à Shibuya",
           "activite": "Restaurant japonais",
-          "score": 9,
+          "score": 8,
           "reason": "Restaurant japonais à Bordeaux"
         },
         {
           "nom": "Restaurant Ishikawa",
           "activite": "Restaurant japonais",
-          "score": 9,
-          "reason": "Restaurant japonais à Bordeaux"
-        },
-        {
-          "nom": "Isshin Ramen",
-          "activite": "Restaurant de nouilles (ramen)",
           "score": 8,
-          "reason": "Restaurant de ramen japonais à Bordeaux"
-        },
-        {
-          "nom": "PAVILLON YUASA",
-          "activite": "Restaurant japonais",
-          "score": 9,
-          "reason": "Restaurant japonais à Bordeaux"
-        },
-        {
-          "nom": "Mako",
-          "activite": "Restaurant de sushis",
-          "score": 8,
-          "reason": "Restaurant de sushis japonais à Bordeaux"
-        },
-        {
-          "nom": "Maison Musubi",
-          "activite": "Restaurant japonais",
-          "score": 9,
-          "reason": "Restaurant japonais à Bordeaux"
-        },
-        {
-          "nom": "DONO Bordeaux - Cantine Japonaise",
-          "activite": "Restaurant japonais",
-          "score": 9,
-          "reason": "Cantine japonaise à Bordeaux"
-        },
-        {
-          "nom": "Le Samourai",
-          "activite": "Restaurant japonais",
-          "score": 9,
-          "reason": "Restaurant japonais à Bordeaux"
-        },
-        {
-          "nom": "CHIHIRO",
-          "activite": "Restaurant japonais",
-          "score": 9,
-          "reason": "Restaurant japonais à Bordeaux"
-        },
-        {
-          "nom": "Café Japonais",
-          "activite": "Restaurant japonais",
-          "score": 9,
           "reason": "Restaurant japonais à Bordeaux"
         },
         {
           "nom": "WAKU WAKU RAMEN",
           "activite": "Restaurant japonais",
           "score": 8,
-          "reason": "Restaurant de ramen japonais à Bordeaux"
-        },
-        {
-          "nom": "Fufu Ramen",
-          "activite": "Restaurant japonais",
-          "score": 8,
-          "reason": "Restaurant de ramen japonais à Bordeaux"
+          "reason": "Restaurant japonais à Bordeaux"
         },
         {
           "nom": "COUCOU Ramen Bordeaux",
           "activite": "Restaurant japonais",
           "score": 8,
-          "reason": "Restaurant de ramen japonais à Bordeaux"
+          "reason": "Restaurant japonais à Bordeaux"
+        },
+        {
+          "nom": "PAVILLON YUASA",
+          "activite": "Restaurant japonais",
+          "score": 8,
+          "reason": "Restaurant japonais à Bordeaux"
+        },
+        {
+          "nom": "Café Japonais",
+          "activite": "Restaurant japonais",
+          "score": 8,
+          "reason": "Restaurant japonais à Bordeaux"
+        },
+        {
+          "nom": "Fufu Ramen",
+          "activite": "Restaurant japonais",
+          "score": 8,
+          "reason": "Restaurant japonais à Bordeaux"
+        },
+        {
+          "nom": "Maison Musubi",
+          "activite": "Restaurant japonais",
+          "score": 8,
+          "reason": "Restaurant japonais à Bordeaux"
+        },
+        {
+          "nom": "Le Samourai",
+          "activite": "Restaurant japonais",
+          "score": 8,
+          "reason": "Restaurant japonais à Bordeaux"
+        },
+        {
+          "nom": "CHIHIRO",
+          "activite": "Restaurant japonais",
+          "score": 8,
+          "reason": "Restaurant japonais à Bordeaux"
         },
         {
           "nom": "MORIMOTO BORDEAUX",
           "activite": "Restaurant japonais",
-          "score": 9,
-          "reason": "Restaurant japonais à Bordeaux"
-        },
-        {
-          "nom": "Matsuri Bordeaux",
-          "activite": "Restaurant de sushis",
           "score": 8,
-          "reason": "Restaurant de sushis japonais à Bordeaux"
-        },
-        {
-          "nom": "SUKI",
-          "activite": "Restaurant japonais",
-          "score": 9,
           "reason": "Restaurant japonais à Bordeaux"
         },
         {
           "nom": "Foodji",
           "activite": "Restaurant japonais",
-          "score": 9,
+          "score": 8,
           "reason": "Restaurant japonais à Bordeaux"
         },
         {
           "nom": "Sushi DOZO Bordeaux",
           "activite": "Restaurant japonais",
-          "score": 9,
+          "score": 8,
+          "reason": "Restaurant japonais à Bordeaux"
+        },
+        {
+          "nom": "DONO Bordeaux - Cantine Japonaise",
+          "activite": "Restaurant japonais",
+          "score": 8,
           "reason": "Restaurant japonais à Bordeaux"
         },
         {
           "nom": "Maki Shop",
           "activite": "Restaurant japonais",
-          "score": 9,
+          "score": 8,
           "reason": "Restaurant japonais à Bordeaux"
         },
         {
           "nom": "Umami ramen",
           "activite": "Restaurant japonais",
           "score": 8,
-          "reason": "Restaurant de ramen japonais à Bordeaux"
+          "reason": "Restaurant japonais à Bordeaux"
+        },
+        {
+          "nom": "Kin no Yama",
+          "activite": "Restaurant japonais",
+          "score": 8,
+          "reason": "Restaurant japonais à Bordeaux"
+        },
+        {
+          "nom": "Momoko",
+          "activite": "Restaurant japonais",
+          "score": 8,
+          "reason": "Restaurant japonais à Bordeaux"
+        },
+        {
+          "nom": "Wasabi Café",
+          "activite": "Restaurant japonais",
+          "score": 8,
+          "reason": "Restaurant japonais à Bordeaux"
+        },
+        {
+          "nom": "CHEF AJI BRUNCH",
+          "activite": "Restaurant japonais",
+          "score": 8,
+          "reason": "Restaurant japonais à Bordeaux"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 8.7,
+      "avg_score_filtered": 8.0,
       "precision_at_10": 100.0,
-      "time_ms": 63646,
+      "time_ms": 67158,
       "error": null
     },
     {
@@ -316,152 +316,152 @@
       "query": "ESN en Île-de-France",
       "mode": "prospection",
       "target": "entreprises de services numériques / SSII",
-      "raw_count": 150,
-      "filtered_count": 85,
+      "raw_count": 426,
+      "filtered_count": 305,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 150,
-        "relevance_after": 85,
-        "relevance_removed": 65,
-        "relevance_threshold": 5,
+        "relevance_before": 426,
+        "relevance_after": 305,
+        "relevance_removed": 121,
+        "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "3": 42,
-          "0": 11,
-          "6": 13,
-          "8": 45,
-          "5": 22,
-          "4": 1,
-          "1": 11,
-          "7": 5
+          "1": 41,
+          "7": 91,
+          "8": 160,
+          "5": 50,
+          "6": 28,
+          "0": 29,
+          "3": 1,
+          "9": 26
         },
-        "relevance_avg_score": 4.8
+        "relevance_avg_score": 6.1
       },
       "eval_scores": [
         {
-          "nom": "EXA INFRASTRUCTURE FRANCE SAS",
-          "activite": null,
-          "score": 3,
-          "reason": "Infrastructure télécoms, pas vraiment une ESN"
-        },
-        {
-          "nom": "CAPGEMINI TECHNOLOGY SERVICES",
-          "activite": null,
-          "score": 9,
-          "reason": "ESN majeure, parfaitement correspondante"
-        },
-        {
-          "nom": "INETUM",
-          "activite": null,
-          "score": 9,
-          "reason": "ESN majeure, parfaitement correspondante"
-        },
-        {
-          "nom": "ORANGE BUSINESS SERVICES",
+          "nom": "IDOX FRANCE",
           "activite": null,
           "score": 7,
-          "reason": "Services numériques d'opérateur télécoms"
+          "reason": "Code APE services informatiques, Paris"
         },
         {
-          "nom": "FIDUCIAL INFORMATIQUE",
-          "activite": null,
-          "score": 8,
-          "reason": "ESN spécialisée, très proche de la cible"
-        },
-        {
-          "nom": "ALTRAN TECHNOLOGIES",
-          "activite": null,
-          "score": 8,
-          "reason": "ESN technologique, très bon résultat"
-        },
-        {
-          "nom": "CGI FRANCE",
-          "activite": null,
-          "score": 9,
-          "reason": "ESN majeure, parfaitement correspondante"
-        },
-        {
-          "nom": "NXO FRANCE",
-          "activite": null,
-          "score": 8,
-          "reason": "ESN spécialisée, très bon résultat"
-        },
-        {
-          "nom": "ATOS FRANCE",
-          "activite": null,
-          "score": 9,
-          "reason": "ESN majeure, parfaitement correspondante"
-        },
-        {
-          "nom": "ALTEN",
-          "activite": null,
-          "score": 9,
-          "reason": "ESN majeure, parfaitement correspondante"
-        },
-        {
-          "nom": "SOCIETE POUR L'INFORMATIQUE INDUSTRIELLE (SII)",
-          "activite": null,
-          "score": 9,
-          "reason": "ESN majeure, parfaitement correspondante"
-        },
-        {
-          "nom": "SPIE ICS",
+          "nom": "CELUGA (CELUGA)",
           "activite": null,
           "score": 7,
-          "reason": "Services informatiques, proche de la cible"
+          "reason": "Code APE services informatiques, Paris"
         },
         {
-          "nom": "BULL SAS",
-          "activite": null,
-          "score": 8,
-          "reason": "ESN technologique, très bon résultat"
-        },
-        {
-          "nom": "CAPGEMINI ENGINEERING RESEARCH AND DEVELOPMENT",
-          "activite": null,
-          "score": 8,
-          "reason": "ESN spécialisée en R&D, très bon résultat"
-        },
-        {
-          "nom": "APSIDE",
-          "activite": null,
-          "score": 8,
-          "reason": "ESN spécialisée, très bon résultat"
-        },
-        {
-          "nom": "ALTITUDE INFRASTRUCTURE THD",
-          "activite": null,
-          "score": 3,
-          "reason": "Infrastructure télécoms, pas une ESN"
-        },
-        {
-          "nom": "ECONOCOM SERVICES & SOLUTIONS (ECONOCOM SERVICES & SOLUTIONS)",
+          "nom": "HOVE (KISIO DIGITAL)",
           "activite": null,
           "score": 7,
-          "reason": "Services numériques, proche de la cible"
+          "reason": "Code APE services informatiques, Paris"
         },
         {
-          "nom": "JILITI",
+          "nom": "VOXLER",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE services informatiques, Paris"
+        },
+        {
+          "nom": "EFFISYS",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE services informatiques, Paris"
+        },
+        {
+          "nom": "VILOGI",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE services informatiques, Paris"
+        },
+        {
+          "nom": "INCENTEEV",
           "activite": null,
           "score": 5,
-          "reason": "Services informatiques, lien plausible"
+          "reason": "Code APE services informatiques mais activité moins claire"
         },
         {
-          "nom": "ORANGE CONCESSIONS (ORANGE CONCESSIONS)",
+          "nom": "P1 SECURITY",
           "activite": null,
-          "score": 3,
-          "reason": "Concessions, pas une ESN"
+          "score": 7,
+          "reason": "Code APE services informatiques, Paris"
         },
         {
-          "nom": "CIS INFOSERVICES",
+          "nom": "LYDIA SOLUTIONS",
           "activite": null,
-          "score": 6,
-          "reason": "Services informatiques, lien modéré"
+          "score": 5,
+          "reason": "Code APE services informatiques mais activité fintech"
+        },
+        {
+          "nom": "PROGRESSIF MEDIA",
+          "activite": null,
+          "score": 5,
+          "reason": "Code APE services informatiques mais média"
+        },
+        {
+          "nom": "MADAGENCE",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE services informatiques, Paris"
+        },
+        {
+          "nom": "EPAM FRANCE",
+          "activite": null,
+          "score": 7,
+          "reason": "ESN internationale, Paris"
+        },
+        {
+          "nom": "CONTENT TO EMOTION",
+          "activite": null,
+          "score": 5,
+          "reason": "Code APE services informatiques mais média"
+        },
+        {
+          "nom": "DROP TEAM DROP TEAM (DROP TEAM)",
+          "activite": null,
+          "score": 5,
+          "reason": "Code APE services informatiques mais activité peu claire"
+        },
+        {
+          "nom": "HUBSIDE",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE services informatiques, Paris"
+        },
+        {
+          "nom": "LVPRO (LEGALVISIONPRO)",
+          "activite": null,
+          "score": 5,
+          "reason": "Code APE services informatiques mais juridique"
+        },
+        {
+          "nom": "MY JOB GLASSES",
+          "activite": null,
+          "score": 5,
+          "reason": "Code APE services informatiques mais RH"
+        },
+        {
+          "nom": "TRIPICA",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE services informatiques, Paris"
+        },
+        {
+          "nom": "VOXTEL",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE services informatiques, Paris"
+        },
+        {
+          "nom": "QESTIT FRANCE",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE services informatiques, Paris"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 7.2,
-      "precision_at_10": 90.0,
-      "time_ms": 31578,
+      "avg_score_filtered": 6.3,
+      "precision_at_10": 100.0,
+      "time_ms": 60415,
       "error": null
     },
     {
@@ -469,151 +469,153 @@
       "query": "Hôtels 3 étoiles à Nice",
       "mode": "prospection",
       "target": "hôtels de catégorie 3 étoiles, pas 4-5 étoiles ni auberges",
-      "raw_count": 504,
-      "filtered_count": 55,
+      "raw_count": 213,
+      "filtered_count": 26,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 504,
-        "relevance_after": 55,
-        "relevance_removed": 449,
+        "relevance_before": 213,
+        "relevance_after": 26,
+        "relevance_removed": 187,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "5": 121,
-          "9": 17,
-          "1": 203,
-          "3": 55,
-          "0": 70,
-          "7": 14,
-          "8": 24
+          "3": 7,
+          "0": 97,
+          "8": 8,
+          "5": 41,
+          "7": 2,
+          "1": 42,
+          "9": 11,
+          "10": 4,
+          "6": 1
         },
-        "relevance_avg_score": 2.8
+        "relevance_avg_score": 2.3
       },
       "eval_scores": [
         {
           "nom": "Hôtel 3 étoiles Le Royal - Nice - Vacances Bleues",
           "activite": "Hôtel",
           "score": 9,
-          "reason": "Hôtel 3 étoiles à Nice, correspondance parfaite"
+          "reason": "Hôtel 3 étoiles à Nice, correspond exactement"
         },
         {
           "nom": "Hôtel Busby : 3 étoiles Nice centre-ville",
           "activite": "Hôtel",
           "score": 9,
-          "reason": "Hôtel 3 étoiles à Nice, correspondance parfaite"
+          "reason": "Hôtel 3 étoiles à Nice, correspond exactement"
+        },
+        {
+          "nom": "Hôtel & Appartements Monsigny Nice",
+          "activite": "Hôtel",
+          "score": 7,
+          "reason": "Hôtel à Nice, probablement 3 étoiles"
+        },
+        {
+          "nom": "Hotel So'Co Nice by HappyCulture",
+          "activite": "Hôtel",
+          "score": 6,
+          "reason": "Hôtel à Nice, catégorie non précisée"
+        },
+        {
+          "nom": "HOTEL MONSIGNY",
+          "activite": null,
+          "score": 5,
+          "reason": "Hôtel à Nice, mais catégorie non confirmée"
+        },
+        {
+          "nom": "Hôtel Villa Rose",
+          "activite": "Hôtel",
+          "score": 5,
+          "reason": "Hôtel à Nice, mais catégorie non confirmée"
         },
         {
           "nom": "Esatitude Hotel 3 étoiles",
           "activite": "Hôtel",
           "score": 9,
-          "reason": "Hôtel 3 étoiles à Nice, correspondance parfaite"
+          "reason": "Hôtel 3 étoiles à Nice, correspond exactement"
         },
         {
-          "nom": "HOTEL MONSIGNY",
-          "activite": null,
+          "nom": "Hôtel Nap by HappyCulture",
+          "activite": "Hôtel",
+          "score": 6,
+          "reason": "Hôtel à Nice, catégorie non précisée"
+        },
+        {
+          "nom": "Nice Garden Hôtel",
+          "activite": "Hôtel",
+          "score": 6,
+          "reason": "Hôtel à Nice, catégorie non confirmée"
+        },
+        {
+          "nom": "Hôtel ibis Nice Aéroport Promenade des Anglais",
+          "activite": "Hôtel",
           "score": 4,
-          "reason": "Hôtel à Nice mais classification non précisée"
+          "reason": "Hôtel ibis, probablement 2 ou 4 étoiles"
         },
         {
-          "nom": "HOTEL DU COUVENT",
-          "activite": null,
+          "nom": "Hôtel Esprit d'Azur",
+          "activite": "Hôtel",
+          "score": 5,
+          "reason": "Hôtel à Nice, mais catégorie non confirmée"
+        },
+        {
+          "nom": "Hotel Villa Les Cygnes",
+          "activite": "Hôtel",
+          "score": 5,
+          "reason": "Hôtel à Nice, mais catégorie non confirmée"
+        },
+        {
+          "nom": "Hôtel Helvétique Nice",
+          "activite": "Hôtel",
+          "score": 5,
+          "reason": "Hôtel à Nice, mais catégorie non confirmée"
+        },
+        {
+          "nom": "Amaryllis Hôtel",
+          "activite": "Hôtel",
+          "score": 5,
+          "reason": "Hôtel à Nice, mais catégorie non confirmée"
+        },
+        {
+          "nom": "Hôtel ibis Styles Nice Aéroport Arenas",
+          "activite": "Hôtel",
           "score": 4,
-          "reason": "Hôtel à Nice mais classification non précisée"
+          "reason": "Hôtel ibis Styles, probablement 2 ou 4 étoiles"
         },
         {
-          "nom": "HOTEL BEAU RIVAGE SDG",
+          "nom": "GRH (HOTEL ALADIN)",
           "activite": null,
-          "score": 4,
-          "reason": "Hôtel à Nice mais classification non précisée"
+          "score": 3,
+          "reason": "Hôtel à Nice, mais informations insuffisantes"
         },
         {
-          "nom": "SAINT HOSPICE",
-          "activite": null,
-          "score": 2,
-          "reason": "Nom d'hôtel sans détail de classification"
-        },
-        {
-          "nom": "SOCIETE NOUVELLE HOTEL DE LYON (SNHL)",
+          "nom": "CHOPPER",
           "activite": null,
           "score": 2,
-          "reason": "Nom d'hôtel sans détail de classification"
+          "reason": "Nom incompréhensible, pas d'info sur l'hôtel"
         },
         {
-          "nom": "PURE MONTAGNE RESORT",
+          "nom": "LES FLORIALES",
           "activite": null,
-          "score": 2,
-          "reason": "Resort, pas un hôtel 3 étoiles"
+          "score": 3,
+          "reason": "Nom incompréhensible, pas d'info sur l'hôtel"
         },
         {
-          "nom": "AMA OLIV8",
+          "nom": "NH HOTELES FRANCE",
           "activite": null,
-          "score": 2,
-          "reason": "Nom sans lien clair avec hôtellerie"
+          "score": 3,
+          "reason": "Chaîne hôtelière, pas un hôtel spécifique"
         },
         {
-          "nom": "SOCIETE HOTELIERE ET IMMOBILIERE DE NICE (SHIN)",
+          "nom": "SOLESTIA CANNES",
           "activite": null,
           "score": 2,
-          "reason": "Société hôtelière, pas un hôtel"
-        },
-        {
-          "nom": "VILLA ROSERAIE (VILLA VICTORINE)",
-          "activite": null,
-          "score": 2,
-          "reason": "Villa, pas un hôtel 3 étoiles"
-        },
-        {
-          "nom": "HRS PLAISIR PRESTIGE",
-          "activite": null,
-          "score": 2,
-          "reason": "Nom sans lien clair avec hôtellerie"
-        },
-        {
-          "nom": "SEASIDE",
-          "activite": null,
-          "score": 2,
-          "reason": "Nom sans détail de classification"
-        },
-        {
-          "nom": "YELO MOZART",
-          "activite": null,
-          "score": 2,
-          "reason": "Nom sans détail de classification"
-        },
-        {
-          "nom": "LES MERVEILLES",
-          "activite": null,
-          "score": 2,
-          "reason": "Nom sans détail de classification"
-        },
-        {
-          "nom": "YELO ICONIC",
-          "activite": null,
-          "score": 2,
-          "reason": "Nom sans détail de classification"
-        },
-        {
-          "nom": "YELO RIVIERA",
-          "activite": null,
-          "score": 2,
-          "reason": "Nom sans détail de classification"
-        },
-        {
-          "nom": "YELO CROISETTE",
-          "activite": null,
-          "score": 2,
-          "reason": "Nom sans détail de classification"
-        },
-        {
-          "nom": "LEISURE BOX (FRANCE)",
-          "activite": null,
-          "score": 2,
-          "reason": "Nom sans lien clair avec hôtellerie"
+          "reason": "Hôtel à Cannes, pas à Nice"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 3.4,
-      "precision_at_10": 30.0,
-      "time_ms": 83036,
+      "avg_score_filtered": 5.2,
+      "precision_at_10": 90.0,
+      "time_ms": 48135,
       "error": null
     },
     {
@@ -621,154 +623,153 @@
       "query": "Salles de crossfit à Lyon",
       "mode": "prospection",
       "target": "salles dédiées au crossfit, pas fitness générique",
-      "raw_count": 680,
-      "filtered_count": 89,
+      "raw_count": 378,
+      "filtered_count": 56,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 680,
-        "relevance_after": 89,
-        "relevance_removed": 591,
+        "relevance_before": 378,
+        "relevance_after": 56,
+        "relevance_removed": 322,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "5": 141,
-          "10": 12,
-          "3": 267,
-          "8": 24,
-          "7": 34,
-          "9": 9,
-          "6": 10,
-          "4": 5,
-          "1": 106,
-          "0": 72
+          "7": 18,
+          "10": 9,
+          "6": 13,
+          "3": 116,
+          "5": 98,
+          "1": 76,
+          "8": 8,
+          "9": 8,
+          "4": 32
         },
-        "relevance_avg_score": 3.4
+        "relevance_avg_score": 3.9
       },
       "eval_scores": [
         {
           "nom": "CrossFit Gerland",
           "activite": "Complexe sportif",
           "score": 9,
-          "reason": "Salle de CrossFit explicite à Lyon"
+          "reason": "Salle de CrossFit à Lyon, parfaite correspondance"
+        },
+        {
+          "nom": "CrossFit Lumière",
+          "activite": "Club de sport",
+          "score": 9,
+          "reason": "Salle de CrossFit à Lyon, parfaite correspondance"
         },
         {
           "nom": "Crossfit des Pentes",
           "activite": "Salle de gym",
           "score": 8,
-          "reason": "Salle de CrossFit à Lyon"
+          "reason": "Salle de CrossFit à Lyon, très bon résultat"
+        },
+        {
+          "nom": "CrossFit HEKA - Lyon Part-Dieu",
+          "activite": "Salle de gym",
+          "score": 8,
+          "reason": "Salle de CrossFit à Lyon, très bon résultat"
         },
         {
           "nom": "CrossFit Secteur 3 - Lyon",
           "activite": "Salle de gym",
           "score": 8,
-          "reason": "Salle de CrossFit à Lyon"
+          "reason": "Salle de CrossFit à Lyon, très bon résultat"
         },
         {
           "nom": "CrossFit HEKA - Lyon Croix-Rousse",
           "activite": "Salle de gym",
-          "score": 9,
-          "reason": "Salle de CrossFit à Lyon avec localisation précise"
-        },
-        {
-          "nom": "CrossFit Lumière",
-          "activite": "Club de sport",
-          "score": 7,
-          "reason": "Club de sport CrossFit à Lyon"
-        },
-        {
-          "nom": "CrossFit des Canuts",
-          "activite": "Salle de gym",
           "score": 8,
-          "reason": "Salle de CrossFit à Lyon"
-        },
-        {
-          "nom": "CrossFit HEKA - Lyon Part-Dieu",
-          "activite": "Salle de gym",
-          "score": 9,
-          "reason": "Salle de CrossFit à Lyon avec localisation précise"
+          "reason": "Salle de CrossFit à Lyon, très bon résultat"
         },
         {
           "nom": "Crossfit Brotteaux",
           "activite": "Salle de gym",
           "score": 8,
-          "reason": "Salle de CrossFit à Lyon"
-        },
-        {
-          "nom": "CrossFit Vaise District",
-          "activite": "Salle de gym",
-          "score": 8,
-          "reason": "Salle de CrossFit à Lyon"
+          "reason": "Salle de CrossFit à Lyon, très bon résultat"
         },
         {
           "nom": "Antropos CrossFit Confluence",
           "activite": "Salle de gym",
           "score": 8,
-          "reason": "Salle de CrossFit à Lyon"
+          "reason": "Salle de CrossFit à Lyon, très bon résultat"
         },
         {
-          "nom": "Antropos CrossFit 7ème",
-          "activite": "Club de sport",
-          "score": 7,
-          "reason": "Club de sport CrossFit à Lyon"
-        },
-        {
-          "nom": "Vo2Max Evolution",
+          "nom": "CrossFit des Canuts",
           "activite": "Salle de gym",
+          "score": 8,
+          "reason": "Salle de CrossFit à Lyon, très bon résultat"
+        },
+        {
+          "nom": "BLOC SESSION LYON",
+          "activite": null,
+          "score": 2,
+          "reason": "Non lié au CrossFit"
+        },
+        {
+          "nom": "NEXTPLAY (DUNK DISTRICT)",
+          "activite": null,
+          "score": 2,
+          "reason": "Non lié au CrossFit"
+        },
+        {
+          "nom": "CROIXROUSSE.CLUB (AMAZONIA)",
+          "activite": null,
+          "score": 2,
+          "reason": "Non lié au CrossFit"
+        },
+        {
+          "nom": "GYMNASS",
+          "activite": null,
+          "score": 2,
+          "reason": "Non lié au CrossFit"
+        },
+        {
+          "nom": "CROSS COUNTER",
+          "activite": null,
+          "score": 2,
+          "reason": "Non lié au CrossFit"
+        },
+        {
+          "nom": "FRENCH PICKLEBALL",
+          "activite": null,
+          "score": 2,
+          "reason": "Non lié au CrossFit"
+        },
+        {
+          "nom": "LYON SUD FITNESS",
+          "activite": null,
           "score": 4,
-          "reason": "Salle de gym générique"
+          "reason": "Fitness générique"
         },
         {
-          "nom": "GARIBALDI GYM",
+          "nom": "URBAN CROSSFIT",
+          "activite": null,
+          "score": 8,
+          "reason": "Salle de CrossFit à Lyon, très bon résultat"
+        },
+        {
+          "nom": "WOMBAT GERLAND",
           "activite": null,
           "score": 2,
-          "reason": "Gym générique sans mention CrossFit"
+          "reason": "Non lié au CrossFit"
         },
         {
-          "nom": "EMMAFITFUN",
+          "nom": "ASS  TENNIS LYON III",
           "activite": null,
           "score": 2,
-          "reason": "Gym générique sans mention CrossFit"
+          "reason": "Non lié au CrossFit"
         },
         {
-          "nom": "FIT FACTORY HUB ONE",
+          "nom": "WOMBAT BRON",
           "activite": null,
           "score": 2,
-          "reason": "Gym générique sans mention CrossFit"
-        },
-        {
-          "nom": "NATESPA 2",
-          "activite": null,
-          "score": 2,
-          "reason": "Gym générique sans mention CrossFit"
-        },
-        {
-          "nom": "ND KAIZEN (CROSSFIT LYON)",
-          "activite": null,
-          "score": 6,
-          "reason": "CrossFit mais hors Lyon"
-        },
-        {
-          "nom": "TJ SPORT",
-          "activite": null,
-          "score": 2,
-          "reason": "Gym générique sans mention CrossFit"
-        },
-        {
-          "nom": "MONPLAISIR GYM",
-          "activite": null,
-          "score": 2,
-          "reason": "Gym générique sans mention CrossFit"
-        },
-        {
-          "nom": "PHYSICONCEPT (PHYSICONCEPT)",
-          "activite": null,
-          "score": 2,
-          "reason": "Gym générique sans mention CrossFit"
+          "reason": "Non lié au CrossFit"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 5.7,
-      "precision_at_10": 100.0,
-      "time_ms": 83072,
+      "avg_score_filtered": 5.2,
+      "precision_at_10": 90.0,
+      "time_ms": 67529,
       "error": null
     },
     {
@@ -776,151 +777,149 @@
       "query": "PME du BTP à Toulouse",
       "mode": "prospection",
       "target": "entreprises du bâtiment et travaux publics",
-      "raw_count": 166,
-      "filtered_count": 152,
+      "raw_count": 158,
+      "filtered_count": 111,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 166,
-        "relevance_after": 152,
-        "relevance_removed": 14,
-        "relevance_threshold": 5,
+        "relevance_before": 158,
+        "relevance_after": 111,
+        "relevance_removed": 47,
+        "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "3": 11,
-          "8": 29,
-          "7": 3,
-          "5": 70,
-          "6": 37,
-          "4": 3,
-          "9": 13
+          "7": 51,
+          "8": 17,
+          "6": 43,
+          "5": 46,
+          "4": 1
         },
-        "relevance_avg_score": 5.9
+        "relevance_avg_score": 6.2
       },
       "eval_scores": [
         {
-          "nom": "EIFFAGE ENERGIE SYSTEMES - SUD OUEST (EES - SO)",
-          "activite": null,
-          "score": 8,
-          "reason": "Entreprise d'énergie et systèmes à Toulouse, secteur BTP"
-        },
-        {
-          "nom": "SOCIETE DE CANALISATIONS ATLANTIQUE MEDITERRANEE TRAVAUX PUBLICS SCAM TP",
-          "activite": null,
-          "score": 9,
-          "reason": "Entreprise de travaux publics proche de Toulouse"
-        },
-        {
-          "nom": "SOCIETE D'AMENAGEMENT FONCIER ET D'ETABLISSEMENT RURAL OCCITANIE (SAFER OCCITANIE)",
-          "activite": null,
-          "score": 2,
-          "reason": "Société d'aménagement rural, hors BTP"
-        },
-        {
-          "nom": "EUROVIA MIDI-PYRENEES",
-          "activite": null,
-          "score": 8,
-          "reason": "Entreprise de travaux publics à Toulouse"
-        },
-        {
-          "nom": "ENTREPRISE BARDE SUD-OUEST (CITEOS) (BSO)",
+          "nom": "SARL C M P",
           "activite": null,
           "score": 7,
-          "reason": "Entreprise de travaux publics proche de Toulouse"
+          "reason": "Construction, code APE BTP"
         },
         {
-          "nom": "GIESPER - TRAVAUX PUBLICS",
+          "nom": "ARTISANS BATISSEURS TOULOUSAINS  A.B.T. (LES COUVREURS OCCITANS)",
+          "activite": null,
+          "score": 8,
+          "reason": "Couvreurs, entreprise BTP"
+        },
+        {
+          "nom": "STIBAT (SOCIETE DE TRAVAUX ET D'INGENIERIE DU BATIMENT) (STIBAT)",
           "activite": null,
           "score": 7,
-          "reason": "Entreprise de travaux publics à proximité"
+          "reason": "Travaux et ingénierie du bâtiment"
         },
         {
-          "nom": "SAS SANTERNE TOULOUSE (AXIANS)",
+          "nom": "GTM SUD OUEST TP GC",
+          "activite": null,
+          "score": 8,
+          "reason": "Travaux publics et génie civil"
+        },
+        {
+          "nom": "C&B RENOVATION (MAD)",
           "activite": null,
           "score": 6,
-          "reason": "Entreprise technique, lien avec BTP"
+          "reason": "Rénovation, secteur proche"
+        },
+        {
+          "nom": "CATRA BTP",
+          "activite": null,
+          "score": 7,
+          "reason": "Entreprise BTP"
+        },
+        {
+          "nom": "ENTREPRISE GENERALE DE PLATRERIE DE LA LEZE (EGPL) (EGPL)",
+          "activite": null,
+          "score": 6,
+          "reason": "Plâtrerie, métier du bâtiment"
+        },
+        {
+          "nom": "SOCIETE BRETONNET PEINTURE REVETEMENT (SBPR)",
+          "activite": null,
+          "score": 5,
+          "reason": "Peinture, métier connexe"
+        },
+        {
+          "nom": "THIERRY PLETT (PLETT PEINTURE)",
+          "activite": null,
+          "score": 5,
+          "reason": "Peinture, métier connexe"
+        },
+        {
+          "nom": "TOITURES MIDI PYRENEES",
+          "activite": null,
+          "score": 7,
+          "reason": "Toitures, entreprise BTP"
+        },
+        {
+          "nom": "SOCIETE NOUVELLE IZQUIERDO",
+          "activite": null,
+          "score": 7,
+          "reason": "Toitures, entreprise BTP"
+        },
+        {
+          "nom": "AMR",
+          "activite": null,
+          "score": 6,
+          "reason": "Construction, secteur large"
+        },
+        {
+          "nom": "ENTREPRISE MARCHAND",
+          "activite": null,
+          "score": 7,
+          "reason": "Entreprise BTP"
+        },
+        {
+          "nom": "IDEAL BATIMENT OCCITANIE (IDEAL BATIMENT)",
+          "activite": null,
+          "score": 6,
+          "reason": "Bâtiment, métiers connexes"
+        },
+        {
+          "nom": "BATI PREST SUD-OUEST",
+          "activite": null,
+          "score": 6,
+          "reason": "Prestations bâtiment"
+        },
+        {
+          "nom": "COMPAGNIE GENERALE D ENTREPRISE MODERNE CONSTRUCTION CGEM CONSTRUCTION",
+          "activite": null,
+          "score": 7,
+          "reason": "Construction, entreprise BTP"
+        },
+        {
+          "nom": "SUD OUEST BATIMENT",
+          "activite": null,
+          "score": 6,
+          "reason": "Bâtiment, métiers connexes"
         },
         {
           "nom": "GARANKA SUD OUEST (DGS)",
           "activite": null,
-          "score": 5,
-          "reason": "Entreprise technique à Toulouse"
-        },
-        {
-          "nom": "SARL C M P",
-          "activite": null,
-          "score": 3,
-          "reason": "Entreprise peu précise"
+          "score": 4,
+          "reason": "Services techniques, lien faible"
         },
         {
           "nom": "EIFFAGE ENERGIE SYSTEMES - CLEVIA SUD-OUEST (EES - CLEVIA SO)",
           "activite": null,
-          "score": 8,
-          "reason": "Entreprise d'énergie à Toulouse"
-        },
-        {
-          "nom": "EIFFAGE CONSTRUCTION MIDI PYRENEES (E.C.M.P.)",
-          "activite": null,
-          "score": 7,
-          "reason": "Entreprise de construction à Toulouse"
-        },
-        {
-          "nom": "GA",
-          "activite": null,
-          "score": 3,
-          "reason": "Entreprise non identifiée"
-        },
-        {
-          "nom": "GREEN CITY IMMOBILIER",
-          "activite": null,
-          "score": 2,
-          "reason": "Immobilier, hors BTP"
-        },
-        {
-          "nom": "CEGELEC DEFENSE",
-          "activite": null,
-          "score": 6,
-          "reason": "Entreprise technique"
+          "score": 4,
+          "reason": "Services techniques, lien faible"
         },
         {
           "nom": "A.ATELIER COROT",
           "activite": null,
           "score": 4,
-          "reason": "Entreprise artisanale"
-        },
-        {
-          "nom": "CEGELEC OCCITANIE TERTIAIRE",
-          "activite": null,
-          "score": 6,
-          "reason": "Entreprise technique"
-        },
-        {
-          "nom": "ENTREPRISE BOURDARIOS",
-          "activite": null,
-          "score": 7,
-          "reason": "Entreprise de construction"
-        },
-        {
-          "nom": "SPIE BATIGNOLLES ENERGIE - SOUCHON (SBE - SOUCHON)",
-          "activite": null,
-          "score": 8,
-          "reason": "Entreprise de travaux publics"
-        },
-        {
-          "nom": "CARRES DE LUMIERE",
-          "activite": null,
-          "score": 4,
-          "reason": "Entreprise artisanale"
-        },
-        {
-          "nom": "GIRAUD MIDI PYRENEES",
-          "activite": null,
-          "score": 5,
-          "reason": "Entreprise technique"
+          "reason": "Services techniques, lien faible"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 5.8,
-      "precision_at_10": 80.0,
-      "time_ms": 37924,
+      "avg_score_filtered": 6.2,
+      "precision_at_10": 100.0,
+      "time_ms": 46662,
       "error": null
     },
     {
@@ -928,72 +927,31 @@
       "query": "Pharmacies à Strasbourg",
       "mode": "prospection",
       "target": "pharmacies d'officine",
-      "raw_count": 209,
-      "filtered_count": 78,
+      "raw_count": 304,
+      "filtered_count": 50,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 209,
-        "relevance_after": 78,
-        "relevance_removed": 131,
+        "relevance_before": 304,
+        "relevance_after": 50,
+        "relevance_removed": 254,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "10": 36,
-          "3": 117,
-          "9": 41,
-          "0": 5,
-          "5": 7,
-          "7": 1,
-          "1": 2
+          "0": 111,
+          "7": 3,
+          "5": 10,
+          "9": 13,
+          "1": 72,
+          "10": 34,
+          "3": 44,
+          "4": 17
         },
-        "relevance_avg_score": 5.4
+        "relevance_avg_score": 2.6
       },
       "eval_scores": [
-        {
-          "nom": "PHARMACIE DE L'HOMME DE FER",
-          "activite": null,
-          "score": 9,
-          "reason": "Pharmacie d'officine à Strasbourg"
-        },
-        {
-          "nom": "SELARL PHARMACIE DU DOME",
-          "activite": null,
-          "score": 9,
-          "reason": "Pharmacie d'officine à Strasbourg"
-        },
-        {
-          "nom": "MARC KLEIN",
-          "activite": null,
-          "score": 8,
-          "reason": "Pharmacie d'officine à Strasbourg"
-        },
-        {
-          "nom": "PHARMACIE DU CONSEIL DES XV (PHARMACIE DE L'ORANGERIE)",
-          "activite": null,
-          "score": 9,
-          "reason": "Pharmacie d'officine à Strasbourg"
-        },
         {
           "nom": "PHARMACIE DE L'ESPLANADE",
           "activite": null,
           "score": 9,
-          "reason": "Pharmacie d'officine à Strasbourg"
-        },
-        {
-          "nom": "SELAS LES TUILERIES",
-          "activite": null,
-          "score": 8,
-          "reason": "Pharmacie d'officine à Strasbourg"
-        },
-        {
-          "nom": "PHARMACIE DE LA MARSEILLAISE SNC",
-          "activite": null,
-          "score": 9,
-          "reason": "Pharmacie d'officine à Strasbourg"
-        },
-        {
-          "nom": "CHARLOTTE JUNG (MEUNIER)",
-          "activite": null,
-          "score": 8,
           "reason": "Pharmacie d'officine à Strasbourg"
         },
         {
@@ -1003,21 +961,9 @@
           "reason": "Pharmacie d'officine à Strasbourg"
         },
         {
-          "nom": "PHARMACIE DE VILLE",
-          "activite": null,
-          "score": 2,
-          "reason": "Ville incorrecte"
-        },
-        {
           "nom": "PHARMACIE DE LA CHARMILLE",
           "activite": null,
           "score": 9,
-          "reason": "Pharmacie d'officine à Strasbourg"
-        },
-        {
-          "nom": "DE SCHIRMECK",
-          "activite": null,
-          "score": 8,
           "reason": "Pharmacie d'officine à Strasbourg"
         },
         {
@@ -1051,28 +997,82 @@
           "reason": "Pharmacie d'officine à Strasbourg"
         },
         {
-          "nom": "PHARMACIE OURY - REICH",
-          "activite": null,
-          "score": 9,
-          "reason": "Pharmacie d'officine à Strasbourg"
-        },
-        {
           "nom": "PHARMACIE DE L' UNIVERSITE",
           "activite": null,
           "score": 9,
           "reason": "Pharmacie d'officine à Strasbourg"
         },
         {
-          "nom": "SELARL PHARMACIE DES POTERIES",
+          "nom": "PHARMACIE DE L'ETOILE",
+          "activite": null,
+          "score": 9,
+          "reason": "Pharmacie d'officine à Strasbourg"
+        },
+        {
+          "nom": "PHARMACIE DE LA LICORNE",
+          "activite": null,
+          "score": 9,
+          "reason": "Pharmacie d'officine à Strasbourg"
+        },
+        {
+          "nom": "PHARMACIE DE LA CANARDIERE",
+          "activite": null,
+          "score": 9,
+          "reason": "Pharmacie d'officine à Strasbourg"
+        },
+        {
+          "nom": "PHARMACIE DE CRONENBOURG",
+          "activite": null,
+          "score": 9,
+          "reason": "Pharmacie d'officine à Strasbourg"
+        },
+        {
+          "nom": "PHARMACIE DE L'ELSAU",
+          "activite": null,
+          "score": 9,
+          "reason": "Pharmacie d'officine à Strasbourg"
+        },
+        {
+          "nom": "PHARMACIE POURTALES",
+          "activite": null,
+          "score": 9,
+          "reason": "Pharmacie d'officine à Strasbourg"
+        },
+        {
+          "nom": "PHARMACIE RIVETOILE",
+          "activite": null,
+          "score": 9,
+          "reason": "Pharmacie d'officine à Strasbourg"
+        },
+        {
+          "nom": "PHARMACIE DU WACKEN (PHARMACIE DU WACKEN BY HOMME DE FER)",
+          "activite": null,
+          "score": 9,
+          "reason": "Pharmacie d'officine à Strasbourg"
+        },
+        {
+          "nom": "PHARMACIE DE LA TOUR",
+          "activite": null,
+          "score": 9,
+          "reason": "Pharmacie d'officine à Strasbourg"
+        },
+        {
+          "nom": "PHARMACIE DE L'ILL",
+          "activite": null,
+          "score": 9,
+          "reason": "Pharmacie d'officine à Strasbourg"
+        },
+        {
+          "nom": "PHARMACIE DE LA GARE (PHARMACIE DE LA GARE)",
           "activite": null,
           "score": 9,
           "reason": "Pharmacie d'officine à Strasbourg"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 8.4,
-      "precision_at_10": 90.0,
-      "time_ms": 44868,
+      "avg_score_filtered": 9.0,
+      "precision_at_10": 100.0,
+      "time_ms": 36524,
       "error": null
     },
     {
@@ -1080,29 +1080,40 @@
       "query": "Boulangeries artisanales à Montpellier",
       "mode": "prospection",
       "target": "boulangeries, pas pâtisseries industrielles ni grandes surfaces",
-      "raw_count": 494,
-      "filtered_count": 105,
+      "raw_count": 221,
+      "filtered_count": 57,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 494,
-        "relevance_after": 105,
-        "relevance_removed": 389,
+        "relevance_before": 221,
+        "relevance_after": 57,
+        "relevance_removed": 164,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "9": 51,
-          "7": 28,
+          "9": 33,
+          "7": 9,
           "10": 2,
-          "3": 157,
-          "0": 9,
-          "8": 20,
-          "5": 30,
-          "1": 171,
-          "6": 4,
-          "4": 22
+          "8": 13,
+          "3": 84,
+          "5": 37,
+          "4": 3,
+          "0": 10,
+          "1": 30
         },
-        "relevance_avg_score": 3.5
+        "relevance_avg_score": 4.4
       },
       "eval_scores": [
+        {
+          "nom": "Boulangerie Artisanale MOP",
+          "activite": "Boulangerie",
+          "score": 9,
+          "reason": "Boulangerie artisanale à Montpellier"
+        },
+        {
+          "nom": "BOULANGERIE ARTISANALE SADEK",
+          "activite": null,
+          "score": 9,
+          "reason": "Boulangerie artisanale à Montpellier"
+        },
         {
           "nom": "Des Rêves et du Pain",
           "activite": "Boulangerie",
@@ -1116,28 +1127,10 @@
           "reason": "Boulangerie artisanale à Montpellier"
         },
         {
-          "nom": "Maison Bonnaire - St Guilhem",
-          "activite": "Boulangerie",
-          "score": 8,
-          "reason": "Boulangerie artisanale à Montpellier"
-        },
-        {
           "nom": "Pain Brut",
           "activite": "Boulangerie",
           "score": 9,
           "reason": "Boulangerie artisanale à Montpellier"
-        },
-        {
-          "nom": "Flour - La Cookiserie",
-          "activite": "Boulangerie",
-          "score": 7,
-          "reason": "Boulangerie à Montpellier, mais nom atypique"
-        },
-        {
-          "nom": "Daveloza St Denis",
-          "activite": "Boulangerie",
-          "score": 7,
-          "reason": "Boulangerie à Montpellier"
         },
         {
           "nom": "Ô Pain Délicieux",
@@ -1150,18 +1143,6 @@
           "activite": "Boulangerie",
           "score": 9,
           "reason": "Boulangerie artisanale à Montpellier"
-        },
-        {
-          "nom": "Boulangerie Artisanale MOP",
-          "activite": "Boulangerie",
-          "score": 9,
-          "reason": "Boulangerie artisanale à Montpellier"
-        },
-        {
-          "nom": "Pain D'Epi -Boulangerie Viennoiseries Sandwicherie Cafe Montpellier",
-          "activite": "Boulangerie",
-          "score": 8,
-          "reason": "Boulangerie à Montpellier"
         },
         {
           "nom": "Les Délices du Faubourg",
@@ -1182,34 +1163,10 @@
           "reason": "Boulangerie artisanale à Montpellier"
         },
         {
-          "nom": "Boulangerie Pâtisserie \"Au four et au pétrin\"",
-          "activite": "Boulangerie",
-          "score": 6,
-          "reason": "Boulangerie-pâtisserie mixte"
-        },
-        {
-          "nom": "PANA Boulangerie",
-          "activite": "Boulangerie",
-          "score": 8,
-          "reason": "Boulangerie à Montpellier"
-        },
-        {
           "nom": "Oh la’mie",
           "activite": "Boulangerie",
           "score": 9,
           "reason": "Boulangerie artisanale à Montpellier"
-        },
-        {
-          "nom": "Baguettes & Chouquettes - Boulangerie Pâtisserie Montpellier",
-          "activite": "Boulangerie",
-          "score": 6,
-          "reason": "Boulangerie-pâtisserie mixte"
-        },
-        {
-          "nom": "L'Atelier Gourmand d'Antigone",
-          "activite": "Boulangerie",
-          "score": 8,
-          "reason": "Boulangerie à Montpellier"
         },
         {
           "nom": "Boulangerie du Coin",
@@ -1220,14 +1177,56 @@
         {
           "nom": "Les Pains De Mila Boulangerie Montpellier Village",
           "activite": "Boulangerie",
-          "score": 8,
-          "reason": "Boulangerie à Montpellier"
+          "score": 9,
+          "reason": "Boulangerie artisanale à Montpellier"
+        },
+        {
+          "nom": "Boulangerie Pâtisserie Frézal",
+          "activite": "Boulangerie",
+          "score": 7,
+          "reason": "Boulangerie avec pâtisserie"
+        },
+        {
+          "nom": "Au Matin Calme",
+          "activite": "Boulangerie",
+          "score": 9,
+          "reason": "Boulangerie artisanale à Montpellier"
+        },
+        {
+          "nom": "Boulangerie Pâtisserie Artisanale Jajounette",
+          "activite": "Boulangerie",
+          "score": 7,
+          "reason": "Boulangerie avec pâtisserie"
+        },
+        {
+          "nom": "L'Atelier Banette Montpellier",
+          "activite": "Boulangerie",
+          "score": 9,
+          "reason": "Boulangerie artisanale à Montpellier"
+        },
+        {
+          "nom": "Le Fournil de Saint François",
+          "activite": "Boulangerie",
+          "score": 9,
+          "reason": "Boulangerie artisanale à Montpellier"
+        },
+        {
+          "nom": "Pistache et Chocolat",
+          "activite": "Boulangerie",
+          "score": 9,
+          "reason": "Boulangerie artisanale à Montpellier"
+        },
+        {
+          "nom": "Maison Bonnaire - Millénaire",
+          "activite": "Boulangerie",
+          "score": 9,
+          "reason": "Boulangerie artisanale à Montpellier"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 8.2,
+      "avg_score_filtered": 8.8,
       "precision_at_10": 100.0,
-      "time_ms": 79966,
+      "time_ms": 50172,
       "error": null
     },
     {
@@ -1235,153 +1234,116 @@
       "query": "Imprimeur 3D en PACA",
       "mode": "sous_traitant",
       "target": "prestataires d'impression 3D / fabrication additive",
-      "raw_count": 381,
-      "filtered_count": 30,
+      "raw_count": 309,
+      "filtered_count": 14,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 381,
-        "relevance_after": 30,
-        "relevance_removed": 351,
+        "relevance_before": 309,
+        "relevance_after": 14,
+        "relevance_removed": 295,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "10": 8,
-          "7": 7,
+          "10": 7,
+          "6": 5,
           "8": 2,
-          "5": 210,
-          "3": 66,
-          "1": 67,
-          "6": 12,
-          "0": 8,
-          "9": 1
+          "4": 9,
+          "5": 67,
+          "1": 24,
+          "0": 131,
+          "3": 64
         },
-        "relevance_avg_score": 4.0
+        "relevance_avg_score": 2.3
       },
       "eval_scores": [
         {
           "nom": "ADDISHAPE - Conception & Impression 3D",
           "activite": "Services",
-          "score": 9,
-          "reason": "Prestataire spécialisé en impression 3D"
-        },
-        {
-          "nom": "3découverte",
-          "activite": "Services",
           "score": 8,
-          "reason": "Service d'impression 3D"
+          "reason": "Prestataire spécialisé en impression 3D"
         },
         {
           "nom": "IMA 3D - Modélisation et Impression3D - Toulon Hyères",
           "activite": "Services",
-          "score": 9,
-          "reason": "Prestataire spécialisé en modélisation et impression 3D"
-        },
-        {
-          "nom": "L'atelier du proto 3D",
-          "activite": "Services",
           "score": 8,
-          "reason": "Atelier de prototypage 3D"
+          "reason": "Prestataire spécialisé en impression 3D"
         },
         {
           "nom": "Azur 3d print",
           "activite": "Services",
           "score": 8,
-          "reason": "Service d'impression 3D"
+          "reason": "Prestataire spécialisé en impression 3D"
         },
         {
           "nom": "Impression 3D Nice Scan 3D : Click&Collect AzurMedia.fr chez AB Tattoo",
           "activite": "Services",
           "score": 7,
-          "reason": "Service d'impression 3D"
-        },
-        {
-          "nom": "LAMI 3D - impression 3D - modélisation 3D",
-          "activite": "Services",
-          "score": 9,
-          "reason": "Prestataire spécialisé en impression et modélisation 3D"
+          "reason": "Service d'impression 3D avec point de collecte"
         },
         {
           "nom": "Impression 3D Nice Scan 3D : Atelier AzurMedia.fr",
           "activite": "Services",
           "score": 7,
-          "reason": "Service d'impression 3D"
-        },
-        {
-          "nom": "Layer Lab - Impression 3D",
-          "activite": "Services",
-          "score": 9,
-          "reason": "Entreprise d'impression 3D"
-        },
-        {
-          "nom": "3dvp",
-          "activite": "Services",
-          "score": 7,
-          "reason": "Service 3D"
+          "reason": "Service d'impression 3D avec atelier"
         },
         {
           "nom": "ADDDITIVE - Impression 3D & Scan 3D - NICE",
           "activite": "Services",
-          "score": 9,
-          "reason": "Prestataire impression et scan 3D"
+          "score": 8,
+          "reason": "Prestataire spécialisé en impression 3D"
         },
         {
           "nom": "S'Printer 3D",
           "activite": "Services",
           "score": 8,
+          "reason": "Prestataire spécialisé en impression 3D"
+        },
+        {
+          "nom": "L'atelier du proto 3D",
+          "activite": "Services",
+          "score": 8,
+          "reason": "Prestataire spécialisé en prototypage 3D"
+        },
+        {
+          "nom": "LAMI 3D - impression 3D - modélisation 3D",
+          "activite": "Services",
+          "score": 8,
+          "reason": "Prestataire spécialisé en impression 3D"
+        },
+        {
+          "nom": "3découverte",
+          "activite": "Services",
+          "score": 7,
           "reason": "Service d'impression 3D"
         },
         {
-          "nom": "BOUGIE ET SENTEUR",
+          "nom": "LA FERME 3D",
           "activite": null,
-          "score": 1,
-          "reason": "Hors sujet"
+          "score": 4,
+          "reason": "Nom vague, pas d'info claire"
         },
         {
-          "nom": "A2I DIDACT",
+          "nom": "Esprit 3D - Centre de Formation en Impression 3D",
           "activite": null,
-          "score": 1,
-          "reason": "Hors sujet"
+          "score": 5,
+          "reason": "Centre de formation, lien indirect"
         },
         {
-          "nom": "13.56 SERVICES",
-          "activite": null,
-          "score": 1,
-          "reason": "Hors sujet"
+          "nom": "Layer Lab - Impression 3D",
+          "activite": "Services",
+          "score": 8,
+          "reason": "Prestataire spécialisé en impression 3D"
         },
         {
-          "nom": "CS MATERIEL",
-          "activite": null,
-          "score": 1,
-          "reason": "Hors sujet"
-        },
-        {
-          "nom": "ISM-IMPRESSION",
-          "activite": null,
-          "score": 2,
-          "reason": "Imprimerie traditionnelle"
-        },
-        {
-          "nom": "DEF INDUSTRIE",
-          "activite": null,
-          "score": 2,
-          "reason": "Imprimerie traditionnelle"
-        },
-        {
-          "nom": "IMPRIMERIE MUS",
-          "activite": null,
-          "score": 2,
-          "reason": "Imprimerie traditionnelle"
-        },
-        {
-          "nom": "OMNIS COLORIS (COLORIS)",
-          "activite": null,
-          "score": 2,
-          "reason": "Imprimerie traditionnelle"
+          "nom": "3dvp",
+          "activite": "Services",
+          "score": 7,
+          "reason": "Service d'impression 3D"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 5.5,
+      "avg_score_filtered": 7.2,
       "precision_at_10": 100.0,
-      "time_ms": 56539,
+      "time_ms": 43372,
       "error": null
     },
     {
@@ -1389,152 +1351,66 @@
       "query": "Sous-traitant usinage mécanique dans le Nord",
       "mode": "sous_traitant",
       "target": "ateliers d'usinage / mécanique de précision",
-      "raw_count": 211,
-      "filtered_count": 89,
+      "raw_count": 101,
+      "filtered_count": 6,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 211,
-        "relevance_after": 89,
-        "relevance_removed": 122,
+        "relevance_before": 101,
+        "relevance_after": 6,
+        "relevance_removed": 95,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "6": 31,
-          "7": 29,
-          "8": 21,
-          "5": 75,
-          "9": 8,
-          "4": 2,
-          "3": 9,
-          "1": 36
+          "0": 53,
+          "3": 36,
+          "7": 1,
+          "5": 6,
+          "8": 1,
+          "9": 4
         },
-        "relevance_avg_score": 5.1
+        "relevance_avg_score": 1.9
       },
       "eval_scores": [
         {
-          "nom": "SARL DROULET",
+          "nom": "AP USINAGE",
           "activite": null,
           "score": 8,
-          "reason": "Atelier mécanique dans le Nord"
+          "reason": "Entreprise d'usinage mécanique dans le Nord"
         },
         {
-          "nom": "CPI-LIARD",
+          "nom": "SA EUROP USINAGE",
           "activite": null,
           "score": 8,
-          "reason": "Sous-traitant usinage dans le Nord"
+          "reason": "Entreprise d'usinage mécanique dans le Nord"
         },
         {
-          "nom": "S.N.H.E.C. (SNHEC)",
+          "nom": "SOCIETE PERCAGE USINAGE DU CAREMBAULT (SPUC)",
           "activite": null,
           "score": 8,
-          "reason": "Entreprise de mécanique de précision"
+          "reason": "Entreprise d'usinage mécanique dans le Nord"
         },
         {
-          "nom": "ATELIERS DE MECANIQUES DE BERSILLIES (AMB)",
+          "nom": "USINAGES LOURDS DU VALENCIENNOIS (ULV)",
           "activite": null,
-          "score": 9,
-          "reason": "Ateliers de mécanique, correspond parfaitement"
+          "score": 8,
+          "reason": "Entreprise d'usinage mécanique dans le Nord"
         },
         {
-          "nom": "ELLI SERVICES",
+          "nom": "SOCIETE EUROPEENNE D'INTERVENTION MECANIQUE (SEIM)",
           "activite": null,
           "score": 7,
-          "reason": "Services mécaniques dans le Nord"
+          "reason": "Intervention mécanique proche de l'usinage"
         },
         {
-          "nom": "CROMBET",
+          "nom": "SADTEM",
           "activite": null,
-          "score": 7,
-          "reason": "Atelier mécanique local"
-        },
-        {
-          "nom": "FIDEM MAINTENANCE",
-          "activite": null,
-          "score": 7,
-          "reason": "Maintenance mécanique"
-        },
-        {
-          "nom": "DIC TECHNOLOGY (BARON DIC)",
-          "activite": null,
-          "score": 8,
-          "reason": "Technologie et usinage"
-        },
-        {
-          "nom": "C.M.A.",
-          "activite": null,
-          "score": 8,
-          "reason": "Atelier mécanique"
-        },
-        {
-          "nom": "SOTECH",
-          "activite": null,
-          "score": 8,
-          "reason": "Sous-traitant industriel"
-        },
-        {
-          "nom": "C M O",
-          "activite": null,
-          "score": 8,
-          "reason": "Entreprise de mécanique"
-        },
-        {
-          "nom": "ALVAL",
-          "activite": null,
-          "score": 7,
-          "reason": "Atelier mécanique"
-        },
-        {
-          "nom": "FERMAUT (FERMAUT)",
-          "activite": null,
-          "score": 8,
-          "reason": "Sous-traitant usinage"
-        },
-        {
-          "nom": "CONSTRUCTIONS MECANIQUES COMINOISES",
-          "activite": null,
-          "score": 9,
-          "reason": "Constructions mécaniques, parfait"
-        },
-        {
-          "nom": "A.M.H. PRODUCTION",
-          "activite": null,
-          "score": 8,
-          "reason": "Production mécanique"
-        },
-        {
-          "nom": "PONTICELLI MARTIN MECANIQUE (PMM)",
-          "activite": null,
-          "score": 8,
-          "reason": "Mécanique industrielle"
-        },
-        {
-          "nom": "SOCIETE DE MECANIQUE ET DE METALLISATION DES FLANDRES-S.M.M.F. (SMMF)",
-          "activite": null,
-          "score": 8,
-          "reason": "Mécanique et métallisation"
-        },
-        {
-          "nom": "SOCIETE DE MECANIQUE GENERALE",
-          "activite": null,
-          "score": 8,
-          "reason": "Mécanique générale"
-        },
-        {
-          "nom": "BREVAN INDUSTRIES - BI",
-          "activite": null,
-          "score": 8,
-          "reason": "Industries mécaniques"
-        },
-        {
-          "nom": "SAMBRE MECA",
-          "activite": null,
-          "score": 8,
-          "reason": "Sous-traitant mécanique"
+          "score": 3,
+          "reason": "Code APE non lié à l'usinage mécanique"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 7.9,
-      "precision_at_10": 100.0,
-      "time_ms": 47852,
+      "avg_score_filtered": 7.0,
+      "precision_at_10": 83.3,
+      "time_ms": 34111,
       "error": null
     },
     {
@@ -1542,152 +1418,113 @@
       "query": "Agence web à Nantes",
       "mode": "sous_traitant",
       "target": "agences de développement web / digital",
-      "raw_count": 675,
-      "filtered_count": 176,
+      "raw_count": 70,
+      "filtered_count": 14,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 675,
-        "relevance_after": 176,
-        "relevance_removed": 499,
+        "relevance_before": 70,
+        "relevance_after": 14,
+        "relevance_removed": 56,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "9": 72,
-          "8": 55,
-          "5": 199,
-          "6": 16,
-          "3": 196,
-          "7": 33,
-          "4": 30,
-          "1": 74
+          "5": 33,
+          "3": 16,
+          "8": 13,
+          "0": 7,
+          "10": 1
         },
         "relevance_avg_score": 4.7
       },
       "eval_scores": [
         {
-          "nom": "Agence web Fair",
-          "activite": "Services",
-          "score": 7,
-          "reason": "Agence web explicite à Nantes"
-        },
-        {
-          "nom": "AE2 Agence Web",
-          "activite": "Services",
-          "score": 8,
-          "reason": "Agence web spécialisée, code APE correspondant"
-        },
-        {
-          "nom": "LATELIER",
-          "activite": "Services",
-          "score": 7,
-          "reason": "Agence web avec code APE digital"
-        },
-        {
-          "nom": "Agence ImagesCréations",
-          "activite": "Services",
-          "score": 6,
-          "reason": "Agence web potentielle mais moins précis"
-        },
-        {
-          "nom": "joliPixel",
-          "activite": "Services",
-          "score": 6,
-          "reason": "Agence web potentielle mais imprécis"
-        },
-        {
-          "nom": "L'Agence Web Nantaise",
-          "activite": "Services",
+          "nom": "L'AGENCE WEB NANTAISE",
+          "activite": null,
           "score": 9,
-          "reason": "Agence web nantaise très explicite"
+          "reason": "Agence web nantaise explicite"
         },
         {
-          "nom": "Visual Web Click",
-          "activite": "Services",
+          "nom": "JEHANN (JEHANN)",
+          "activite": null,
           "score": 7,
-          "reason": "Agence web avec référence web"
+          "reason": "Code APE web, à Nantes"
         },
         {
-          "nom": "Agence.Média",
-          "activite": "Services",
-          "score": 8,
-          "reason": "Agence web avec code APE digital"
-        },
-        {
-          "nom": "Menuel Communication",
-          "activite": "Services",
-          "score": 5,
-          "reason": "Communication générale, moins précis"
-        },
-        {
-          "nom": "ACID-Solutions",
-          "activite": "Services",
+          "nom": "NEXT DECISION",
+          "activite": null,
           "score": 7,
-          "reason": "Solutions digitales avec code APE"
+          "reason": "Code APE web, à Nantes"
         },
         {
-          "nom": "WeBird - Agence marketing digital - SEA, SEO et Analytics",
-          "activite": "Services",
-          "score": 8,
-          "reason": "Agence marketing digital spécialisée"
-        },
-        {
-          "nom": "Web Studio",
-          "activite": "Services",
+          "nom": "YOUNUP",
+          "activite": null,
           "score": 7,
-          "reason": "Web studio correspondant"
+          "reason": "Code APE web, à Nantes"
         },
         {
-          "nom": "Génération Internet",
-          "activite": "Services",
+          "nom": "IRONIE (IRONIE)",
+          "activite": null,
           "score": 7,
-          "reason": "Agence internet avec code APE"
+          "reason": "Code APE web, à Nantes"
         },
         {
-          "nom": "Agence web Le Petit Garage",
-          "activite": "Services",
+          "nom": "MOSICA (MOSICA)",
+          "activite": null,
           "score": 7,
-          "reason": "Agence web explicite"
+          "reason": "Code APE web, à Nantes"
         },
         {
-          "nom": "PASSEDEVANT - Agence SEO et Création de site",
-          "activite": "Services",
-          "score": 8,
-          "reason": "Agence web SEO spécialisée"
-        },
-        {
-          "nom": "AGENCE WEB NANTES",
-          "activite": "Services",
+          "nom": "AUGUSTA REEVES OUEST",
+          "activite": null,
           "score": 6,
-          "reason": "Agence web proche de Nantes"
+          "reason": "Code APE web, mais nom moins explicite"
         },
         {
-          "nom": "Cohérence - Agence Web | Nantes",
-          "activite": "Services",
+          "nom": "NOMADIA FIELD OPERATIONS",
+          "activite": null,
           "score": 5,
-          "reason": "Agence web en périphérie"
+          "reason": "Code APE web, mais activité moins claire"
         },
         {
-          "nom": "Mо̄do",
-          "activite": "Services",
-          "score": 4,
-          "reason": "Services peu définis"
+          "nom": "KANOMA",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE web, à Nantes"
         },
         {
-          "nom": "Galopins - Agence de communication à Nantes",
-          "activite": "Services",
-          "score": 5,
-          "reason": "Communication générale"
+          "nom": "ALNITAKA",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE web, à Nantes"
         },
         {
-          "nom": "Webskiller",
-          "activite": "Services",
+          "nom": "LENGOW",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE web, à Nantes"
+        },
+        {
+          "nom": "LUGOS (LUGOS)",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE web, à Nantes"
+        },
+        {
+          "nom": "MBP DIGITAL",
+          "activite": null,
+          "score": 7,
+          "reason": "Code APE web, à Nantes"
+        },
+        {
+          "nom": "AE2 (AE2 AGENCE WEB)",
+          "activite": null,
           "score": 6,
-          "reason": "Web potentiel mais imprécis"
+          "reason": "Code APE différent mais semble web"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 6.7,
+      "avg_score_filtered": 6.9,
       "precision_at_10": 100.0,
-      "time_ms": 92521,
+      "time_ms": 29986,
       "error": null
     },
     {
@@ -1695,153 +1532,151 @@
       "query": "Cabinet comptable à Paris",
       "mode": "sous_traitant",
       "target": "cabinets d'expertise comptable",
-      "raw_count": 444,
-      "filtered_count": 257,
+      "raw_count": 267,
+      "filtered_count": 46,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 444,
-        "relevance_after": 257,
-        "relevance_removed": 187,
+        "relevance_before": 267,
+        "relevance_after": 46,
+        "relevance_removed": 221,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "8": 27,
-          "9": 217,
-          "5": 87,
-          "7": 8,
-          "4": 7,
-          "3": 3,
-          "0": 56,
-          "1": 34,
-          "6": 5
+          "0": 122,
+          "7": 5,
+          "8": 10,
+          "5": 58,
+          "9": 31,
+          "1": 14,
+          "3": 27
         },
-        "relevance_avg_score": 6.2
+        "relevance_avg_score": 2.9
       },
       "eval_scores": [
         {
-          "nom": "SADEC",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
-        },
-        {
-          "nom": "PKF ARSILON CONSEIL (PKF ARSILON)",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
-        },
-        {
-          "nom": "PKF ARSILON COMMISSARIAT AUX COMPTES",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
-        },
-        {
-          "nom": "SYNDEX",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
-        },
-        {
-          "nom": "SEMAPHORES EXPERTISE (ADEXI)",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
-        },
-        {
-          "nom": "RSM FRANCE",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
-        },
-        {
-          "nom": "CSP DU PARC",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
-        },
-        {
-          "nom": "EXPONENS CONSEIL ET EXPERTISE (EXPONENS)",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
-        },
-        {
-          "nom": "SNC STEF-TFE SERVICES",
+          "nom": "IPSILON (IPSILON)",
           "activite": null,
           "score": 5,
-          "reason": "Code APE ok mais nom peu explicite"
+          "reason": "Code APE proche mais pas précis"
         },
         {
-          "nom": "GREGOIRE &ASSOCIES",
+          "nom": "SARL CABINET LASSERRE (CABINET LASSERRE)",
           "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
+          "score": 5,
+          "reason": "Code APE proche mais pas précis"
         },
         {
-          "nom": "DC-CONSEILS",
+          "nom": "CABINET LAVOIX",
           "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
+          "score": 5,
+          "reason": "Code APE proche mais pas précis"
         },
         {
-          "nom": "GROUPE LAVIALE AUDIT, CONSEIL, EXPERTISE COMPTABLE",
+          "nom": "JURIS",
+          "activite": null,
+          "score": 5,
+          "reason": "Code APE proche mais pas précis"
+        },
+        {
+          "nom": "ASS TUTELAIRE FEDERAT PROTESTANTE OEUVRE (ATFPO)",
+          "activite": null,
+          "score": 2,
+          "reason": "Association sans lien direct"
+        },
+        {
+          "nom": "SAS DROUOT AVOCATS",
+          "activite": null,
+          "score": 3,
+          "reason": "Cabinet d'avocats"
+        },
+        {
+          "nom": "GAA",
+          "activite": null,
+          "score": 5,
+          "reason": "Code APE proche mais pas précis"
+        },
+        {
+          "nom": "PROMAJE",
+          "activite": null,
+          "score": 5,
+          "reason": "Code APE proche mais pas précis"
+        },
+        {
+          "nom": "ICOSA",
+          "activite": null,
+          "score": 5,
+          "reason": "Code APE proche mais pas précis"
+        },
+        {
+          "nom": "REGIMBEAU SARL (REGIMBEAU)",
+          "activite": null,
+          "score": 5,
+          "reason": "Code APE proche mais pas précis"
+        },
+        {
+          "nom": "DS AVOCATS",
+          "activite": null,
+          "score": 3,
+          "reason": "Cabinet d'avocats"
+        },
+        {
+          "nom": "CABINET PARISIEN D'EXPERTISE COMPTABLE (CAPEC)",
           "activite": null,
           "score": 9,
-          "reason": "Cabinet d'expertise comptable explicite"
+          "reason": "Cabinet d'expertise comptable à Paris"
         },
         {
-          "nom": "ECGE CONSEIL (ECGE)",
+          "nom": "CABINET STRAUSS EXPERTISE COMPTABLE (CSEC)",
           "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
+          "score": 9,
+          "reason": "Cabinet d'expertise comptable à Paris"
         },
         {
-          "nom": "TALENZ AUDIT",
+          "nom": "CABINET PEYNET EXPERTISE COMPTABLE (CPEC) (CPEC)",
           "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
+          "score": 9,
+          "reason": "Cabinet d'expertise comptable à Paris"
         },
         {
-          "nom": "ACEFI CL (ACL)",
+          "nom": "CABINET DESSAUX ET ASSOCIES AUDIT ET EXPERTISE COMPTABLE",
           "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
+          "score": 9,
+          "reason": "Cabinet d'expertise comptable à Paris"
         },
         {
-          "nom": "NEXIOM AUDIT (EXCO NEXIOM AUDIT)",
+          "nom": "CABINET D'EXPERTISE ET DE REVISION COMPTABLE ET D'ORGANISATION (AUXLOR) (CERCO)",
           "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
+          "score": 9,
+          "reason": "Cabinet d'expertise comptable à Paris"
         },
         {
-          "nom": "APEX (A PRIME ET SOGEX ACTE)",
+          "nom": "SASU SABE CABINET D' EXPERTISE COMPTABLE",
           "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
+          "score": 9,
+          "reason": "Cabinet d'expertise comptable à Paris"
         },
         {
-          "nom": "SECAFI EXPERTISE",
+          "nom": "CABINET IBERICO EXPERTS COMPTABLES & AUDIT (CIECA) (CIECA)",
           "activite": null,
           "score": 7,
-          "reason": "Cabinet d'expertise spécialisé"
+          "reason": "Cabinet d'expertise comptable"
         },
         {
-          "nom": "ENDRIX SNM",
+          "nom": "EXPERT COMPTABLE PARIS 75 CABINET BLEU",
           "activite": null,
-          "score": 5,
-          "reason": "Code APE ok mais nom peu explicite"
+          "score": 9,
+          "reason": "Cabinet d'expertise comptable à Paris"
         },
         {
-          "nom": "EFICIO (SOCOGERE)",
+          "nom": "CABINET D'EXPERTISE COMPTABLE, DE COMMISARIAT AUX COMPTES ET DE CONSEIL (CE3C)",
           "activite": null,
-          "score": 8,
-          "reason": "Cabinet comptable parisien"
+          "score": 9,
+          "reason": "Cabinet d'expertise comptable à Paris"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 7.7,
-      "precision_at_10": 100.0,
-      "time_ms": 61269,
+      "avg_score_filtered": 6.3,
+      "precision_at_10": 80.0,
+      "time_ms": 44039,
       "error": null
     },
     {
@@ -1849,152 +1684,151 @@
       "query": "Cliniques vétérinaires en Bretagne",
       "mode": "client",
       "target": "cabinets et cliniques vétérinaires",
-      "raw_count": 514,
-      "filtered_count": 155,
+      "raw_count": 250,
+      "filtered_count": 38,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 514,
-        "relevance_after": 155,
-        "relevance_removed": 359,
+        "relevance_before": 250,
+        "relevance_after": 38,
+        "relevance_removed": 212,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "3": 44,
-          "7": 11,
-          "9": 53,
-          "5": 236,
-          "8": 62,
-          "1": 53,
-          "10": 29,
-          "0": 26
+          "0": 68,
+          "1": 89,
+          "5": 49,
+          "3": 6,
+          "10": 24,
+          "9": 8,
+          "8": 6
         },
-        "relevance_avg_score": 5.3
+        "relevance_avg_score": 2.8
       },
       "eval_scores": [
         {
-          "nom": "VET&SPHERE",
+          "nom": "CLINIQUE VETERINAIRE DES ISLANDAIS",
           "activite": null,
-          "score": 8,
+          "score": 9,
           "reason": "Clinique vétérinaire en Bretagne"
         },
         {
-          "nom": "SAS DES VETERINAIRES BRETAGNE SUD (CABINET VETERINAIRE DE PLUMELIAU / SAINT FRANCOIS D'ASSISE / GROUPE DE SANTE ANIMALE DU BLAVET)",
+          "nom": "CLINIQUE VETERINAIRE DES RIVIERES",
           "activite": null,
-          "score": 8,
-          "reason": "Cabinet vétérinaire en Bretagne"
-        },
-        {
-          "nom": "SAS DES VETERINAIRES BRETAGNE NORD 1 (CABINET VETERINAIRE DE PLOUIGNEAU)",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet vétérinaire en Bretagne"
-        },
-        {
-          "nom": "POLE VETERINAIRE DU GOUET AU LIE",
-          "activite": null,
-          "score": 8,
-          "reason": "Pôle vétérinaire en Bretagne"
-        },
-        {
-          "nom": "EMBRYO VET",
-          "activite": null,
-          "score": 7,
-          "reason": "Clinique vétérinaire spécialisée"
-        },
-        {
-          "nom": "GROUPE VETERINAIRE DE BROCELIANDE",
-          "activite": null,
-          "score": 8,
-          "reason": "Groupe vétérinaire en Bretagne"
-        },
-        {
-          "nom": "EPIDALIS",
-          "activite": null,
-          "score": 8,
+          "score": 9,
           "reason": "Clinique vétérinaire en Bretagne"
         },
         {
-          "nom": "BRETES-VET",
+          "nom": "CLINIQUE VETERINAIRE DES FALUNS",
           "activite": null,
-          "score": 8,
+          "score": 9,
           "reason": "Clinique vétérinaire en Bretagne"
         },
         {
-          "nom": "VETOVIE (VETOVIE CESSON-SEVIGNE) (VETOVIE)",
+          "nom": "CLINIQUE VETERINAIRE AR MOR",
           "activite": null,
-          "score": 8,
+          "score": 9,
           "reason": "Clinique vétérinaire en Bretagne"
         },
         {
-          "nom": "SELARL DES MARCHES DE BRETAGNE",
+          "nom": "SELARL CLINIQUE VETERINAIRE HORTENSIAS (SELARL)",
           "activite": null,
-          "score": 8,
-          "reason": "Cabinet vétérinaire en Bretagne"
-        },
-        {
-          "nom": "SELARL VETARMOR",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet vétérinaire en Bretagne"
-        },
-        {
-          "nom": "VETERINAIRES DE L'ARGUENON",
-          "activite": null,
-          "score": 8,
+          "score": 9,
           "reason": "Clinique vétérinaire en Bretagne"
         },
         {
-          "nom": "SELARL VETERINAIRE DE LA RANCE",
+          "nom": "CLINIQUE VETERINAIRE COUILLANDEAU HILZHEBER KAISER",
           "activite": null,
-          "score": 8,
-          "reason": "Cabinet vétérinaire en Bretagne"
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "CLINIQUE VETERINAIRE DES DOCTEURS LHOMME & SOYER",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "CLINIQUE VETERINAIRE HELENE BAUD ET MARI GALLIOU",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "CLINIQUE VETERINAIRE DE KERHARDY ERIC BOUCHON-ANTOINE BRISSON",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "CLINIQUE VETERINAIRE LAITA",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "SARL DE VETERINAIRES CMTVET (CLINIQUE VETERINAIRE DES SAULNIERS)",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "VETERINAIRES DE BOURBRIAC (CLINIQUE VETERINAIRE DE BOURBRIAC)",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "VETERINAIRES DE LA LAITA (CLINIQUE VETERINAIRE LAITA)",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "VETERINAIRES DES RIVIERES (CLINIQUE VETERINAIRE DES RIVIERES)",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "VETERINAIRES DE PLEYBER-CHRIST ET LANMEUR (CLINIQUE VETERINAIRE DE PLEYBER-CHRIST)",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "SELARL DE VETERINAIRES LES FONTAINES (SELARL DE VETERINAIRES LES FONTAINES)",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "SCP DE VETERINAIRES PONDIVET",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "PIRQUIN DE GUILLEBON VETERINAIRES",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
+        },
+        {
+          "nom": "ANICOON VETERINAIRES (CLINIQUE VETERINAIRE ANICOON LARMOR-PLAGE)",
+          "activite": null,
+          "score": 9,
+          "reason": "Clinique vétérinaire en Bretagne"
         },
         {
           "nom": "SAS DES VETERINAIRES BRETAGNE NORD 2 (CLINIQUE VETERINAIRE SAINT HERBOT - CHATEAULIN)",
           "activite": null,
-          "score": 8,
-          "reason": "Clinique vétérinaire en Bretagne"
-        },
-        {
-          "nom": "GROUPE VETERINAIRE DES DEUX VALLEES",
-          "activite": null,
-          "score": 8,
-          "reason": "Groupe vétérinaire en Bretagne"
-        },
-        {
-          "nom": "AMIVET",
-          "activite": null,
-          "score": 8,
-          "reason": "Clinique vétérinaire en Bretagne"
-        },
-        {
-          "nom": "VETERINAIRE DE L'HERMINE",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet vétérinaire en Bretagne"
-        },
-        {
-          "nom": "SELARL EMERAUDEVET'",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet vétérinaire en Bretagne"
-        },
-        {
-          "nom": "SOCIETE D'EXERCICE LIBERAL DE VETERINAIRES DES 7 CHAPELLES",
-          "activite": null,
-          "score": 8,
-          "reason": "Cabinet vétérinaire en Bretagne"
-        },
-        {
-          "nom": "KERZOUVET",
-          "activite": null,
-          "score": 8,
+          "score": 9,
           "reason": "Clinique vétérinaire en Bretagne"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 8.0,
+      "avg_score_filtered": 9.0,
       "precision_at_10": 100.0,
-      "time_ms": 79908,
+      "time_ms": 36062,
       "error": null
     },
     {
@@ -2002,152 +1836,152 @@
       "query": "Concessions automobiles à Lyon",
       "mode": "client",
       "target": "concessionnaires / vendeurs automobiles",
-      "raw_count": 310,
-      "filtered_count": 97,
+      "raw_count": 204,
+      "filtered_count": 29,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 310,
-        "relevance_after": 97,
-        "relevance_removed": 213,
+        "relevance_before": 204,
+        "relevance_after": 29,
+        "relevance_removed": 175,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "5": 123,
-          "7": 23,
-          "9": 34,
-          "6": 21,
-          "3": 76,
-          "10": 10,
-          "8": 9,
-          "4": 14
+          "0": 36,
+          "5": 27,
+          "7": 14,
+          "9": 12,
+          "4": 51,
+          "3": 61,
+          "8": 2,
+          "6": 1
         },
-        "relevance_avg_score": 5.4
+        "relevance_avg_score": 3.7
       },
       "eval_scores": [
         {
-          "nom": "RENAULT LYON SUD - RRG",
-          "activite": "Concessionnaire automobile",
-          "score": 8,
-          "reason": "Concessionnaire Renault à proximité de Lyon"
-        },
-        {
-          "nom": "RENAULT LYON NORD - RRG",
-          "activite": "Concessionnaire automobile",
+          "nom": "GVA BYMYCAR LYON (BY MY CAR)",
+          "activite": null,
           "score": 9,
-          "reason": "Concessionnaire Renault à Lyon"
+          "reason": "Concession automobile à Lyon"
         },
         {
-          "nom": "Audi Lyon Sud - Groupe Central Autos - concession automobile",
-          "activite": "Concessionnaire automobile",
-          "score": 7,
-          "reason": "Concessionnaire Audi proche de Lyon"
-        },
-        {
-          "nom": "Asm Auto",
-          "activite": "Concessionnaire automobile",
-          "score": 8,
-          "reason": "Concessionnaire automobile à Lyon"
-        },
-        {
-          "nom": "Volkswagen Lyon Sud - Groupe Central Autos - concession automobile",
-          "activite": "Concessionnaire automobile",
-          "score": 7,
-          "reason": "Concessionnaire Volkswagen proche de Lyon"
-        },
-        {
-          "nom": "Toyota Lyon Sud - Groupe Autosphere",
-          "activite": "Concessionnaire automobile",
-          "score": 8,
-          "reason": "Concessionnaire Toyota à proximité de Lyon"
-        },
-        {
-          "nom": "FORD BYmyCAR Lyon Sud",
-          "activite": "Concessionnaire automobile",
-          "score": 8,
-          "reason": "Concessionnaire Ford à proximité de Lyon"
-        },
-        {
-          "nom": "VOLKSWAGEN BYmyCAR Lyon Vaise",
-          "activite": "Concessionnaire automobile",
+          "nom": "EMERAUDES AVENUE",
+          "activite": null,
           "score": 9,
-          "reason": "Concessionnaire Volkswagen à Lyon"
+          "reason": "Concession automobile à Lyon"
         },
         {
-          "nom": "Aston Martin Lyon",
-          "activite": "Concessionnaire automobile",
+          "nom": "AMVO",
+          "activite": null,
+          "score": 9,
+          "reason": "Concession automobile à Lyon"
+        },
+        {
+          "nom": "PART DIEU AUTOMOBILES",
+          "activite": null,
+          "score": 9,
+          "reason": "Concession automobile à Lyon"
+        },
+        {
+          "nom": "NOTRE BELLE AUTO (EWIGO)",
+          "activite": null,
+          "score": 9,
+          "reason": "Concession automobile à Lyon"
+        },
+        {
+          "nom": "VI.OCCASION",
+          "activite": null,
+          "score": 9,
+          "reason": "Concession automobile à Lyon"
+        },
+        {
+          "nom": "K.W AUTOMOBILES",
+          "activite": null,
+          "score": 9,
+          "reason": "Concession automobile à Lyon"
+        },
+        {
+          "nom": "UNIK MECANIK",
+          "activite": null,
           "score": 7,
-          "reason": "Concessionnaire automobile haut de gamme à Lyon"
+          "reason": "Garage automobile à Lyon"
         },
         {
-          "nom": "PEUGEOT STELLANTIS &YOU LYON VENISSIEUX",
-          "activite": "Concessionnaire automobile",
-          "score": 8,
-          "reason": "Concessionnaire Peugeot à proximité de Lyon"
+          "nom": "AD CAR",
+          "activite": null,
+          "score": 9,
+          "reason": "Concession automobile à Lyon"
         },
         {
-          "nom": "BMW Pautric Lyon Sud",
-          "activite": "Concessionnaire automobile",
-          "score": 8,
-          "reason": "Concessionnaire BMW à proximité de Lyon"
+          "nom": "LA BOUTIQUE EGARAGE (EGARAGE LYON-CALUIRE)",
+          "activite": null,
+          "score": 9,
+          "reason": "Concession automobile à Lyon"
         },
         {
-          "nom": "Volkswagen Lyon Ouest - Groupe Central Autos",
-          "activite": "Concessionnaire automobile",
+          "nom": "AGENCE AUTO-IMMO",
+          "activite": null,
           "score": 6,
-          "reason": "Concessionnaire Volkswagen en périphérie de Lyon"
+          "reason": "Agence automobile peu précise"
         },
         {
-          "nom": "VOLKSWAGEN BYmyCAR Lyon 3",
-          "activite": "Concessionnaire automobile",
+          "nom": "LYONNAISE CONCESSION & FRANCHI",
+          "activite": null,
+          "score": 5,
+          "reason": "Code APE différent, moins pertinent"
+        },
+        {
+          "nom": "GARAGE CRISTAL",
+          "activite": null,
           "score": 9,
-          "reason": "Concessionnaire Volkswagen à Lyon"
+          "reason": "Garage automobile à Lyon"
         },
         {
-          "nom": "TransakAuto Lyon 8",
-          "activite": "Concessionnaire automobile",
-          "score": 8,
-          "reason": "Concessionnaire automobile à Lyon"
+          "nom": "CERDAN AUTO",
+          "activite": null,
+          "score": 9,
+          "reason": "Concession automobile à Lyon"
         },
         {
-          "nom": "RENAULT LYON OUEST SAINTE-FOY-LES-LYON - RRG",
-          "activite": "Concessionnaire automobile",
+          "nom": "VOLVO TRUCKS FRANCE",
+          "activite": null,
+          "score": 4,
+          "reason": "Camions, hors périmètre"
+        },
+        {
+          "nom": "INTER MOTORS LYON",
+          "activite": null,
           "score": 7,
-          "reason": "Concessionnaire Renault en périphérie de Lyon"
+          "reason": "Concession proche de Lyon"
         },
         {
-          "nom": "Hyundai Lyon Sud - Groupe Central Autos",
-          "activite": "Concessionnaire automobile",
+          "nom": "CMR AUTOMOBILE",
+          "activite": null,
           "score": 7,
-          "reason": "Concessionnaire Hyundai proche de Lyon"
+          "reason": "Concession proche de Lyon"
         },
         {
-          "nom": "DS STORE LYON ECULLY",
-          "activite": "Concessionnaire automobile",
+          "nom": "FAB1981",
+          "activite": null,
           "score": 7,
-          "reason": "Concessionnaire DS en périphérie de Lyon"
+          "reason": "Concession proche de Lyon"
         },
         {
-          "nom": "L'Agence Automobilière Lyon",
-          "activite": "Concessionnaire automobile",
-          "score": 8,
-          "reason": "Agence automobile à Lyon"
+          "nom": "MOHAMED GUIDOUM",
+          "activite": null,
+          "score": 9,
+          "reason": "Concession automobile à Lyon"
         },
         {
-          "nom": "OPEL STELLANTIS &YOU LYON VENISSIEUX",
-          "activite": "Concessionnaire automobile",
-          "score": 8,
-          "reason": "Concessionnaire Opel à proximité de Lyon"
-        },
-        {
-          "nom": "SEAT BYmyCAR Lyon Vaise",
-          "activite": "Concessionnaire automobile",
+          "nom": "3G AUTOS",
+          "activite": null,
           "score": 7,
-          "reason": "Concessionnaire Seat à Lyon"
+          "reason": "Concession proche de Lyon"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 7.7,
+      "avg_score_filtered": 7.9,
       "precision_at_10": 100.0,
-      "time_ms": 82808,
+      "time_ms": 42799,
       "error": null
     },
     {
@@ -2155,152 +1989,135 @@
       "query": "Entreprises de nettoyage industriel en IDF",
       "mode": "rachat",
       "target": "sociétés de nettoyage / propreté industrielle",
-      "raw_count": 627,
-      "filtered_count": 274,
+      "raw_count": 198,
+      "filtered_count": 17,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 627,
-        "relevance_after": 274,
-        "relevance_removed": 353,
+        "relevance_before": 198,
+        "relevance_after": 17,
+        "relevance_removed": 181,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "5": 323,
-          "7": 80,
-          "9": 80,
-          "6": 57,
-          "8": 57,
-          "3": 9,
-          "0": 20,
-          "4": 1
+          "1": 73,
+          "7": 2,
+          "9": 7,
+          "3": 41,
+          "5": 40,
+          "6": 5,
+          "0": 27,
+          "8": 2,
+          "10": 1
         },
-        "relevance_avg_score": 5.9
+        "relevance_avg_score": 2.7
       },
       "eval_scores": [
         {
-          "nom": "CTP ENVIRONNEMENT",
+          "nom": "Entreprise De Nettoyage Industriel",
+          "activite": "Services",
+          "score": 9,
+          "reason": "Nom et activité parfaitement alignés"
+        },
+        {
+          "nom": "ATALIAN PROPRETE",
           "activite": null,
           "score": 8,
-          "reason": "Entreprise de nettoyage industriel en IDF"
+          "reason": "Entreprise de propreté industrielle à Paris"
         },
         {
-          "nom": "N.I NETTOYAGE INDUSTRIEL",
-          "activite": null,
+          "nom": "Net’IDF Group nettoyage professionnel Ile de France",
+          "activite": "Services",
+          "score": 7,
+          "reason": "Nettoyage professionnel en IDF"
+        },
+        {
+          "nom": "Avelia Proprete: Entreprise de Nettoyage Paris et IDF",
+          "activite": "Services",
           "score": 8,
-          "reason": "Nettoyage industriel en IDF"
+          "reason": "Entreprise de nettoyage à Paris et IDF"
         },
         {
-          "nom": "NETT SERVICES",
-          "activite": null,
+          "nom": "NI NETTOYAGE INDUSTRIEL, DÉSINFECTION ET DECONTAMINATION TOUS LOCAUX PARIS ET IDF",
+          "activite": "Services",
+          "score": 9,
+          "reason": "Nettoyage industriel spécialisé Paris et IDF"
+        },
+        {
+          "nom": "SBL Nettoyage Paris - Entreprise de nettoyage",
+          "activite": "Services",
+          "score": 6,
+          "reason": "Nettoyage général, moins industriel"
+        },
+        {
+          "nom": "D.B.N.P Entreprise de Nettoyage et Multi-services à Paris et sur toute île de France.",
+          "activite": "Services",
           "score": 7,
-          "reason": "Services de nettoyage à Paris"
+          "reason": "Entreprise de nettoyage multi-services"
         },
         {
-          "nom": "SARL GAF-MULTI-SERVICES",
-          "activite": null,
+          "nom": "N.I Nettoyage Industriel",
+          "activite": "Services",
+          "score": 9,
+          "reason": "Nettoyage industriel spécialisé"
+        },
+        {
+          "nom": "Grand Paris Clean Entreprise de nettoyage et d'entretien Paris et Île de France",
+          "activite": "Services",
           "score": 7,
-          "reason": "Services de nettoyage à Paris"
+          "reason": "Nettoyage et entretien en IDF"
         },
         {
-          "nom": "PROPRETE UTILE",
+          "nom": "Point Propre",
+          "activite": "Services",
+          "score": 5,
+          "reason": "Propreté générale"
+        },
+        {
+          "nom": "DESPS (DBG FACILITY)",
           "activite": null,
+          "score": 6,
+          "reason": "Facility management, lien partiel"
+        },
+        {
+          "nom": "AZUL Services | Nettoyage professionnel, bureaux & industriel à Paris et Île-de-France",
+          "activite": "Services",
           "score": 8,
-          "reason": "Entreprise de propreté en IDF"
+          "reason": "Nettoyage professionnel et industriel"
         },
         {
-          "nom": "MENAGE ET PROPRETE",
+          "nom": "POLYGON FRANCE (BRETAGNE ASSECHEMENT - NORMANDIE ASSISTANCE - MAINE ASSECHEMENT - POLYGON FRANCE)",
           "activite": null,
-          "score": 8,
-          "reason": "Entreprise de nettoyage en IDF"
+          "score": 3,
+          "reason": "Activité différente"
         },
         {
-          "nom": "TECHNI LINE",
-          "activite": null,
-          "score": 7,
-          "reason": "Entreprise de nettoyage en IDF"
-        },
-        {
-          "nom": "BIO-STERIL",
-          "activite": null,
-          "score": 7,
-          "reason": "Services de nettoyage en IDF"
-        },
-        {
-          "nom": "NEVES VENTILACTIONS (NVA)",
-          "activite": null,
-          "score": 7,
-          "reason": "Services de nettoyage en IDF"
-        },
-        {
-          "nom": "SOCIETE G.A.G.E.",
-          "activite": null,
-          "score": 7,
-          "reason": "Services de nettoyage en IDF"
-        },
-        {
-          "nom": "ABDELKRIM BEZZA",
+          "nom": "MENAGE CLEAN 95",
           "activite": null,
           "score": 5,
-          "reason": "Entreprise individuelle de nettoyage"
+          "reason": "Nettoyage général"
         },
         {
-          "nom": "CLL NETTOYAGE",
+          "nom": "CLEANINVEST",
           "activite": null,
-          "score": 8,
+          "score": 4,
+          "reason": "Peu de détails sur l'activité"
+        },
+        {
+          "nom": "Entreprise de nettoyage ile de france - PSD",
+          "activite": "Services",
+          "score": 7,
           "reason": "Entreprise de nettoyage en IDF"
         },
         {
-          "nom": "NETTOYAGE AMC SERVICES",
-          "activite": null,
-          "score": 8,
-          "reason": "Services de nettoyage en IDF"
-        },
-        {
-          "nom": "NOREA ENVIRONNEMENT (NOREA ENVIRONNEMENT)",
-          "activite": null,
-          "score": 8,
-          "reason": "Entreprise de nettoyage en IDF"
-        },
-        {
-          "nom": "NG PRO MULTI SERVICES",
-          "activite": null,
+          "nom": "VALIDE PROPRE! L'expertise propreté des locaux en Île de France",
+          "activite": "Services",
           "score": 7,
-          "reason": "Services multi-services en IDF"
-        },
-        {
-          "nom": "EURO NETT POLYSERVICES (EURO NETT POLYSERVICES)",
-          "activite": null,
-          "score": 8,
-          "reason": "Entreprise de nettoyage en IDF"
-        },
-        {
-          "nom": "FRANCE HABITAT SERVICES (FHS)",
-          "activite": null,
-          "score": 7,
-          "reason": "Services de nettoyage à Paris"
-        },
-        {
-          "nom": "PRO-INSERT YVELINES (PRO-INSERT YVELINES)",
-          "activite": null,
-          "score": 7,
-          "reason": "Services de nettoyage en IDF"
-        },
-        {
-          "nom": "EURO ECO SERVICES",
-          "activite": null,
-          "score": 7,
-          "reason": "Services de nettoyage en IDF"
-        },
-        {
-          "nom": "NICOLAS HAMBACHER",
-          "activite": null,
-          "score": 5,
-          "reason": "Entreprise individuelle de nettoyage"
+          "reason": "Expertise propreté en IDF"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 7.2,
+      "avg_score_filtered": 6.8,
       "precision_at_10": 100.0,
-      "time_ms": 104653,
+      "time_ms": 50434,
       "error": null
     },
     {
@@ -2308,153 +2125,153 @@
       "query": "Garages automobiles à Marseille",
       "mode": "rachat",
       "target": "garages / ateliers de réparation automobile",
-      "raw_count": 718,
-      "filtered_count": 266,
+      "raw_count": 390,
+      "filtered_count": 171,
       "relevance_stats": {
         "relevance_skipped": false,
-        "relevance_before": 718,
-        "relevance_after": 266,
-        "relevance_removed": 452,
+        "relevance_before": 390,
+        "relevance_after": 171,
+        "relevance_removed": 219,
         "relevance_threshold": 6,
         "relevance_score_distribution": {
-          "1": 184,
-          "10": 39,
-          "8": 30,
-          "7": 7,
-          "5": 31,
-          "4": 27,
-          "3": 151,
-          "9": 190,
-          "0": 59
+          "10": 97,
+          "6": 3,
+          "4": 15,
+          "3": 93,
+          "0": 20,
+          "1": 82,
+          "9": 68,
+          "5": 9,
+          "8": 3
         },
-        "relevance_avg_score": 4.6
+        "relevance_avg_score": 5.4
       },
       "eval_scores": [
         {
-          "nom": "PALACE AUTOMOBILE MARSEILLE",
-          "activite": null,
-          "score": 7,
-          "reason": "Garage automobile à Marseille"
-        },
-        {
-          "nom": "C.S AUTOMOBILES",
-          "activite": null,
-          "score": 7,
-          "reason": "Garage automobile à Marseille"
-        },
-        {
-          "nom": "A3M",
-          "activite": null,
-          "score": 7,
-          "reason": "Garage automobile à Marseille"
-        },
-        {
-          "nom": "SERBELLONI ET FILS CARROMECA",
-          "activite": null,
-          "score": 7,
-          "reason": "Garage automobile à Marseille"
-        },
-        {
-          "nom": "MNA AUTOMOBILE (MNA AUTOMOBILE)",
-          "activite": null,
-          "score": 7,
-          "reason": "Garage automobile à Marseille"
-        },
-        {
-          "nom": "CHUTES LAVIE AUTOMOBILES",
-          "activite": null,
-          "score": 6,
-          "reason": "Semble être un garage mais activité précise floue"
-        },
-        {
-          "nom": "MON LAVAGE",
-          "activite": null,
-          "score": 5,
-          "reason": "Lavage automobile, pas vraiment réparation"
-        },
-        {
-          "nom": "K&B NET",
-          "activite": null,
-          "score": 5,
-          "reason": "Lavage automobile, pas vraiment réparation"
-        },
-        {
-          "nom": "SARL SYRINE",
-          "activite": null,
-          "score": 7,
-          "reason": "Garage automobile à Marseille"
-        },
-        {
-          "nom": "SARL SERVICE DEPANNAGE REMORQUAGE",
-          "activite": null,
+          "nom": "Garage L'art De L'auto",
+          "activite": "Garage automobile",
           "score": 8,
-          "reason": "Service de dépannage et remorquage automobile"
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
         },
         {
-          "nom": "CG CARROSSERIE",
-          "activite": null,
+          "nom": "Garage Tozzi",
+          "activite": "Garage automobile",
           "score": 8,
-          "reason": "Carrosserie automobile à Marseille"
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
         },
         {
-          "nom": "SOCIETE D ELECTRONIQUE ET DE VENTE AUTOMOBILE (SODEVA)",
-          "activite": null,
-          "score": 7,
-          "reason": "Garage automobile à Marseille"
-        },
-        {
-          "nom": "EURL DIAS LAVAGE",
-          "activite": null,
-          "score": 5,
-          "reason": "Lavage automobile, pas vraiment réparation"
-        },
-        {
-          "nom": "SEGEB EXPL GEST BOETTO & FILS (SEGEB)",
-          "activite": null,
-          "score": 7,
-          "reason": "Garage automobile à Marseille"
-        },
-        {
-          "nom": "PATRICK MULATERO",
-          "activite": null,
-          "score": 7,
-          "reason": "Garage automobile à Marseille"
-        },
-        {
-          "nom": "LAVAUTO EXPRESS DU PAYANNET",
-          "activite": null,
-          "score": 5,
-          "reason": "Lavage automobile, pas vraiment réparation"
-        },
-        {
-          "nom": "MOHAMED ZOUBIR",
-          "activite": null,
-          "score": 7,
-          "reason": "Garage automobile à Marseille"
-        },
-        {
-          "nom": "AUTO RAPIDO",
-          "activite": null,
-          "score": 7,
-          "reason": "Garage automobile à Marseille"
-        },
-        {
-          "nom": "ERIC GIUNTOLI",
-          "activite": null,
-          "score": 7,
-          "reason": "Garage automobile à Marseille"
-        },
-        {
-          "nom": "SARL NEW CARROSSERIE D'ENDOUME",
-          "activite": null,
+          "nom": "First Stop Marseille",
+          "activite": "Garage automobile",
           "score": 8,
-          "reason": "Carrosserie automobile à Marseille"
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "GARAGE ERRICO",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "Eurorepar Garage Achard",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "LU CARS GARAGE EUROREPAR Car Service",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "garage formule auto",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "Garage des Dames",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "LUXE GARAGE",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "L’atelier des Chartreux",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "GARAGE MÉCANIQUE EXPRESS",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "Garage Des Chartreux - Mécanique et Carrosserie - FRANCHISE 100 % OFFERTE 13 Marseille",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "Euromaster Marseille 10eme",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "MJ AUTO",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "GARAGE OHANIAN | Garage auto Marseille - Diagnostic auto Marseille - Mecan'Auto",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "Garage Mekki",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "Auto Services, Garage carrosserie à Marseille Rabatau",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "Buy Car Auto - garage parc sevigne",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "2 C Meca",
+          "activite": "Garage automobile",
+          "score": 8,
+          "reason": "Garage automobile à Marseille, correspond parfaitement"
+        },
+        {
+          "nom": "Garage automobile",
+          "activite": "Garage automobile",
+          "score": 7,
+          "reason": "Garage automobile à Marseille, mais code APE légèrement différent"
         }
       ],
       "avg_score_raw": 0,
-      "avg_score_filtered": 6.7,
+      "avg_score_filtered": 8.0,
       "precision_at_10": 100.0,
-      "time_ms": 108193,
+      "time_ms": 75488,
       "error": null
     }
   ]
