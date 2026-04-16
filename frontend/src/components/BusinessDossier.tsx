@@ -102,9 +102,9 @@ export default function BusinessDossier({
       <Section
         icon={Route}
         title="Cartographie des flux"
-        subtitle="Flux de valeur, financiers et d'information entre les acteurs."
+        subtitle="Valeur, cash, information — graphe interactif, acteurs cliquables vers les segments."
       >
-        <FlowDiagram flows={flows} />
+        <FlowDiagram flows={flows} segments={segments} />
       </Section>
 
       <SegmentsSection
@@ -296,7 +296,10 @@ function SegmentBlock({
   const hasResults = !segment.error && segment.total > 0;
 
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-surface-1 overflow-hidden">
+    <div
+      id={`atelier-segment-${segment.key}`}
+      className="rounded-2xl border border-white/[0.06] bg-surface-1 overflow-hidden scroll-mt-24"
+    >
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}

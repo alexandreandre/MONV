@@ -235,13 +235,31 @@ export interface FlowEdge {
   origine: string;
   destination: string;
   label: string;
+  detail?: string | null;
+  pattern?: string | null;
 }
 
+/** Acteur du schéma ; `segment_key` relie au tableau MONV du même identifiant. */
+export interface FlowActor {
+  label: string;
+  segment_key: string | null;
+  actor_id?: string | null;
+  role?: string | null;
+  hint?: string | null;
+  emphasis?: string | null;
+}
+
+export type FlowDiagramLayout = "radial" | "horizontal" | "vertical";
+
 export interface FlowMap {
-  acteurs: string[];
+  /** Anciennes sessions : tableau de chaînes ; dossiers récents : objets `FlowActor`. */
+  acteurs: FlowActor[] | string[];
   flux_valeur: FlowEdge[];
   flux_financiers: FlowEdge[];
   flux_information: FlowEdge[];
+  diagram_title?: string | null;
+  layout?: FlowDiagramLayout | string | null;
+  flow_insight?: string | null;
 }
 
 export interface SegmentResult {

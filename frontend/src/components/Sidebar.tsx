@@ -316,7 +316,7 @@ function SidebarContent({
               Agent
             </span>
             <span className="text-[13px] font-semibold leading-tight truncate w-full text-white">
-              Atelier — dossier projet
+              Créé ton entreprise
             </span>
           </span>
         </button>

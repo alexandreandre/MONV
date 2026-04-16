@@ -510,7 +510,12 @@ function HomeInner() {
       const controller = new AbortController();
       sendAbortRef.current = controller;
 
-      const modeForRequest: Mode = activeConversationMode ?? selectedMode;
+      const atelierFollowUp =
+        isAtelierConversation &&
+        messages.some((m) => m.message_type === "business_dossier");
+      const modeForRequest: Mode = atelierFollowUp
+        ? "prospection"
+        : (activeConversationMode ?? selectedMode);
 
       try {
         const res = await apiPost<ChatResponse>(
@@ -586,6 +591,8 @@ function HomeInner() {
       activeConversationMode,
       activeProjectFolderId,
       replaceConversationInUrl,
+      isAtelierConversation,
+      messages,
     ]
   );
 
@@ -861,7 +868,7 @@ function HomeInner() {
   })();
 
   const chatLandingSubline = user
-    ? "Recherche par mode ou Atelier — données publiques INSEE et RCS."
+    ? "Commençons à travailler."
     : null;
 
   const sidebarProps = {
@@ -1062,16 +1069,6 @@ function HomeInner() {
                     aria-labelledby="recherche-mode-heading"
                   >
                     <div className="mb-4">
-                      <h2
-                        id="recherche-mode-heading"
-                        className="text-xs font-medium text-gray-500"
-                      >
-                        Nouvelle recherche
-                      </h2>
-                      <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
-                        Mode puis consigne. Données publiques INSEE et RCS ; résultats
-                        indicatifs.
-                      </p>
                     </div>
                     <ModeSelector
                       value={selectedMode}
@@ -1124,12 +1121,7 @@ function HomeInner() {
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium text-gray-500">Atelier</p>
                           <p className="text-base sm:text-[17px] font-medium text-white mt-0.5 leading-snug">
-                            QCM court, dossier (business model, flux, tableaux
-                            d&apos;entreprises)
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                            Plusieurs recherches MONV dans une même session, hors flux
-                            « mode » classique.
+                            Créons ton entreprise ensemble.
                           </p>
                         </div>
                         <span className="inline-flex shrink-0 items-center justify-center gap-1.5 self-stretch sm:self-center rounded-lg border border-white/[0.1] bg-white/[0.05] px-3.5 py-2 text-sm font-medium text-white group-hover:bg-white/[0.08] sm:min-h-0 min-h-[44px]">
@@ -1168,24 +1160,51 @@ function HomeInner() {
             </div>
 
             {isAtelierConversation ? (
-              // Dans une session Atelier, l'utilisateur n'interagit qu'avec le
-              // QCM puis consulte son dossier. Le « + Nouveau chat » permet de
-              // repartir sur une recherche classique ou un nouvel Atelier.
-              <div className="border-t border-gray-800/60 px-4 py-3 bg-surface-0">
-                <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
-                  <p className="text-[11px] text-gray-500">
-                    Session <span className="text-teal-300">Atelier</span>{" "}
-                    — démarre un nouveau chat pour une recherche classique.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleNewChat}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-surface-1 px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:border-white/[0.18] transition-colors"
-                  >
-                    Nouveau chat
-                  </button>
+              messages.some((m) => m.message_type === "business_dossier") ? (
+                <div className="border-t border-gray-800/60 px-4 py-3 bg-surface-0">
+                  <div className="max-w-3xl mx-auto space-y-2">
+                    <ChatInput
+                      onSend={handleSend}
+                      disabled={sending}
+                      loading={sending}
+                      onStop={handleStopSend}
+                      placeholder="Poursuivre : ex. « Trouve des ESN à Toulouse » ou « concurrents secteur X »…"
+                    />
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <p className="text-[11px] text-gray-500 text-center sm:text-left">
+                        Session <span className="text-teal-300">Atelier</span> — recherche
+                        suivante en mode prospection (historique conservé).
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleNewChat}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-surface-1 px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:border-white/[0.18] transition-colors shrink-0"
+                      >
+                        Nouveau chat
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="border-t border-gray-800/60 px-4 py-3 bg-surface-0">
+                  <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+                    <p className="text-[11px] text-gray-500">
+                      Session <span className="text-teal-300">Atelier</span> — réponds au
+                      questionnaire puis consulte ton dossier.{" "}
+                      <span className="text-gray-600">
+                        Nouveau chat pour quitter sans dossier.
+                      </span>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleNewChat}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-surface-1 px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:border-white/[0.18] transition-colors"
+                    >
+                      Nouveau chat
+                    </button>
+                  </div>
+                </div>
+              )
             ) : (
               <div className="border-t border-gray-800/60 px-4 py-3 bg-surface-0">
                 <div className="max-w-3xl mx-auto">

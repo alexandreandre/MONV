@@ -75,7 +75,7 @@ export default function ChatMessage({
         >
           <Compass size={13} className={AGENT_META.atelier.accentText} />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 w-full shrink-0">
           {message.content && (
             <div className="rounded-2xl px-4 py-3 bg-surface-2 text-gray-200 border border-white/[0.06] inline-block max-w-full">
               <div className="prose prose-invert prose-sm max-w-none [&>p]:leading-relaxed">

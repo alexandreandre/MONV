@@ -1,133 +1,521 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ArrowRight, Banknote, Info, Package } from "lucide-react";
-import type { FlowEdge, FlowMap } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  Handle,
+  MarkerType,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
+  type Edge,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import dagre from "@dagrejs/dagre";
+import {
+  Banknote,
+  ExternalLink,
+  Info,
+  Layers,
+  MousePointerClick,
+  Package,
+  Sparkles,
+  Star,
+} from "lucide-react";
+import type { FlowActor, FlowEdge, FlowMap, SegmentResult } from "@/lib/api";
 
 interface Props {
   flows: FlowMap;
+  segments?: SegmentResult[];
 }
 
-type FlowLayer = "valeur" | "financier" | "information";
+type FlowLayer = "valeur" | "financier" | "information" | "all";
 
-const LAYERS: {
-  id: FlowLayer;
-  label: string;
-  icon: typeof Package;
-  accent: string;
-  badge: string;
-}[] = [
-  {
-    id: "valeur",
-    label: "Flux de valeur",
-    icon: Package,
-    accent: "border-emerald-500/30 bg-emerald-500/5",
-    badge: "bg-emerald-500/15 text-emerald-300",
-  },
-  {
-    id: "financier",
-    label: "Flux financiers",
-    icon: Banknote,
-    accent: "border-amber-500/30 bg-amber-500/5",
-    badge: "bg-amber-500/15 text-amber-300",
-  },
-  {
-    id: "information",
-    label: "Flux d'information",
-    icon: Info,
-    accent: "border-sky-500/30 bg-sky-500/5",
-    badge: "bg-sky-500/15 text-sky-300",
-  },
-];
+const LAYER_META: Record<
+  Exclude<FlowLayer, "all">,
+  { label: string; color: string; icon: typeof Package }
+> = {
+  valeur: { label: "Valeur", color: "#34d399", icon: Package },
+  financier: { label: "Cash", color: "#fbbf24", icon: Banknote },
+  information: { label: "Info", color: "#38bdf8", icon: Info },
+};
 
-/**
- * Cartographie des flux — rendu « chips d'acteurs + liste d'arcs ».
- * Pas de SVG généré (contrainte produit). Chaque arc est une carte
- * "from → to" lisible, avec onglets pour basculer entre les 3 couches.
- */
-export default function FlowDiagram({ flows }: Props) {
-  const [active, setActive] = useState<FlowLayer>("valeur");
+type ActorNodeData = {
+  actor: FlowActor;
+  segmentKey: string | null;
+  segmentLabel: string | null;
+  onNavigate: (key: string) => void;
+};
 
-  const edges = useMemo<FlowEdge[]>(() => {
-    if (active === "valeur") return flows.flux_valeur || [];
-    if (active === "financier") return flows.flux_financiers || [];
-    return flows.flux_information || [];
-  }, [active, flows]);
+function normalizeActors(acteurs: FlowMap["acteurs"]): FlowActor[] {
+  if (!acteurs?.length) return [];
+  const first = acteurs[0];
+  if (typeof first === "string") {
+    return (acteurs as string[]).map((label) => ({ label, segment_key: null }));
+  }
+  return acteurs as FlowActor[];
+}
 
-  const activeMeta = LAYERS.find((l) => l.id === active)!;
+function normLabel(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+function findActor(label: string, actors: FlowActor[]): FlowActor | null {
+  const t = normLabel(label);
+  const exact = actors.find((a) => normLabel(a.label) === t);
+  if (exact) return exact;
+  return (
+    actors.find((a) => {
+      const al = normLabel(a.label);
+      return t.includes(al) || al.includes(t);
+    }) ?? null
+  );
+}
+
+function segmentKeyForActor(
+  actor: FlowActor | null,
+  segments: SegmentResult[],
+): string | null {
+  if (!actor) return null;
+  if (actor.segment_key) return actor.segment_key;
+  const al = normLabel(actor.label);
+  return segments.find((s) => normLabel(s.label) === al)?.key ?? null;
+}
+
+/* ---------- Node custom ---------- */
+
+const NODE_WIDTH = 210;
+const NODE_HEIGHT = 76;
+
+function ActorNode({ data }: NodeProps) {
+  const { actor, segmentKey, segmentLabel, onNavigate } = data as unknown as ActorNodeData;
+  const primary = actor.emphasis === "primary";
+  const clickable = Boolean(segmentKey);
 
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-surface-1 p-4">
-      {flows.acteurs.length > 0 && (
-        <div className="mb-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500 mb-2">
-            Acteurs
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {flows.acteurs.map((a, i) => (
-              <span
-                key={i}
-                className="inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11px] text-gray-300"
-              >
-                {a}
-              </span>
-            ))}
-          </div>
+    <div
+      className={`relative flex h-[76px] w-[210px] flex-col justify-center rounded-xl border px-3 py-2 text-left shadow-[0_4px_14px_-4px_rgba(0,0,0,0.7)] transition-all ${
+        primary
+          ? "border-teal-400/60 bg-teal-500/[0.12]"
+          : "border-white/[0.14] bg-[#18181b]"
+      } ${
+        clickable
+          ? "cursor-pointer hover:border-teal-300/80 hover:bg-teal-500/[0.14]"
+          : "cursor-default"
+      }`}
+      onClick={() => clickable && segmentKey && onNavigate(segmentKey)}
+      title={
+        actor.hint?.trim() ||
+        (clickable && segmentLabel
+          ? `Aller au segment : ${segmentLabel}`
+          : undefined)
+      }
+    >
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="!h-2 !w-2 !border-0 !bg-white/20"
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-2 !w-2 !border-0 !bg-white/20"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!h-2 !w-2 !border-0 !bg-white/20"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-2 !w-2 !border-0 !bg-white/20"
+      />
+
+      <div className="flex items-center gap-1.5">
+        {primary && (
+          <Star
+            size={11}
+            className="shrink-0 text-teal-300"
+            aria-hidden
+            fill="currentColor"
+          />
+        )}
+        <span className="truncate text-[12.5px] font-semibold text-gray-50">
+          {actor.label}
+        </span>
+        {clickable && (
+          <ExternalLink
+            size={10}
+            className="ml-auto shrink-0 text-teal-300/80"
+            aria-hidden
+          />
+        )}
+      </div>
+      {actor.role?.trim() && (
+        <span className="mt-0.5 truncate text-[10px] text-gray-400">
+          {actor.role}
+        </span>
+      )}
+      {clickable && segmentLabel && (
+        <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-md bg-teal-500/15 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-teal-200/90">
+          Segment · {segmentLabel}
+        </span>
+      )}
+    </div>
+  );
+}
+
+const nodeTypes = { actor: ActorNode };
+
+/* ---------- Layout dagre ---------- */
+
+function layoutWithDagre(nodes: Node[], edges: Edge[]): Node[] {
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({
+    rankdir: "LR",
+    nodesep: 40,
+    ranksep: 90,
+    marginx: 24,
+    marginy: 24,
+  });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  for (const n of nodes) g.setNode(n.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+  for (const e of edges) g.setEdge(e.source, e.target);
+  dagre.layout(g);
+
+  return nodes.map((n) => {
+    const { x, y } = g.node(n.id);
+    return {
+      ...n,
+      position: { x: x - NODE_WIDTH / 2, y: y - NODE_HEIGHT / 2 },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+    };
+  });
+}
+
+/* ---------- Graph inner (needs ReactFlowProvider) ---------- */
+
+function FlowGraph({
+  actors,
+  layeredEdges,
+  segments,
+  onNavigate,
+}: {
+  actors: FlowActor[];
+  layeredEdges: (FlowEdge & { layer: Exclude<FlowLayer, "all"> })[];
+  segments: SegmentResult[];
+  onNavigate: (key: string) => void;
+}) {
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  useEffect(() => {
+    const rawNodes: Node[] = actors.map((actor) => {
+      const sk = segmentKeyForActor(actor, segments);
+      const sl = sk ? segments.find((s) => s.key === sk)?.label ?? null : null;
+      return {
+        id: `a-${normLabel(actor.label)}`,
+        type: "actor",
+        position: { x: 0, y: 0 },
+        data: {
+          actor,
+          segmentKey: sk,
+          segmentLabel: sl,
+          onNavigate,
+        } satisfies ActorNodeData,
+      };
+    });
+
+    const rawEdges: Edge[] = [];
+    const seen = new Set<string>();
+    layeredEdges.forEach((e, idx) => {
+      const origin = findActor(e.origine, actors);
+      const dest = findActor(e.destination, actors);
+      if (!origin || !dest || origin.label === dest.label) return;
+      const sid = `a-${normLabel(origin.label)}`;
+      const tid = `a-${normLabel(dest.label)}`;
+      const meta = LAYER_META[e.layer];
+      const key = `${sid}->${tid}:${e.layer}:${idx}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      const dashed = (e.pattern || "").toLowerCase() === "dashed";
+      rawEdges.push({
+        id: key,
+        source: sid,
+        target: tid,
+        type: "smoothstep",
+        animated: false,
+        label: e.label?.trim() || undefined,
+        labelStyle: {
+          fill: "#e5e7eb",
+          fontSize: 10,
+          fontWeight: 600,
+        },
+        labelBgStyle: { fill: "#0b0b0c", fillOpacity: 0.85 },
+        labelBgPadding: [4, 2],
+        labelBgBorderRadius: 4,
+        style: {
+          stroke: meta.color,
+          strokeWidth: 1.8,
+          strokeDasharray: dashed ? "6 4" : undefined,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: meta.color,
+          width: 18,
+          height: 18,
+        },
+        data: { detail: e.detail ?? null, layer: e.layer },
+      });
+    });
+
+    setNodes(layoutWithDagre(rawNodes, rawEdges));
+    setEdges(rawEdges);
+  }, [actors, layeredEdges, segments, onNavigate, setNodes, setEdges]);
+
+  return (
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
+      fitView
+      fitViewOptions={{ padding: 0.18 }}
+      minZoom={0.4}
+      maxZoom={1.6}
+      proOptions={{ hideAttribution: true }}
+      nodesDraggable
+      nodesConnectable={false}
+      elementsSelectable
+      panOnDrag
+      zoomOnScroll={false}
+      zoomOnPinch
+      className="!bg-transparent"
+    >
+      <Background
+        variant={BackgroundVariant.Dots}
+        gap={18}
+        size={1}
+        color="rgba(255,255,255,0.06)"
+      />
+      <Controls
+        showInteractive={false}
+        className="!bg-[#0b0b0c]/90 !border !border-white/[0.08] !rounded-lg overflow-hidden [&>button]:!bg-transparent [&>button]:!border-white/[0.08] [&>button]:!text-gray-200 [&>button:hover]:!bg-white/[0.06]"
+      />
+    </ReactFlow>
+  );
+}
+
+/* ---------- Composant principal ---------- */
+
+export default function FlowDiagram({ flows, segments = [] }: Props) {
+  const [active, setActive] = useState<FlowLayer>("all");
+
+  const actors = useMemo(() => normalizeActors(flows.acteurs), [flows.acteurs]);
+
+  const allEdges = useMemo<(FlowEdge & { layer: Exclude<FlowLayer, "all"> })[]>(
+    () => [
+      ...(flows.flux_valeur ?? []).map((e) => ({ ...e, layer: "valeur" as const })),
+      ...(flows.flux_financiers ?? []).map((e) => ({
+        ...e,
+        layer: "financier" as const,
+      })),
+      ...(flows.flux_information ?? []).map((e) => ({
+        ...e,
+        layer: "information" as const,
+      })),
+    ],
+    [flows],
+  );
+
+  const counts = useMemo<Record<FlowLayer, number>>(
+    () => ({
+      all: allEdges.length,
+      valeur: (flows.flux_valeur ?? []).length,
+      financier: (flows.flux_financiers ?? []).length,
+      information: (flows.flux_information ?? []).length,
+    }),
+    [allEdges, flows],
+  );
+
+  const layeredEdges = useMemo(() => {
+    if (active === "all") return allEdges;
+    return allEdges.filter((e) => e.layer === active);
+  }, [active, allEdges]);
+
+  const scrollToSegment = useCallback((key: string) => {
+    const el = document.getElementById(`atelier-segment-${key}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    el?.classList.add(
+      "ring-2",
+      "ring-teal-500/50",
+      "transition-shadow",
+      "duration-500",
+    );
+    window.setTimeout(() => {
+      el?.classList.remove("ring-2", "ring-teal-500/50");
+    }, 1600);
+  }, []);
+
+  const linkedActors = useMemo(
+    () => actors.filter((a) => Boolean(segmentKeyForActor(a, segments))).length,
+    [actors, segments],
+  );
+
+  const title = (flows.diagram_title || "").trim();
+  const insight = (flows.flow_insight || "").trim();
+
+  const tabs: { id: FlowLayer; label: string; color: string; icon: typeof Package }[] = [
+    { id: "all", label: "Tous", color: "#9ca3af", icon: Layers },
+    { id: "valeur", label: "Valeur", color: LAYER_META.valeur.color, icon: Package },
+    { id: "financier", label: "Cash", color: LAYER_META.financier.color, icon: Banknote },
+    {
+      id: "information",
+      label: "Info",
+      color: LAYER_META.information.color,
+      icon: Info,
+    },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-white/[0.08] bg-surface-1 p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+      {(title || insight) && (
+        <div className="mb-4 flex flex-col gap-1.5 border-b border-white/[0.06] pb-3">
+          {title && (
+            <div className="flex items-start gap-2">
+              <Sparkles
+                size={15}
+                className="mt-0.5 shrink-0 text-teal-400/90"
+                aria-hidden
+              />
+              <h4 className="text-sm font-semibold text-gray-100 leading-snug">
+                {title}
+              </h4>
+            </div>
+          )}
+          {insight && (
+            <p className="text-[11px] leading-relaxed text-gray-400 pl-[1.35rem]">
+              {insight}
+            </p>
+          )}
         </div>
       )}
 
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {LAYERS.map((l) => {
-          const Icon = l.icon;
-          const isActive = l.id === active;
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 uppercase tracking-wider">
+          <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-0.5">
+            <Layers size={11} className="text-gray-400" aria-hidden />
+            {actors.length} acteurs
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-0.5">
+            {layeredEdges.length} liaisons
+          </span>
+        </div>
+        {segments.length > 0 && linkedActors > 0 && (
+          <span className="inline-flex items-center gap-1 text-[10px] text-gray-500">
+            <MousePointerClick
+              size={11}
+              className="text-teal-400/90"
+              aria-hidden
+            />
+            {linkedActors} carte{linkedActors > 1 ? "s" : ""} cliquable
+            {linkedActors > 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
+      <div
+        className="mb-3 flex flex-wrap gap-1.5"
+        role="tablist"
+        aria-label="Type de flux"
+      >
+        {tabs.map((t) => {
+          const Icon = t.icon;
+          const isActive = t.id === active;
           return (
             <button
-              key={l.id}
+              key={t.id}
               type="button"
-              onClick={() => setActive(l.id)}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActive(t.id)}
+              style={
                 isActive
-                  ? l.accent + " text-white"
-                  : "border-white/[0.06] bg-transparent text-gray-500 hover:text-gray-300 hover:border-white/[0.12]"
+                  ? {
+                      borderColor: `${t.color}66`,
+                      backgroundColor: `${t.color}1a`,
+                      color: t.color,
+                    }
+                  : undefined
+              }
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                isActive
+                  ? ""
+                  : "border-white/[0.06] bg-transparent text-gray-500 hover:border-white/[0.1] hover:text-gray-300"
               }`}
             >
-              <Icon size={12} />
-              {l.label}
+              <Icon size={12} aria-hidden />
+              {t.label}
+              <span
+                className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold ${
+                  isActive ? "bg-black/30" : "bg-white/[0.05] text-gray-500"
+                }`}
+              >
+                {counts[t.id] ?? 0}
+              </span>
             </button>
           );
         })}
       </div>
 
-      {edges.length === 0 ? (
-        <p className="text-xs text-gray-500 italic py-6 text-center">
-          Aucun flux {activeMeta.label.toLowerCase()} identifié.
+      {/* ---- Légende ---- */}
+      <div className="mb-2 flex flex-wrap gap-2 text-[10px] text-gray-500">
+        {(["valeur", "financier", "information"] as const).map((k) => {
+          const m = LAYER_META[k];
+          return (
+            <span key={k} className="inline-flex items-center gap-1">
+              <span
+                className="inline-block h-2 w-4 rounded-sm"
+                style={{ backgroundColor: m.color }}
+              />
+              {m.label}
+            </span>
+          );
+        })}
+      </div>
+
+      {/* ---- Graphe ---- */}
+      {actors.length === 0 ? (
+        <p className="rounded-lg border border-white/[0.06] bg-surface-2/60 py-8 text-center text-xs italic text-gray-500">
+          Aucun acteur identifié.
         </p>
       ) : (
-        <ul className="space-y-2">
-          {edges.map((edge, i) => (
-            <li
-              key={i}
-              className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-white/[0.05] bg-surface-2 px-3 py-2.5"
-            >
-              <div className="flex items-center gap-2 text-sm text-gray-200 min-w-0 flex-1">
-                <span className="truncate font-medium">{edge.origine}</span>
-                <ArrowRight
-                  size={14}
-                  className={`flex-shrink-0 ${activeMeta.badge.split(" ").pop()}`}
-                />
-                <span className="truncate font-medium">{edge.destination}</span>
-              </div>
-              {edge.label && (
-                <span
-                  className={`inline-flex items-center self-start sm:self-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${activeMeta.badge}`}
-                >
-                  {edge.label}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div className="h-[520px] w-full overflow-hidden rounded-xl border border-white/[0.06] bg-[#0a0a0b]">
+          <ReactFlowProvider>
+            <FlowGraph
+              actors={actors}
+              layeredEdges={layeredEdges}
+              segments={segments}
+              onNavigate={scrollToSegment}
+            />
+          </ReactFlowProvider>
+        </div>
       )}
+
+      <p className="mt-2 text-[10px] text-gray-600">
+        Glissez pour déplacer un acteur · molette + clic pour naviguer dans le
+        graphe · clic sur une carte pour rejoindre son segment.
+      </p>
     </div>
   );
 }
