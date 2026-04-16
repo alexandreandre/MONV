@@ -145,7 +145,15 @@ def _infer_columns(
     ]
     if intent == "recherche_dirigeant":
         base.extend(["dirigeant_nom", "dirigeant_prenom", "dirigeant_fonction"])
-    if entities.get("ca_min") or entities.get("ca_max"):
+    want_finance = bool(entities.get("ca_min") or entities.get("ca_max"))
+    if results and not want_finance:
+        want_finance = any(
+            getattr(r, "chiffre_affaires", None) is not None
+            or getattr(r, "resultat_net", None) is not None
+            or getattr(r, "annee_dernier_ca", None) is not None
+            for r in results
+        )
+    if want_finance:
         base.extend([
             "annee_dernier_ca",
             "date_cloture_exercice",
@@ -163,6 +171,8 @@ def _infer_columns(
         base.append("site_web")
     if results and any(r.email for r in results):
         base.append("email")
+    if results and any(r.signaux for r in results):
+        base.append("signaux")
     base.append("lien_annuaire")
     if results and any(r.google_maps_url for r in results):
         base.append("google_maps_url")
