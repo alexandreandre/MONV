@@ -11,9 +11,15 @@ description: >-
 
 ## Objectif
 
-Sur la branche **`main`** : **`git add -A`**, créer un ou plusieurs **commits au messages détaillés**, puis **`git push origin main`** (ou `git push -u origin main` si besoin de définir l’upstream).
+Sur la branche **`main`** : enchaîner **jusqu’au bout** — **`git add -A`**, un ou plusieurs **commits** au messages détaillés, puis **`git push origin main`** (ou `git push -u origin main` si besoin de définir l’upstream). Le flux se termine par un **push réussi** ou une **erreur expliquée** (jamais en s’arrêtant volontairement avant le push sans raison liée aux garde-fous).
 
 **Différence avec le skill `push`** : `push` cible **uniquement** une branche personnelle `dev-*` et **interdit** de pousser sur `main`. Ce skill **`commit`** est pour le flux **direct sur `main`** quand l’utilisateur le demande explicitement.
+
+## Exécution (obligatoire pour l’agent)
+
+- **Exécuter réellement** les commandes Git (outils terminal) dans l’ordre des étapes ci-dessous, pas seulement les décrire.
+- **Aller jusqu’au push** sur `origin/main` dans la même intervention : après les commits, lancer `git push origin main` (ou `-u` si nécessaire).
+- **Ne pas** demander « confirmer le push ? » ni bloquer le push par défaut. Les seuls arrêts avant push sont : mauvaise branche, secrets détectés, merge/rebase non terminé, ou refus du remote (non fast-forward) — dans ces cas, expliquer et proposer la suite sans `git push --force` sur `main` sauf demande écrite explicite.
 
 ## Quand utiliser ce skill
 
@@ -49,7 +55,7 @@ git status -sb
 git diff --stat
 ```
 
-- Rien à committer : vérifier commits locaux non poussés (`git log origin/main..HEAD` ou équivalent) ; si oui, `git push origin main` après re-vérification de la branche.
+- Rien à committer : vérifier commits locaux non poussés (`git log origin/main..HEAD` ou équivalent) ; si oui, **`git push origin main`** après re-vérification de la branche.
 
 ### 4. Staging complet
 
@@ -98,9 +104,10 @@ Si l’upstream n’existe pas encore sur cette machine : `git push -u origin ma
 - Utiliser ce skill depuis une branche **`dev-*`** sans changer d’intention (risque de confusion avec `/push`).
 - Messages vagues (« update », « fix ») sur un gros diff.
 - `git push --force` sur `main` sans accord explicite.
+- S’arrêter après le commit **sans** avoir tenté le push alors que la branche est `main` et qu’aucun garde-fou ne bloque.
 
 ## Exemple d’invocation
 
 > `/commit` — tout est sur `main`, j’ai fini la correction, add tout, commit détaillé et push.
 
-L’agent vérifie qu’on est bien sur `main`, stager tout (hors alertes secrets), committe, pousse vers `origin/main`, synthèse courte.
+L’agent vérifie qu’on est bien sur `main`, stager tout (hors alertes secrets), committe, **pousse** vers `origin/main`, synthèse courte.
