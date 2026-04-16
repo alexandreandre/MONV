@@ -130,6 +130,7 @@ def _infer_columns(
         "nom",
         "siren",
         "siret",
+        "categorie_entreprise",
         "activite_principale",
         "libelle_activite",
         "adresse",
@@ -145,7 +146,17 @@ def _infer_columns(
     if intent == "recherche_dirigeant":
         base.extend(["dirigeant_nom", "dirigeant_prenom", "dirigeant_fonction"])
     if entities.get("ca_min") or entities.get("ca_max"):
-        base.extend(["chiffre_affaires", "resultat_net"])
+        base.extend([
+            "annee_dernier_ca",
+            "date_cloture_exercice",
+            "chiffre_affaires",
+            "resultat_net",
+            "marge_brute",
+            "ebe",
+            "capitaux_propres",
+            "effectif_financier",
+            "capital_social",
+        ])
     if results and any(r.telephone for r in results):
         base.append("telephone")
     if results and any(r.site_web for r in results):

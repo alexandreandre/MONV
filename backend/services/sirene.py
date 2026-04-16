@@ -533,6 +533,7 @@ def _parse_company(raw: dict) -> CompanyResult:
         siren=raw.get("siren", ""),
         siret=siege.get("siret"),
         nom=raw.get("nom_complet", ""),
+        categorie_entreprise=raw.get("categorie_entreprise"),
         activite_principale=raw.get("activite_principale"),
         libelle_activite=raw.get("libelle_activite_principale"),
         adresse=" ".join(addr_parts) if addr_parts else None,

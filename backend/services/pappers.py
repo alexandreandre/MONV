@@ -95,6 +95,40 @@ def _financial_year_key(row: dict) -> int:
     return 0
 
 
+def _normalize_fr_finances(finances: object) -> list[dict]:
+    """Normalise la clé `finances` Pappers FR (dict par année ou liste) en liste triée par année décroissante."""
+    if finances is None:
+        return []
+    if isinstance(finances, dict):
+        rows: list[dict] = []
+        for k, v in finances.items():
+            if not isinstance(v, dict):
+                continue
+            row = dict(v)
+            try:
+                y = int(str(k).strip())
+            except (TypeError, ValueError):
+                y = int(row.get("annee") or row.get("year") or 0)
+            if row.get("annee") is None and row.get("year") is None:
+                row["annee"] = y
+            rows.append(row)
+        rows.sort(key=lambda r: int(r.get("annee") or r.get("year") or 0), reverse=True)
+        return rows
+    if isinstance(finances, list):
+        rows = [dict(x) for x in finances if isinstance(x, dict)]
+        rows.sort(key=lambda r: int(r.get("annee") or r.get("year") or 0), reverse=True)
+        return rows
+    return []
+
+
+def _capital_from_entreprise_payload(data: dict) -> float | None:
+    return _safe_float(
+        data.get("capital_social")
+        or data.get("capital")
+        or data.get("capital_social_entreprise")
+    )
+
+
 def _financial_ca_result(row: dict) -> tuple[float | None, float | None]:
     ca = _safe_float(
         row.get("chiffre_affaires")
@@ -141,12 +175,15 @@ def _company_result_from_intl(r: dict) -> CompanyResult | None:
         dir_fonction = rep.get("qualite") or ""
 
     ca, rn = None, None
+    annee_ca: int | None = None
     fins = r.get("financials")
     if isinstance(fins, list) and fins:
         rows = [x for x in fins if isinstance(x, dict)]
         rows.sort(key=_financial_year_key, reverse=True)
         if rows:
             ca, rn = _financial_ca_result(rows[0])
+            yk = _financial_year_key(rows[0])
+            annee_ca = yk if yk else None
 
     return CompanyResult(
         siren=str(num).replace(" ", ""),
@@ -166,6 +203,7 @@ def _company_result_from_intl(r: dict) -> CompanyResult | None:
         dirigeant_fonction=dir_fonction or None,
         chiffre_affaires=ca,
         resultat_net=rn,
+        annee_dernier_ca=annee_ca,
         site_web=None,
     )
 
@@ -274,14 +312,31 @@ async def _search_france(params: dict) -> list[CompanyResult]:
                 dir_prenom = d.get("prenom") or ""
                 dir_fonction = d.get("qualite") or ""
 
-            finances = r.get("finances", {})
-            ca = None
-            rn = None
-            if finances:
-                last_year = finances.get(sorted(finances.keys())[-1]) if isinstance(finances, dict) else None
-                if isinstance(last_year, dict):
-                    ca = last_year.get("chiffre_affaires")
-                    rn = last_year.get("resultat")
+            fin_rows = _normalize_fr_finances(r.get("finances"))
+            ca = rn = None
+            annee_ca = None
+            date_cloture = None
+            marge = ebe_val = cap_prop = eff_fin = None
+            cap_soc = _capital_from_entreprise_payload(r) if isinstance(r, dict) else None
+            if fin_rows:
+                ly = fin_rows[0]
+                ca = _safe_float(ly.get("chiffre_affaires"))
+                rn = _safe_float(ly.get("resultat") or ly.get("resultat_net"))
+                ay = ly.get("annee") or ly.get("year")
+                if ay is not None:
+                    try:
+                        annee_ca = int(ay)
+                    except (TypeError, ValueError):
+                        annee_ca = None
+                date_cloture = ly.get("date_cloture_exercice") or ly.get("date_cloture")
+                marge = _safe_float(ly.get("marge_brute"))
+                ebe_val = _safe_float(
+                    ly.get("excedent_brut_exploitation")
+                    or ly.get("ebe")
+                    or ly.get("excédent_brut_exploitation")
+                )
+                cap_prop = _safe_float(ly.get("capitaux_propres"))
+                eff_fin = _safe_float(ly.get("effectif") or ly.get("effectif_moyen"))
 
             results.append(
                 CompanyResult(
@@ -299,6 +354,13 @@ async def _search_france(params: dict) -> list[CompanyResult]:
                     dirigeant_fonction=dir_fonction or None,
                     chiffre_affaires=ca,
                     resultat_net=rn,
+                    annee_dernier_ca=annee_ca,
+                    date_cloture_exercice=str(date_cloture) if date_cloture else None,
+                    marge_brute=marge,
+                    ebe=ebe_val,
+                    capitaux_propres=cap_prop,
+                    effectif_financier=eff_fin,
+                    capital_social=cap_soc,
                     site_web=r.get("site_web"),
                 )
             )
@@ -407,9 +469,10 @@ async def get_company_finances(siren: str) -> dict:
         except Exception:
             return {}
 
-    finances = data.get("finances", [])
+    finances = _normalize_fr_finances(data.get("finances"))
     return {
         "siren": siren,
         "denomination": data.get("denomination"),
         "finances": finances,
+        "capital_social": _capital_from_entreprise_payload(data),
     }

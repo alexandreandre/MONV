@@ -8,9 +8,50 @@ from models.schemas import ExecutionPlan, CompanyResult, SearchResults
 from services.sirene import search_sirene
 from services.pappers import search_pappers, get_company_dirigeants, get_company_finances
 from services.google_places import search_google_places
+from services.orchestrator import extend_columns_for_plan
 from utils.pipeline_log import plog
 
 MAX_TOTAL_RESULTS = settings.MAX_RESULTS_PER_QUERY * 4
+
+
+def _safe_float(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _apply_finance_row(result: CompanyResult, last: dict, capital_from_company: float | None) -> None:
+    """Fusionne la ligne comptable la plus récente + capital issu de la fiche entreprise."""
+    y = last.get("annee") or last.get("year")
+    if y is not None and result.annee_dernier_ca is None:
+        try:
+            result.annee_dernier_ca = int(y)
+        except (TypeError, ValueError):
+            pass
+    dc = last.get("date_cloture_exercice") or last.get("date_cloture")
+    if dc and not result.date_cloture_exercice:
+        result.date_cloture_exercice = str(dc)
+    if not result.chiffre_affaires:
+        result.chiffre_affaires = _safe_float(last.get("chiffre_affaires"))
+    if not result.resultat_net:
+        result.resultat_net = _safe_float(last.get("resultat") or last.get("resultat_net"))
+    if not result.marge_brute:
+        result.marge_brute = _safe_float(last.get("marge_brute"))
+    if not result.ebe:
+        result.ebe = _safe_float(
+            last.get("excedent_brut_exploitation") or last.get("ebe")
+        )
+    if not result.capitaux_propres:
+        result.capitaux_propres = _safe_float(last.get("capitaux_propres"))
+    if not result.effectif_financier:
+        result.effectif_financier = _safe_float(
+            last.get("effectif") or last.get("effectif_moyen")
+        )
+    if capital_from_company is not None and result.capital_social is None:
+        result.capital_social = capital_from_company
 
 
 def _dedup_key(r: CompanyResult) -> str:
@@ -88,13 +129,13 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
             for result in all_results[:50]:
                 fin_data = await get_company_finances(result.siren)
                 finances = fin_data.get("finances", [])
+                cap_co = fin_data.get("capital_social")
+                if cap_co is not None:
+                    cap_co = _safe_float(cap_co)
                 if finances and isinstance(finances, list) and finances:
                     last = finances[0]
                     if isinstance(last, dict):
-                        if not result.chiffre_affaires:
-                            result.chiffre_affaires = last.get("chiffre_affaires")
-                        if not result.resultat_net:
-                            result.resultat_net = last.get("resultat")
+                        _apply_finance_row(result, last, cap_co)
             plog("api_call_end", source=call.source, action=call.action)
 
     if len(all_results) < 5:
@@ -152,10 +193,11 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
                             seen_keys.add(key)
                             all_results.append(r)
 
+    cols = extend_columns_for_plan(plan.columns, plan.api_calls)
     return SearchResults(
         total=len(all_results),
         results=all_results,
-        columns=plan.columns,
+        columns=cols,
         credits_required=plan.estimated_credits,
     )
 
@@ -188,6 +230,22 @@ def _merge_fields(existing: CompanyResult, new: CompanyResult) -> None:
         existing.chiffre_affaires = new.chiffre_affaires
     if new.resultat_net and not existing.resultat_net:
         existing.resultat_net = new.resultat_net
+    if new.annee_dernier_ca is not None and existing.annee_dernier_ca is None:
+        existing.annee_dernier_ca = new.annee_dernier_ca
+    if new.date_cloture_exercice and not existing.date_cloture_exercice:
+        existing.date_cloture_exercice = new.date_cloture_exercice
+    if new.marge_brute is not None and existing.marge_brute is None:
+        existing.marge_brute = new.marge_brute
+    if new.ebe is not None and existing.ebe is None:
+        existing.ebe = new.ebe
+    if new.capitaux_propres is not None and existing.capitaux_propres is None:
+        existing.capitaux_propres = new.capitaux_propres
+    if new.effectif_financier is not None and existing.effectif_financier is None:
+        existing.effectif_financier = new.effectif_financier
+    if new.capital_social is not None and existing.capital_social is None:
+        existing.capital_social = new.capital_social
+    if new.categorie_entreprise and not existing.categorie_entreprise:
+        existing.categorie_entreprise = new.categorie_entreprise
     if new.dirigeant_nom and not existing.dirigeant_nom:
         existing.dirigeant_nom = new.dirigeant_nom
         existing.dirigeant_prenom = new.dirigeant_prenom

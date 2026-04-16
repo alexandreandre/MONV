@@ -154,8 +154,16 @@ class CompanyResult(BaseModel):
     dirigeant_nom: str | None = None
     dirigeant_prenom: str | None = None
     dirigeant_fonction: str | None = None
+    categorie_entreprise: str | None = None  # ex. PME / ETI (SIRENE)
     chiffre_affaires: float | None = None
     resultat_net: float | None = None
+    annee_dernier_ca: int | None = None  # exercice du dernier CA connu
+    date_cloture_exercice: str | None = None
+    marge_brute: float | None = None
+    ebe: float | None = None  # excédent brut d'exploitation
+    capitaux_propres: float | None = None
+    effectif_financier: float | None = None  # effectif déclaré sur l'exercice (comptes)
+    capital_social: float | None = None
     email: str | None = None
     telephone: str | None = None
     site_web: str | None = None

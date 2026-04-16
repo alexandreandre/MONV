@@ -49,7 +49,24 @@ const COL_LABELS: Record<string, string> = {
   site_web: "Site web",
   lien_annuaire: "Fiche entreprise",
   google_maps_url: "Google Maps",
+  categorie_entreprise: "Catégorie (PME / ETI…)",
+  annee_dernier_ca: "Année (dernier CA)",
+  date_cloture_exercice: "Clôture d'exercice",
+  marge_brute: "Marge brute (€)",
+  ebe: "EBE (€)",
+  capitaux_propres: "Capitaux propres (€)",
+  effectif_financier: "Effectif (comptes)",
+  capital_social: "Capital social (€)",
 };
+
+const CURRENCY_COLS = new Set([
+  "chiffre_affaires",
+  "resultat_net",
+  "marge_brute",
+  "ebe",
+  "capitaux_propres",
+  "capital_social",
+]);
 
 const ROWS_PER_PAGE = 5;
 
@@ -70,11 +87,9 @@ export default function ResultsTable({
   const [filterText, setFilterText] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
 
+  /** Colonnes déclarées par l'API : toujours affichées (aperçu souvent partiel sur 10 lignes). */
   const visibleCols = columns.filter(
-    (c) =>
-      c !== "lien_annuaire" &&
-      c !== "google_maps_url" &&
-      data.some((r) => r[c])
+    (c) => c !== "lien_annuaire" && c !== "google_maps_url"
   );
   const hasGoogleMaps = data.some((r) => r.google_maps_url);
 
@@ -120,23 +135,38 @@ export default function ResultsTable({
 
   const formatValue = (col: string, val: any) => {
     if (val === null || val === undefined || val === "") return "—";
-    if (col === "chiffre_affaires" || col === "resultat_net") {
+    if (CURRENCY_COLS.has(col)) {
       const num = Number(val);
-      if (isNaN(num)) return val;
+      if (isNaN(num)) return String(val);
       if (Math.abs(num) >= 1_000_000)
         return `${(num / 1_000_000).toFixed(1)}\u202fM\u202f\u20ac`;
       if (Math.abs(num) >= 1_000)
         return `${(num / 1_000).toFixed(0)}\u202fk\u202f\u20ac`;
       return `${num}\u202f\u20ac`;
     }
-    if (col === "date_creation" && typeof val === "string" && val.length >= 10) {
-      const d = new Date(val);
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleDateString("fr-FR", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        });
+    if (col === "effectif_financier") {
+      const num = Number(val);
+      if (isNaN(num)) return String(val);
+      return num === Math.floor(num) ? String(Math.floor(num)) : String(num);
+    }
+    if (col === "annee_dernier_ca") {
+      const n = Number(val);
+      if (!isNaN(n)) return String(Math.floor(n));
+      return String(val);
+    }
+    if (
+      col === "date_creation" ||
+      col === "date_cloture_exercice"
+    ) {
+      if (typeof val === "string" && val.length >= 10) {
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString("fr-FR", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          });
+        }
       }
     }
     return String(val);
