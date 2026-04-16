@@ -98,22 +98,24 @@ export const LANDING_TEMPLATES: Template[] = [
     mode: "sous_traitant",
   },
   {
-    id: "client-portefeuille-siren",
-    title: "Mes clients existants",
-    description: "Collez des SIREN pour enrichir CA, dirigeants et signaux",
+    id: "benchmark-logiciel-idf",
+    title: "Benchmark SaaS / logiciel IDF",
+    description:
+      "PME éditeurs et ESN en Île-de-France — CA, effectifs, dynamique sur 2 ans",
     query:
-      "J'ai ces SIREN dans mon portefeuille, enrichis-moi les fiches : 552032534, 552081317, 542065479",
-    icon: "briefcase",
-    mode: "client",
+      "Je veux un benchmark des PME du logiciel et du conseil en systèmes en Île-de-France, effectifs 20 à 250, pour comparer CA récent, CA N-1 et rentabilité",
+    icon: "chart",
+    mode: "benchmark",
   },
   {
-    id: "client-segmentation-secteur",
-    title: "Comptes BTP existants",
-    description: "Analyser et segmenter mes clients du BTP",
+    id: "benchmark-boulangerie-france",
+    title: "Boulangeries artisanales France",
+    description:
+      "Périmètre NAF boulangerie — panel pour étude de marché et concurrence",
     query:
-      "Voici mes comptes clients dans le BTP, analyse leur santé financière et leurs signaux récents",
-    icon: "building",
-    mode: "client",
+      "Benchmark des boulangeries-pâtisseries artisanales en France, PME jusqu'à 50 salariés : je veux un panel avec chiffre d'affaires, variation et effectifs",
+    icon: "factory",
+    mode: "benchmark",
   },
   {
     id: "rachat-restaurant-paris",

@@ -7,10 +7,14 @@ import {
   useMemo,
   useRef,
   useCallback,
+  Suspense,
 } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   apiPost,
   apiGet,
+  apiPatch,
+  apiDelete,
   clearToken,
   isLoggedIn,
   type User,
@@ -19,6 +23,7 @@ import {
   type ChatResponse,
   type ExportResponse,
   type AgentSendResponse,
+  type ProjectFolder,
 } from "@/lib/api";
 import { LANDING_TEMPLATES } from "@/lib/landingTemplates";
 import {
@@ -30,18 +35,19 @@ import {
 import { ATELIER_MODE_LABEL } from "@/lib/agents";
 import AuthModal from "@/components/AuthModal";
 import Sidebar from "@/components/Sidebar";
+import ProjectHub from "@/components/ProjectHub";
 import ChatInput from "@/components/ChatInput";
 import ChatMessage from "@/components/ChatMessage";
 import TemplateCards from "@/components/TemplateCards";
 import ModeSelector from "@/components/ModeSelector";
-import AgentCard from "@/components/AgentCard";
 import AgentWelcome from "@/components/AgentWelcome";
 import Dashboard from "@/components/Dashboard";
 import CreditsPage from "@/components/CreditsPage";
 import ToastContainer, { type ToastData } from "@/components/Toast";
 import MobileHeader from "@/components/MobileHeader";
 import PipelineProgress, { type PipelineStep } from "@/components/PipelineProgress";
-import { ArrowRight } from "lucide-react";
+import { CONV_SEARCH_PARAM } from "@/lib/conversationNav";
+import { ArrowRight, Compass } from "lucide-react";
 
 type Page = "chat" | "dashboard" | "credits" | "atelier";
 
@@ -64,7 +70,7 @@ function displayFirstName(fullName: string): string | null {
   );
 }
 
-export default function Home() {
+function HomeInner() {
   const [user, setUser] = useState<User | null>(null);
   /** Jeton présent : afficher sidebar / header tout de suite, avant /auth/me */
   const [sessionHint, setSessionHint] = useState(false);
@@ -77,11 +83,21 @@ export default function Home() {
     setAuthInitialMode(mode);
     setShowAuth(true);
   }, []);
+  const router = useRouter();
+  const pathname = usePathname() || "/";
+  const searchParams = useSearchParams();
+  const lastSyncedConvParamRef = useRef<string | null>(null);
+
   const [page, setPage] = useState<Page>("chat");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [projectFolders, setProjectFolders] = useState<ProjectFolder[]>([]);
+  /** Projet sélectionné (vue type ChatGPT) — null = accueil recherche global. */
+  const [activeProjectFolderId, setActiveProjectFolderId] = useState<string | null>(
+    null
+  );
   const [conversationsLoading, setConversationsLoading] = useState(false);
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -96,6 +112,18 @@ export default function Home() {
   const templates = useMemo(
     () => LANDING_TEMPLATES.filter((t) => normalizeMode(t.mode) === selectedMode),
     [selectedMode]
+  );
+
+  const activeProjectFolder = useMemo(
+    () => projectFolders.find((f) => f.id === activeProjectFolderId) ?? null,
+    [projectFolders, activeProjectFolderId]
+  );
+
+  const showProjectHub = Boolean(
+    user &&
+      activeProjectFolder &&
+      !currentConvId &&
+      messages.length === 0
   );
 
   const [sending, setSending] = useState(false);
@@ -117,13 +145,47 @@ export default function Home() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const replaceConversationInUrl = useCallback(
+    (conversationId: string | null) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (conversationId) {
+        next.set(CONV_SEARCH_PARAM, conversationId);
+      } else {
+        next.delete(CONV_SEARCH_PARAM);
+      }
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [router, pathname, searchParams]
+  );
+
+  const applyConversationState = useCallback((conv: Conversation) => {
+    setCurrentConvId(conv.id);
+    setMessages(conv.messages);
+    setActiveProjectFolderId(conv.folder_id ?? null);
+    const rawMode = conv.mode != null ? String(conv.mode).trim() : "";
+    const atelier = rawMode === ATELIER_MODE_LABEL;
+    setIsAtelierConversation(atelier);
+    setActiveConversationMode(
+      atelier || rawMode === "" ? null : normalizeMode(rawMode)
+    );
+  }, []);
+
   const loadConversations = useCallback(async () => {
     setConversationsLoading(true);
     try {
-      const convs = await apiGet<Conversation[]>("/chat/conversations");
-      setConversations(convs);
-    } catch {
-      /* ignore */
+      const [convRes, folderRes] = await Promise.allSettled([
+        apiGet<Conversation[]>("/chat/conversations"),
+        apiGet<ProjectFolder[]>("/chat/project-folders"),
+      ]);
+      if (convRes.status === "fulfilled") {
+        setConversations(convRes.value);
+      }
+      if (folderRes.status === "fulfilled") {
+        setProjectFolders(folderRes.value);
+      } else {
+        setProjectFolders([]);
+      }
     } finally {
       setConversationsLoading(false);
     }
@@ -150,9 +212,10 @@ export default function Home() {
 
     (async () => {
       try {
-        const [meRes, convRes] = await Promise.allSettled([
+        const [meRes, convRes, folderRes] = await Promise.allSettled([
           apiGet<User>("/auth/me?token=" + token),
           apiGet<Conversation[]>("/chat/conversations"),
+          apiGet<ProjectFolder[]>("/chat/project-folders"),
         ]);
         if (cancelled) return;
         if (meRes.status === "rejected") {
@@ -160,6 +223,7 @@ export default function Home() {
           setUser(null);
           setSessionHint(false);
           setConversations([]);
+          setProjectFolders([]);
           return;
         }
         setUser(meRes.value);
@@ -167,6 +231,11 @@ export default function Home() {
           setConversations(convRes.value);
         } else {
           setConversations([]);
+        }
+        if (folderRes.status === "fulfilled") {
+          setProjectFolders(folderRes.value);
+        } else {
+          setProjectFolders([]);
         }
       } finally {
         if (!cancelled) setConversationsLoading(false);
@@ -200,17 +269,131 @@ export default function Home() {
     setUser(null);
     setMessages([]);
     setCurrentConvId(null);
+    lastSyncedConvParamRef.current = null;
+    replaceConversationInUrl(null);
+    setActiveProjectFolderId(null);
     setConversations([]);
+    setProjectFolders([]);
     setConversationsLoading(false);
   };
 
+  const handleCreateProjectFolder = useCallback(
+    async (name: string) => {
+      try {
+        const created = await apiPost<ProjectFolder>("/chat/project-folders", {
+          name,
+        });
+        await loadConversations();
+        setActiveProjectFolderId(created.id);
+        setCurrentConvId(null);
+        setMessages([]);
+        setPage("chat");
+        addToast("success", "Projet créé.");
+      } catch (e) {
+        addToast(
+          "error",
+          e instanceof Error ? e.message : "Impossible de créer le projet."
+        );
+        throw e;
+      }
+    },
+    [loadConversations, addToast]
+  );
+
+  const handleRenameProjectFolder = useCallback(
+    async (id: string, name: string) => {
+      try {
+        await apiPatch<ProjectFolder>(`/chat/project-folders/${id}`, { name });
+        await loadConversations();
+        addToast("success", "Projet renommé.");
+      } catch (e) {
+        addToast(
+          "error",
+          e instanceof Error ? e.message : "Impossible de renommer le projet."
+        );
+        throw e;
+      }
+    },
+    [loadConversations, addToast]
+  );
+
+  const handleDeleteProjectFolder = useCallback(
+    async (id: string) => {
+      try {
+        await apiDelete(`/chat/project-folders/${id}`);
+        await loadConversations();
+        if (id === activeProjectFolderId) {
+          setActiveProjectFolderId(null);
+          setCurrentConvId(null);
+          setMessages([]);
+        }
+        addToast("success", "Projet supprimé.");
+      } catch (e) {
+        addToast(
+          "error",
+          e instanceof Error ? e.message : "Impossible de supprimer le projet."
+        );
+        throw e;
+      }
+    },
+    [loadConversations, addToast, activeProjectFolderId]
+  );
+
+  const handleMoveConversationToFolder = useCallback(
+    async (conversationId: string, folderId: string | null): Promise<boolean> => {
+      const conv = conversations.find((c) => c.id === conversationId);
+      const currentFolder = conv?.folder_id ?? null;
+      const targetFolder = folderId ?? null;
+      if (currentFolder === targetFolder) return false;
+
+      try {
+        await apiPatch<Conversation>(
+          `/chat/conversations/${conversationId}/folder`,
+          { folder_id: folderId }
+        );
+        await loadConversations();
+        addToast(
+          "success",
+          folderId
+            ? "Conversation déplacée dans le projet."
+            : "Conversation rangée dans Récents."
+        );
+        return true;
+      } catch (e) {
+        addToast(
+          "error",
+          e instanceof Error ? e.message : "Impossible de déplacer la conversation."
+        );
+        throw e;
+      }
+    },
+    [conversations, loadConversations, addToast]
+  );
+
   const handleNewChat = () => {
+    lastSyncedConvParamRef.current = null;
+    replaceConversationInUrl(null);
+    setActiveProjectFolderId(null);
     setCurrentConvId(null);
     setMessages([]);
     setActiveConversationMode(null);
     setIsAtelierConversation(false);
     setPage("chat");
   };
+
+  const handleSelectProjectFolder = useCallback(
+    (folderId: string) => {
+      lastSyncedConvParamRef.current = null;
+      replaceConversationInUrl(null);
+      setActiveProjectFolderId(folderId);
+      setCurrentConvId(null);
+      setMessages([]);
+      setActiveConversationMode(null);
+      setIsAtelierConversation(false);
+      setPage("chat");
+    },
+    [replaceConversationInUrl]
+  );
 
   const handleOpenAtelier = () => {
     if (!user) {
@@ -218,6 +401,9 @@ export default function Home() {
       openAuth("register");
       return;
     }
+    lastSyncedConvParamRef.current = null;
+    replaceConversationInUrl(null);
+    setActiveProjectFolderId(null);
     setCurrentConvId(null);
     setMessages([]);
     setActiveConversationMode(null);
@@ -225,24 +411,68 @@ export default function Home() {
     setPage("atelier");
   };
 
-  const handleSelectConversation = async (id: string) => {
-    setCurrentConvId(id);
+  /** Retour Atelier → chat sans vider le projet ouvert (ex. vue PROJETS). */
+  const handleAtelierBack = useCallback(() => {
+    lastSyncedConvParamRef.current = null;
+    replaceConversationInUrl(null);
     setPage("chat");
-    try {
-      const conv = await apiGet<Conversation>(
-        `/chat/conversations/${id}`
-      );
-      setMessages(conv.messages);
-      const rawMode = conv.mode != null ? String(conv.mode).trim() : "";
-      const atelier = rawMode === ATELIER_MODE_LABEL;
-      setIsAtelierConversation(atelier);
-      setActiveConversationMode(
-        atelier || rawMode === "" ? null : normalizeMode(rawMode)
-      );
-    } catch {
-      addToast("error", "Impossible de charger la conversation.");
+    setMessages([]);
+    setCurrentConvId(null);
+    setIsAtelierConversation(false);
+  }, [replaceConversationInUrl]);
+
+  const handleSelectConversation = useCallback(
+    async (id: string) => {
+      setPage("chat");
+      try {
+        const conv = await apiGet<Conversation>(`/chat/conversations/${id}`);
+        applyConversationState(conv);
+        lastSyncedConvParamRef.current = conv.id;
+        replaceConversationInUrl(conv.id);
+      } catch {
+        addToast("error", "Impossible de charger la conversation.");
+      }
+    },
+    [addToast, applyConversationState, replaceConversationInUrl]
+  );
+
+  useEffect(() => {
+    const param = searchParams.get(CONV_SEARCH_PARAM)?.trim() || null;
+    if (!param) {
+      lastSyncedConvParamRef.current = null;
+      return;
     }
-  };
+    if (!isLoggedIn()) return;
+    if (!user && !sessionHint) return;
+    if (lastSyncedConvParamRef.current === param) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const conv = await apiGet<Conversation>(`/chat/conversations/${param}`);
+        if (cancelled) return;
+        applyConversationState(conv);
+        lastSyncedConvParamRef.current = conv.id;
+        setPage("chat");
+      } catch {
+        if (!cancelled) {
+          addToast("error", "Impossible de charger la conversation.");
+          lastSyncedConvParamRef.current = null;
+          replaceConversationInUrl(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    searchParams,
+    user,
+    sessionHint,
+    addToast,
+    applyConversationState,
+    replaceConversationInUrl,
+  ]);
 
   const simulatePipelineProgress = () => {
     setPipelineStep("filtering");
@@ -289,6 +519,9 @@ export default function Home() {
             conversation_id: currentConvId,
             message: text,
             mode: modeForRequest,
+            ...(!currentConvId && activeProjectFolderId
+              ? { folder_id: activeProjectFolderId }
+              : {}),
           },
           { signal: controller.signal }
         );
@@ -299,6 +532,8 @@ export default function Home() {
           setCurrentConvId(res.conversation_id);
           setActiveConversationMode(modeForRequest);
           setIsAtelierConversation(false);
+          lastSyncedConvParamRef.current = res.conversation_id;
+          replaceConversationInUrl(res.conversation_id);
         }
 
         setMessages((prev) => {
@@ -349,6 +584,8 @@ export default function Home() {
       openAuth,
       selectedMode,
       activeConversationMode,
+      activeProjectFolderId,
+      replaceConversationInUrl,
     ]
   );
 
@@ -378,6 +615,9 @@ export default function Home() {
           if (controller.signal.aborted) return;
 
           setMessages((prev) => [...prev, ...res.messages]);
+          if (res.folder_id) {
+            setActiveProjectFolderId(res.folder_id);
+          }
 
           const updatedUser = await apiGet<User>(
             "/auth/me?token=" + localStorage.getItem("monv_token")
@@ -430,6 +670,9 @@ export default function Home() {
             conversation_id: currentConvId,
             message: text,
             mode: modeForRequest,
+            ...(!currentConvId && activeProjectFolderId
+              ? { folder_id: activeProjectFolderId }
+              : {}),
           },
           { signal: controller.signal }
         );
@@ -480,11 +723,12 @@ export default function Home() {
       selectedMode,
       activeConversationMode,
       isAtelierConversation,
+      activeProjectFolderId,
     ]
   );
 
   const handleAgentStart = useCallback(
-    async (pitch: string) => {
+    async (pitch: string, attachFolderId: string | null = null) => {
       if (!user) {
         if (sessionHint) return;
         openAuth("register");
@@ -517,12 +761,20 @@ export default function Home() {
       try {
         const res = await apiPost<AgentSendResponse>(
           "/agent/send",
-          { pitch },
+          {
+            pitch,
+            ...(attachFolderId ? { folder_id: attachFolderId } : {}),
+          },
           { signal: controller.signal }
         );
         if (controller.signal.aborted) return;
 
         setCurrentConvId(res.conversation_id);
+        if (res.folder_id) {
+          setActiveProjectFolderId(res.folder_id);
+        }
+        lastSyncedConvParamRef.current = res.conversation_id;
+        replaceConversationInUrl(res.conversation_id);
         setMessages((prev) => {
           const filtered = prev.filter((m) => m.id !== optimisticMsg.id);
           return [
@@ -538,6 +790,8 @@ export default function Home() {
           setMessages([]);
           setIsAtelierConversation(false);
           setPage("atelier");
+          lastSyncedConvParamRef.current = null;
+          replaceConversationInUrl(null);
           return;
         }
         const errorMsg: Message = {
@@ -562,7 +816,7 @@ export default function Home() {
         setSending(false);
       }
     },
-    [user, sessionHint, openAuth, addToast, loadConversations]
+    [user, sessionHint, openAuth, addToast, loadConversations, replaceConversationInUrl]
   );
 
   const handleExport = async (searchId: string, format: "xlsx" | "csv") => {
@@ -598,32 +852,43 @@ export default function Home() {
     handleSend(query);
   };
 
-  const CAPABILITIES = [
-    "Clients & prospects",
-    "Prestataires & sous-traitants",
-    "Étude de marché",
-    "Données INSEE & RCS",
-  ];
-
   const showAuthenticatedChrome = Boolean(user || sessionHint);
 
   const chatLandingHeadline = (() => {
     if (!user) return "MONV";
     const first = displayFirstName(user.name);
-    return first
-      ? `Bonjour ${first}, bienvenue dans MONV`
-      : "Bienvenue dans MONV";
+    return first ? `Bonjour ${first}` : "MONV";
   })();
+
+  const chatLandingSubline = user
+    ? "Recherche par mode ou Atelier — données publiques INSEE et RCS."
+    : null;
 
   const sidebarProps = {
     user,
     conversations,
+    projectFolders,
     conversationsLoading,
     currentConvId,
+    activeProjectFolderId,
     onNewChat: handleNewChat,
     onSelectConversation: handleSelectConversation,
+    onSelectProjectFolder: handleSelectProjectFolder,
+    onCreateProjectFolder: handleCreateProjectFolder,
+    onRenameProjectFolder: handleRenameProjectFolder,
+    onDeleteProjectFolder: handleDeleteProjectFolder,
+    onMoveConversationToFolder: handleMoveConversationToFolder,
     onNavigate: (p: Page) => {
+      if (p === "atelier") {
+        handleOpenAtelier();
+        return;
+      }
       if (!user && p !== "chat") return;
+      if (p !== "chat") {
+        lastSyncedConvParamRef.current = null;
+        replaceConversationInUrl(null);
+        setActiveProjectFolderId(null);
+      }
       setPage(p);
     },
     onLogout: handleLogout,
@@ -642,6 +907,7 @@ export default function Home() {
             user={user}
             onMenuOpen={() => setSidebarMobileOpen(true)}
             onNavigateCredits={() => setPage("credits")}
+            onOpenAtelier={handleOpenAtelier}
           />
           <div className="flex-1 overflow-y-auto scrollbar-thin">
             <Dashboard onBack={handleNewChat} />
@@ -662,11 +928,13 @@ export default function Home() {
               user={user}
               onMenuOpen={() => setSidebarMobileOpen(true)}
               onNavigateCredits={() => setPage("credits")}
+              onOpenAtelier={handleOpenAtelier}
             />
           )}
           <AgentWelcome
-            onBack={handleNewChat}
+            onBack={handleAtelierBack}
             onSubmit={handleAgentStart}
+            projectFolders={projectFolders}
             disabled={!user || sending}
             loading={sending}
           />
@@ -685,6 +953,7 @@ export default function Home() {
             user={user}
             onMenuOpen={() => setSidebarMobileOpen(true)}
             onNavigateCredits={() => setPage("credits")}
+            onOpenAtelier={handleOpenAtelier}
           />
           <div className="flex-1 overflow-y-auto scrollbar-thin">
             <CreditsPage
@@ -711,107 +980,167 @@ export default function Home() {
             user={user}
             onMenuOpen={() => setSidebarMobileOpen(true)}
             onNavigateCredits={() => setPage("credits")}
+            onOpenAtelier={handleOpenAtelier}
           />
         )}
-        {messages.length === 0 ? (
+        {showProjectHub && activeProjectFolder ? (
+          <ProjectHub
+            projectFolderId={activeProjectFolder.id}
+            projectName={activeProjectFolder.name}
+            conversationsInProject={conversations.filter(
+              (c) => c.folder_id === activeProjectFolder.id
+            )}
+            conversationsLoading={conversationsLoading}
+            selectedMode={selectedMode}
+            onModeChange={setSelectedMode}
+            templates={templates}
+            onTemplateSelect={handleTemplateSelect}
+            sending={sending}
+            onSend={handleSend}
+            onStop={handleStopSend}
+            onSelectConversation={handleSelectConversation}
+            onLeaveProject={handleNewChat}
+            onOpenAtelier={() => setPage("atelier")}
+            onMoveConversationToFolder={handleMoveConversationToFolder}
+          />
+        ) : messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center px-4 sm:px-6 overflow-y-auto">
-            <div className="my-auto w-full flex flex-col items-center py-6 sm:py-10">
-              <div className="max-w-2xl w-full text-center mb-8 sm:mb-10">
+            <div className="my-auto w-full flex flex-col items-center py-6 sm:py-10 max-w-3xl mx-auto">
+              <div
+                className={`w-full mb-6 sm:mb-8 ${
+                  user || sessionHint ? "text-center" : "text-center max-w-2xl mx-auto"
+                }`}
+              >
                 <h1
-                  className={`font-extrabold tracking-tight text-white mb-3 text-balance ${
+                  className={`tracking-tight text-white text-balance ${
                     user
-                      ? "text-2xl sm:text-4xl leading-tight"
-                      : "text-3xl sm:text-5xl"
+                      ? "text-2xl sm:text-3xl font-semibold leading-snug"
+                      : "text-3xl sm:text-5xl font-extrabold leading-tight"
                   }`}
                 >
                   {chatLandingHeadline}
                 </h1>
-                <p className="text-base sm:text-lg text-gray-400 max-w-md mx-auto leading-relaxed">
-                  Trouvez n&apos;importe quelle entreprise en France.
-                  Décrivez ce que vous cherchez, récupérez votre liste.
-                </p>
-
-                <div className="flex flex-wrap items-center justify-center gap-2 mt-4 sm:mt-5">
-                  {CAPABILITIES.map((cap) => (
-                    <span
-                      key={cap}
-                      className="text-xs text-gray-400 border border-white/[0.08] rounded-full px-3 py-1"
-                    >
-                      {cap}
-                    </span>
-                  ))}
-                </div>
-
-                {!user && !sessionHint && (
-                  <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 px-2 sm:px-0">
-                    <button
-                      type="button"
-                      onClick={() => openAuth("register")}
-                      className="inline-flex items-center justify-center gap-2 bg-white text-gray-950 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 active:bg-gray-300 transition-colors text-sm w-full sm:w-auto min-h-[44px]"
-                    >
-                      S&apos;inscrire — 5 crédits offerts
-                      <ArrowRight size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openAuth("login")}
-                      className="inline-flex items-center justify-center px-6 py-3 rounded-lg font-semibold text-sm text-white border border-gray-700 hover:bg-white/[0.06] active:bg-white/[0.1] hover:border-gray-600 transition-colors w-full sm:w-auto min-h-[44px]"
-                    >
-                      Se connecter
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {(user || sessionHint) && (
-                <div className="w-full max-w-2xl mb-3">
-                  <AgentCard onOpen={handleOpenAtelier} disabled={sending || !user} />
-                </div>
-              )}
-
-              {(user || sessionHint) && (
-                <div className="w-full max-w-2xl mb-4">
-                  <div className="flex items-center gap-2 mb-2 px-1">
-                    <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-gray-500">
-                      Ou choisis un mode de recherche
-                    </span>
-                    <span className="flex-1 h-px bg-white/[0.06]" />
-                  </div>
-                  <ModeSelector
-                    value={selectedMode}
-                    onChange={setSelectedMode}
-                    disabled={sending || !user}
-                  />
-                </div>
-              )}
-
-              {(user || sessionHint) && (
-                <div className="w-full max-w-2xl mb-8">
-                  <ChatInput
-                    onSend={handleSend}
-                    disabled={sending || !user}
-                    loading={sending}
-                    onStop={handleStopSend}
-                    placeholder={MODE_META[selectedMode].placeholder}
-                  />
-                </div>
-              )}
-
-              <div className="w-full max-w-3xl">
-                <p className="text-xs font-medium text-gray-600 uppercase tracking-wider text-center mb-3">
-                  Exemples — mode {MODE_META[selectedMode].label}
-                </p>
-                {templates.length > 0 ? (
-                  <TemplateCards
-                    templates={templates}
-                    onSelect={handleTemplateSelect}
-                  />
-                ) : (
-                  <p className="text-center text-xs text-gray-600 py-6 border border-dashed border-white/[0.06] rounded-lg">
-                    Aucun exemple pour ce mode — décris ta recherche directement.
+                {chatLandingSubline && (
+                  <p className="mt-2 text-sm text-gray-500 max-w-lg mx-auto leading-relaxed">
+                    {chatLandingSubline}
                   </p>
                 )}
+
+                {!user && !sessionHint && (
+                  <>
+                    <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 px-2 sm:px-0">
+                      <button
+                        type="button"
+                        onClick={() => openAuth("register")}
+                        className="inline-flex items-center justify-center gap-2 bg-white text-gray-950 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 active:bg-gray-300 transition-colors text-sm w-full sm:w-auto min-h-[44px]"
+                      >
+                        S&apos;inscrire — 5 crédits offerts
+                        <ArrowRight size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAuth("login")}
+                        className="inline-flex items-center justify-center px-6 py-3 rounded-lg font-semibold text-sm text-white border border-gray-700 hover:bg-white/[0.06] active:bg-white/[0.1] hover:border-gray-600 transition-colors w-full sm:w-auto min-h-[44px]"
+                      >
+                        Se connecter
+                      </button>
+                    </div>
+                    <p className="mt-5 text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
+                      Inscris-toi pour lancer des recherches par mode (prospection,
+                      sous-traitants, etc.). Tu pourras aussi ouvrir l&apos;agent{" "}
+                      <span className="text-teal-300/95">Atelier</span> pour un
+                      dossier projet guidé (QCM puis tableaux d&apos;entreprises).
+                    </p>
+                  </>
+                )}
               </div>
+
+              {(user || sessionHint) && (
+                <>
+                  <section
+                    className="w-full rounded-xl border border-white/[0.08] bg-surface-1/60 p-4 sm:p-6 flex flex-col min-w-0 mb-5"
+                    aria-labelledby="recherche-mode-heading"
+                  >
+                    <div className="mb-4">
+                      <h2
+                        id="recherche-mode-heading"
+                        className="text-xs font-medium text-gray-500"
+                      >
+                        Nouvelle recherche
+                      </h2>
+                      <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
+                        Mode puis consigne. Données publiques INSEE et RCS ; résultats
+                        indicatifs.
+                      </p>
+                    </div>
+                    <ModeSelector
+                      value={selectedMode}
+                      onChange={setSelectedMode}
+                      disabled={sending || !user}
+                    />
+                    <div className="mt-5 pt-5 border-t border-white/[0.07] flex flex-col min-h-0">
+                      <ChatInput
+                        onSend={handleSend}
+                        disabled={sending || !user}
+                        loading={sending}
+                        onStop={handleStopSend}
+                        placeholder={MODE_META[selectedMode].placeholder}
+                      />
+                    </div>
+                    <div className="mt-6 pt-6 border-t border-white/[0.07]">
+                      <p className="text-xs font-medium text-gray-500 mb-3">
+                        Exemples · {MODE_META[selectedMode].label}
+                      </p>
+                      {templates.length > 0 ? (
+                        <TemplateCards
+                          nested
+                          templates={templates}
+                          onSelect={handleTemplateSelect}
+                        />
+                      ) : (
+                        <p className="text-center text-xs text-gray-600 py-5 border border-dashed border-white/[0.06] rounded-lg">
+                          Aucun exemple pour ce mode — décris ta recherche
+                          directement.
+                        </p>
+                      )}
+                    </div>
+                  </section>
+
+                  <div className="w-full mb-10">
+                    <button
+                      type="button"
+                      onClick={handleOpenAtelier}
+                      disabled={sending || !user}
+                      className="group relative w-full overflow-hidden rounded-xl border border-white/[0.08] bg-surface-1 text-left hover:border-white/[0.14] disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
+                    >
+                      <div
+                        className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-teal-700/90"
+                        aria-hidden
+                      />
+                      <div className="relative flex flex-col sm:flex-row sm:items-center gap-4 pl-5 pr-4 py-4 sm:py-4">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-teal-950/45 text-teal-200/95">
+                          <Compass size={20} strokeWidth={2} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-gray-500">Atelier</p>
+                          <p className="text-base sm:text-[17px] font-medium text-white mt-0.5 leading-snug">
+                            QCM court, dossier (business model, flux, tableaux
+                            d&apos;entreprises)
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                            Plusieurs recherches MONV dans une même session, hors flux
+                            « mode » classique.
+                          </p>
+                        </div>
+                        <span className="inline-flex shrink-0 items-center justify-center gap-1.5 self-stretch sm:self-center rounded-lg border border-white/[0.1] bg-white/[0.05] px-3.5 py-2 text-sm font-medium text-white group-hover:bg-white/[0.08] sm:min-h-0 min-h-[44px]">
+                          Ouvrir
+                          <ArrowRight size={15} aria-hidden />
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         ) : (
@@ -845,7 +1174,7 @@ export default function Home() {
               <div className="border-t border-gray-800/60 px-4 py-3 bg-surface-0">
                 <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
                   <p className="text-[11px] text-gray-500">
-                    Session <span className="text-fuchsia-300">Atelier</span>{" "}
+                    Session <span className="text-teal-300">Atelier</span>{" "}
                     — démarre un nouveau chat pour une recherche classique.
                   </p>
                   <button
@@ -895,5 +1224,19 @@ export default function Home() {
       )}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-surface-0 text-gray-500 text-sm">
+          Chargement…
+        </div>
+      }
+    >
+      <HomeInner />
+    </Suspense>
   );
 }

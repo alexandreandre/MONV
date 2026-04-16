@@ -24,8 +24,7 @@ export interface AgentMeta {
   description: string;
   placeholder: string;
   icon: LucideIcon;
-  /** Classes Tailwind pour l'accent de l'agent — gradient fuchsia/rose afin
-   *  de se différencier nettement des 4 modes (emerald/sky/amber/violet). */
+  /** Accent visuel : teal/cyan (hors palette des 4 modes emerald/sky/amber/violet). */
   gradientFrom: string;
   gradientTo: string;
   accentText: string;
@@ -38,19 +37,20 @@ export const AGENT_META: Record<Agent, AgentMeta> = {
   atelier: {
     id: "atelier",
     label: "Atelier",
-    short: "Concevoir mon entreprise",
-    tagline: "Transforme une idée en dossier de création actionnable.",
+    short: "Parcours projet",
+    tagline: "QCM court, puis dossier structuré et listes d’entreprises.",
     description:
-      "Décris ton projet, réponds à 4 questions, et reçois un business model, une cartographie des flux et des tableaux d'entreprises réelles à contacter.",
+      "Tu décris le projet, tu réponds à 4 questions, tu reçois un business model, une cartographie des flux et des tableaux d’entreprises à contacter (données publiques).",
     placeholder:
-      "Décris ton projet : secteur, ville, cible, ce que tu veux proposer…",
+      "Secteur, zone, clientèle, offre — ce que tu veux lancer ou structurer.",
     icon: Compass,
-    gradientFrom: "from-rose-500",
-    gradientTo: "to-fuchsia-500",
-    accentText: "text-fuchsia-300",
-    ringColor: "ring-fuchsia-500/30",
-    badgeBg: "bg-fuchsia-500/15",
-    badgeText: "text-fuchsia-300",
+    /** Accent discret (évite le duo teal/cyan « slide produit »). */
+    gradientFrom: "from-teal-700",
+    gradientTo: "to-teal-800",
+    accentText: "text-teal-200/90",
+    ringColor: "ring-teal-500/35",
+    badgeBg: "bg-teal-500/15",
+    badgeText: "text-teal-300",
   },
 };
 

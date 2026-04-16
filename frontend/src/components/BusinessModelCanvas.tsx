@@ -56,7 +56,7 @@ export default function BusinessModelCanvas({ canvas }: Props) {
           title="Proposition de valeur"
           icon={Award}
           items={canvas.proposition_valeur}
-          accent="bg-fuchsia-500/8 border-fuchsia-500/20"
+          accent="bg-teal-500/8 border-teal-500/20"
           emphasize
           className="md:row-span-2"
         />
@@ -65,13 +65,13 @@ export default function BusinessModelCanvas({ canvas }: Props) {
             title="Relation client"
             icon={Heart}
             items={canvas.relation_client}
-            accent="bg-rose-500/5 border-rose-500/15"
+            accent="bg-teal-500/5 border-teal-500/12"
           />
           <Cell
             title="Canaux"
             icon={Flag}
             items={canvas.canaux}
-            accent="bg-rose-500/5 border-rose-500/15"
+            accent="bg-teal-500/5 border-teal-500/12"
           />
         </div>
         <Cell
@@ -125,11 +125,11 @@ function Cell({
       <div className="flex items-center gap-1.5 mb-2">
         <Icon
           size={12}
-          className={emphasize ? "text-fuchsia-300" : "text-gray-400"}
+          className={emphasize ? "text-teal-300" : "text-gray-400"}
         />
         <h4
           className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${
-            emphasize ? "text-fuchsia-200" : "text-gray-400"
+            emphasize ? "text-teal-200" : "text-gray-400"
           }`}
         >
           {title}

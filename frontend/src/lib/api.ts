@@ -43,6 +43,35 @@ export async function apiGet<T>(path: string): Promise<T> {
   return res.json();
 }
 
+export async function apiPatch<T>(
+  path: string,
+  body: unknown,
+  options?: ApiFetchOptions
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    headers: getHeaders(),
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Erreur serveur" }));
+    throw new Error(err.detail || `Erreur ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function apiDelete(path: string): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Erreur serveur" }));
+    throw new Error(err.detail || `Erreur ${res.status}`);
+  }
+}
+
 export function setToken(token: string) {
   localStorage.setItem("monv_token", token);
 }
@@ -112,7 +141,17 @@ export interface Conversation {
   created_at: string;
   updated_at: string;
   mode?: string | null;
+  /** Projet (PROJETS) — null = conversation dans Récents. */
+  folder_id?: string | null;
   messages: Message[];
+}
+
+export interface ProjectFolder {
+  id: string;
+  name: string;
+  sort_position: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ChatResponse {
@@ -159,11 +198,14 @@ export interface AgentSendRequest {
   conversation_id?: string | null;
   pitch?: string;
   answers?: string;
+  /** Projet existant ; si absent au 1er tour, l’API crée un nouveau projet. */
+  folder_id?: string | null;
 }
 
 export interface AgentSendResponse {
   conversation_id: string;
   messages: Message[];
+  folder_id?: string | null;
 }
 
 export interface ProjectBrief {

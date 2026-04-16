@@ -417,7 +417,7 @@ function SynthesisSection({ synthesis }: { synthesis: BusinessDossierPayload["sy
       icon: Gauge,
       title: "KPIs à suivre",
       items: synthesis.kpis,
-      accent: "border-fuchsia-500/20 bg-fuchsia-500/5",
+      accent: "border-teal-500/20 bg-teal-500/5",
     },
   ].filter((b) => b.items && b.items.length > 0);
 

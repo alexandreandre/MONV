@@ -1,22 +1,24 @@
 /**
- * 4 modes d'usage MONV — synchronisés avec backend/services/modes.py.
+ * 4 modes d'usage MONV — synchronisés avec `backend/services/modes.py`.
  *
  * Le mode `prospection` est le défaut : un envoi sans `mode` produit
  * exactement le même comportement qu'avant l'introduction des modes.
  */
 
 import type { LucideIcon } from "lucide-react";
-import { Target, Truck, Briefcase, Landmark } from "lucide-react";
+import { Target, Truck, BarChart3, Landmark } from "lucide-react";
 
-export type Mode = "prospection" | "sous_traitant" | "client" | "rachat";
+export type Mode = "prospection" | "sous_traitant" | "benchmark" | "rachat";
 
-export const MODES: Mode[] = ["prospection", "sous_traitant", "client", "rachat"];
+export const MODES: Mode[] = ["prospection", "sous_traitant", "benchmark", "rachat"];
 
 export const DEFAULT_MODE: Mode = "prospection";
 
 /** Ancien identifiant API / historique — mappé vers `sous_traitant` côté client et serveur. */
 const LEGACY_MODE_ALIASES: Record<string, Mode> = {
   fournisseurs: "sous_traitant",
+  achat: "benchmark",
+  client: "benchmark",
 };
 
 export interface ModeMeta {
@@ -55,16 +57,18 @@ export const MODE_META: Record<Mode, ModeMeta> = {
     badgeText: "text-sky-300",
     icon: Truck,
   },
-  client: {
-    id: "client",
-    label: "Client",
-    short: "Mon portefeuille",
-    description: "Enrichir mes comptes existants (collez des SIREN)",
-    placeholder: "Collez vos SIREN ou décrivez vos comptes à analyser…",
+  benchmark: {
+    id: "benchmark",
+    label: "Benchmark",
+    short: "Benchmark secteur",
+    description:
+      "Panorama chiffré d’un secteur ou marché (CA, effectifs, rentabilité)",
+    placeholder:
+      "Secteur ou NAF, zone, taille cible — ex. « PME logiciel IDF, CA 2–20 M€ »…",
     accent: "border-amber-500/40 text-amber-300 bg-amber-500/10",
     badgeBg: "bg-amber-500/15",
     badgeText: "text-amber-300",
-    icon: Briefcase,
+    icon: BarChart3,
   },
   rachat: {
     id: "rachat",

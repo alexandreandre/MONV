@@ -1,46 +1,38 @@
 "use client";
 
 import { useState } from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Compass,
-  Factory,
-  Hotel,
-  ShoppingBag,
-  Sparkles,
-  Utensils,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, Compass } from "lucide-react";
 import { AGENT_META } from "@/lib/agents";
+import type { ProjectFolder } from "@/lib/api";
 
 interface Props {
   onBack: () => void;
-  onSubmit: (pitch: string) => void;
+  /**
+   * `attachFolderId` : id d’un projet existant, ou `null` pour en créer un nouveau (défaut).
+   */
+  onSubmit: (pitch: string, attachFolderId: string | null) => void;
+  projectFolders?: ProjectFolder[];
   disabled?: boolean;
   loading?: boolean;
 }
 
-const EXAMPLE_PITCHES: { icon: typeof Utensils; label: string; query: string }[] = [
+const EXAMPLE_PITCHES: { label: string; query: string }[] = [
   {
-    icon: Utensils,
     label: "Restaurant japonais premium à Lyon",
     query:
       "Je veux ouvrir un restaurant japonais haut de gamme à Lyon, avec service à table, livraison locale et vente en ligne de sakés rares importés.",
   },
   {
-    icon: ShoppingBag,
     label: "Boutique de vêtements éthiques",
     query:
       "Je lance une boutique de vêtements éthiques à Bordeaux pour une clientèle 25-45 ans urbaine, avec une boutique physique et un site e-commerce.",
   },
   {
-    icon: Hotel,
     label: "Coworking familial en Normandie",
     query:
       "Je veux créer un espace de coworking avec garderie intégrée à Caen pour les jeunes parents entrepreneurs, en location à la journée ou au mois.",
   },
   {
-    icon: Factory,
     label: "Atelier d'impression 3D B2B",
     query:
       "Je monte un atelier d'impression 3D B2B à Toulouse pour produire des prototypes et petites séries pour PME industrielles locales.",
@@ -54,18 +46,21 @@ const EXAMPLE_PITCHES: { icon: typeof Utensils; label: string; query: string }[]
 export default function AgentWelcome({
   onBack,
   onSubmit,
+  projectFolders = [],
   disabled = false,
   loading = false,
 }: Props) {
   const meta = AGENT_META.atelier;
-  const Icon = meta.icon;
   const [pitch, setPitch] = useState("");
+  /** "" = nouveau projet (comportement par défaut côté API). */
+  const [attachFolderId, setAttachFolderId] = useState("");
 
   const canSubmit = pitch.trim().length >= 20 && !disabled && !loading;
 
   const handleSubmit = () => {
     if (!canSubmit) return;
-    onSubmit(pitch.trim());
+    const fid = attachFolderId.trim();
+    onSubmit(pitch.trim(), fid ? fid : null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -81,53 +76,73 @@ export default function AgentWelcome({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors mb-6"
+          className="inline-flex items-center gap-2 text-xs font-medium text-gray-500 hover:text-white border border-transparent hover:border-white/[0.08] rounded-lg px-2 py-1.5 -ml-2 transition-colors mb-8 focus-visible:ring-2 focus-visible:ring-teal-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
         >
-          <ArrowLeft size={14} />
-          Retour
+          <ArrowLeft size={14} aria-hidden />
+          Retour à l&apos;accueil
         </button>
 
-        <div className="rounded-2xl border border-white/[0.06] bg-surface-1 overflow-hidden mb-6 sm:mb-8">
-          <div
-            className={`h-1 w-full bg-gradient-to-r ${meta.gradientFrom} ${meta.gradientTo} opacity-60`}
-          />
-
-          <div className="px-5 sm:px-8 py-7 sm:py-9">
-            <div className="flex items-start gap-4 mb-5">
+        <div className="rounded-xl border border-white/[0.08] bg-surface-1 mb-6 sm:mb-8 overflow-hidden">
+          <div className="border-l-[3px] border-teal-600/70 px-5 sm:px-8 py-7 sm:py-9">
+            <div className="flex items-start gap-4 mb-6">
               <div
-                className={`flex-shrink-0 w-11 h-11 rounded-xl bg-gradient-to-br ${meta.gradientFrom} ${meta.gradientTo} flex items-center justify-center text-white`}
+                className="flex-shrink-0 w-11 h-11 sm:w-12 sm:h-12 rounded-lg border border-white/[0.08] bg-teal-950/50 flex items-center justify-center text-teal-200/95"
+                aria-hidden
               >
-                <Icon size={20} />
+                <Compass size={20} strokeWidth={2} />
               </div>
-              <div>
-                <span
-                  className={`inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] ${meta.accentText}`}
-                >
-                  <Sparkles size={10} />
-                  Agent Atelier
-                </span>
-                <h1 className="text-xl sm:text-2xl font-bold text-white leading-tight mt-1">
-                  Concevons ton entreprise
+              <div className="min-w-0 pt-0.5">
+                <p className="text-[11px] font-medium tracking-wide text-gray-500 mb-1">
+                  Atelier
+                </p>
+                <h1 className="text-xl sm:text-2xl font-semibold text-white leading-snug tracking-tight">
+                  Parcours guidé — du pitch au dossier
                 </h1>
               </div>
             </div>
 
             <p className="text-sm text-gray-400 leading-relaxed max-w-xl">
-              Décris ton projet en quelques phrases. Je te poserai 4 questions
-              courtes, puis je produirai un dossier complet : business model,
-              cartographie des flux, et surtout des{" "}
-              <span className="text-gray-200">
-                tableaux d&rsquo;entreprises réelles
-              </span>{" "}
-              à contacter (fournisseurs, clients, concurrents, prestataires).
+              Quelques phrases sur le projet, puis 4 questions. Livrable : business
+              model, flux, et{" "}
+              <span className="text-gray-200">tableaux d&rsquo;entreprises</span>{" "}
+              (fournisseurs, clients, concurrents, prestataires) à partir de données
+              publiques.
             </p>
 
-            <div className="mt-6">
+            <div className="mt-6 rounded-lg border border-white/[0.06] bg-surface-2/80 px-4 py-3">
+              <label
+                htmlFor="atelier-projet-rattachement"
+                className="block text-xs font-medium text-gray-500 mb-2"
+              >
+                Projet MONV (dossier)
+              </label>
+              <select
+                id="atelier-projet-rattachement"
+                value={attachFolderId}
+                onChange={(e) => setAttachFolderId(e.target.value)}
+                disabled={disabled || loading}
+                className="w-full rounded-lg border border-white/[0.1] bg-surface-0 px-3 py-2.5 text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30 disabled:opacity-50"
+              >
+                <option value="">Nouveau projet (par défaut)</option>
+                {projectFolders.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-[11px] text-gray-500 leading-relaxed">
+                Par défaut, un <span className="text-gray-400">nouveau</span> projet
+                est créé pour cette session Atelier. Choisis un projet existant pour
+                tout regrouper au même endroit.
+              </p>
+            </div>
+
+            <div className="mt-7">
               <label
                 htmlFor="pitch"
-                className="block text-[11px] font-medium uppercase tracking-[0.1em] text-gray-500 mb-2"
+                className="block text-xs font-medium text-gray-500 mb-2"
               >
-                Ton projet
+                Description du projet
               </label>
               <textarea
                 id="pitch"
@@ -137,13 +152,13 @@ export default function AgentWelcome({
                 disabled={disabled || loading}
                 rows={5}
                 placeholder={meta.placeholder}
-                className="w-full bg-surface-2 border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-white/[0.22] transition-colors resize-none leading-relaxed"
+                className="w-full bg-surface-2 border border-white/[0.08] rounded-lg px-4 py-3.5 text-sm text-white placeholder-gray-600 focus:outline-none focus-visible:border-teal-600/45 focus-visible:ring-2 focus-visible:ring-teal-600/20 resize-none leading-relaxed disabled:opacity-60"
               />
-              <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <p className="text-[11px] text-gray-600">
+              <div className="mt-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                <p className="text-[11px] text-gray-600 leading-relaxed max-w-md">
                   Plus tu donnes de contexte (secteur, ville, cible), meilleur
                   sera le dossier.{" "}
-                  <kbd className="px-1 py-0.5 rounded border border-white/[0.06] text-[10px] text-gray-500">
+                  <kbd className="px-1.5 py-0.5 rounded border border-white/[0.08] text-[10px] text-gray-500 font-sans not-italic">
                     ⌘ + Entrée
                   </kbd>{" "}
                   pour envoyer.
@@ -152,14 +167,14 @@ export default function AgentWelcome({
                   type="button"
                   onClick={handleSubmit}
                   disabled={!canSubmit}
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-colors min-h-[44px] ${
+                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium min-h-[44px] shrink-0 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1 ${
                     canSubmit
-                      ? "bg-white text-gray-950 hover:bg-gray-200 active:bg-gray-300"
-                      : "bg-white/[0.06] text-gray-600 cursor-not-allowed"
+                      ? "bg-white text-gray-950 hover:bg-gray-100 focus-visible:ring-teal-500/35"
+                      : "bg-white/[0.06] text-gray-600 cursor-not-allowed focus-visible:ring-0"
                   }`}
                 >
                   {loading ? "Analyse en cours…" : "Lancer l'Atelier"}
-                  {!loading && <ArrowRight size={15} />}
+                  {!loading && <ArrowRight size={15} aria-hidden />}
                 </button>
               </div>
             </div>
@@ -167,48 +182,38 @@ export default function AgentWelcome({
         </div>
 
         <div>
-          <p className="text-[11px] font-medium text-gray-600 uppercase tracking-wider mb-3">
-            Ou pars d&rsquo;un exemple
+          <p className="text-xs font-medium text-gray-500 mb-2">
+            Formulations types (à adapter)
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {EXAMPLE_PITCHES.map((ex) => {
-              const ExIcon = ex.icon;
-              return (
+          <ul className="flex flex-col gap-1.5">
+            {EXAMPLE_PITCHES.map((ex) => (
+              <li key={ex.label}>
                 <button
-                  key={ex.label}
                   type="button"
                   disabled={disabled || loading}
                   onClick={() => setPitch(ex.query)}
-                  className="group text-left rounded-xl border border-white/[0.06] bg-surface-1 px-3.5 py-3 hover:border-white/[0.14] hover:bg-surface-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full text-left rounded-lg border border-white/[0.06] bg-surface-1 px-3 py-2.5 hover:border-white/[0.12] hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-teal-500/25 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
                 >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`flex-shrink-0 w-8 h-8 rounded-lg bg-white/[0.04] group-hover:bg-white/[0.08] flex items-center justify-center ${meta.accentText} transition-colors`}
-                    >
-                      <ExIcon size={14} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white leading-snug">
-                        {ex.label}
-                      </p>
-                      <p className="text-xs text-gray-500 line-clamp-2 mt-0.5 leading-snug">
-                        {ex.query}
-                      </p>
-                    </div>
-                  </div>
+                  <p className="text-sm text-gray-200 leading-snug">{ex.label}</p>
+                  <p className="text-[11px] text-gray-600 mt-1 line-clamp-2 leading-snug">
+                    {ex.query}
+                  </p>
                 </button>
-              );
-            })}
-          </div>
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className="mt-8 rounded-xl border border-white/[0.06] bg-surface-2 px-4 py-3 flex items-start gap-3">
-          <Compass size={14} className="text-gray-400 flex-shrink-0 mt-0.5" />
+        <div className="mt-8 rounded-lg border border-white/[0.06] bg-surface-2 px-4 py-3.5 flex items-start gap-3">
+          <Compass
+            size={14}
+            className="text-teal-200/80 flex-shrink-0 mt-0.5"
+            aria-hidden
+          />
           <p className="text-xs text-gray-400 leading-relaxed">
-            L&rsquo;Atelier lance <span className="text-gray-200">plusieurs</span>{" "}
-            recherches MONV en une session (une par type d&rsquo;entreprise
-            identifiée). Les résultats s&rsquo;exportent comme une recherche
-            normale. Les crédits ne sont débités qu&rsquo;à l&rsquo;export.
+            L&rsquo;Atelier enchaîne plusieurs recherches MONV dans une même session
+            (une recherche par type d&rsquo;entreprise repéré). Export comme une
+            recherche classique ; crédits débités à l&rsquo;export.
           </p>
         </div>
       </div>
