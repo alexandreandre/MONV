@@ -10,7 +10,6 @@ Pipeline en 4 couches + conversation :
   Couche 3b — Pertinence  (LLM rapide)     : filtre des lignes hors cible
 """
 
-import asyncio
 import json
 import traceback
 from datetime import datetime, timezone
@@ -288,6 +287,8 @@ async def send_message(
                 "relevance_after",
                 "relevance_removed",
                 "relevance_fallback_unfiltered",
+                "relevance_threshold",
+                "relevance_avg_score",
             )
             if k in rel_stats
         }
@@ -342,13 +343,6 @@ async def send_message(
         created_at=datetime.now(timezone.utc),
         mode=active_mode,
     )
-
-    async def _bg_insert_search_history() -> None:
-        try:
-            await search_history_insert(supabase, search_record)
-        except Exception:
-            plog("search_history_insert_error",
-                 error=traceback.format_exc()[-1500:])
 
     # ── Construire le message de résultats ─────────────────────────
     credits_needed = search_results.credits_required
@@ -415,8 +409,11 @@ async def send_message(
     await message_insert(supabase, result_msg)
     response_messages.append(result_msg)
 
-    # Lancer l'insert historique APRÈS message_insert pour éviter le deadlock sur _sb_lock
-    asyncio.create_task(_bg_insert_search_history())
+    # Persister l'historique avant de répondre : l'export utilise ce row (évite 404 si clic rapide).
+    try:
+        await search_history_insert(supabase, search_record)
+    except Exception:
+        plog("search_history_insert_error", error=traceback.format_exc()[-1500:])
 
     return _build_response(conv.id, response_messages)
 
