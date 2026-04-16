@@ -13,10 +13,14 @@ import {
   Megaphone,
   Scale,
   ArrowRight,
+  Activity,
+  Hotel,
 } from "lucide-react";
 import type { Template } from "@/lib/api";
 
 const ICONS: Record<string, React.ReactNode> = {
+  hotel: <Hotel size={16} />,
+  activity: <Activity size={16} />,
   rocket: <Rocket size={16} />,
   factory: <Factory size={16} />,
   building: <Building size={16} />,

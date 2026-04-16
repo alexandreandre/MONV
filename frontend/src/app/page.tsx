@@ -10,9 +10,9 @@ import {
   type Message,
   type Conversation,
   type ChatResponse,
-  type Template,
   type ExportResponse,
 } from "@/lib/api";
+import { LANDING_TEMPLATES } from "@/lib/landingTemplates";
 import AuthModal from "@/components/AuthModal";
 import Sidebar from "@/components/Sidebar";
 import ChatInput from "@/components/ChatInput";
@@ -44,7 +44,7 @@ export default function Home() {
   const [conversationsLoading, setConversationsLoading] = useState(false);
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const templates = LANDING_TEMPLATES;
 
   const [sending, setSending] = useState(false);
   const [pipelineStep, setPipelineStep] = useState<PipelineStep>("filtering");
@@ -77,8 +77,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    apiGet<Template[]>("/templates").then(setTemplates).catch(() => {});
-
     if (!isLoggedIn()) return;
 
     let cancelled = false;
@@ -433,17 +431,15 @@ export default function Home() {
               </div>
             )}
 
-            {templates.length > 0 && (
-              <div className="w-full max-w-3xl">
-                <p className="text-xs font-medium text-gray-600 uppercase tracking-wider text-center mb-3">
-                  Exemples de recherches
-                </p>
-                <TemplateCards
-                  templates={templates}
-                  onSelect={handleTemplateSelect}
-                />
-              </div>
-            )}
+            <div className="w-full max-w-3xl">
+              <p className="text-xs font-medium text-gray-600 uppercase tracking-wider text-center mb-3">
+                Exemples de recherches
+              </p>
+              <TemplateCards
+                templates={templates}
+                onSelect={handleTemplateSelect}
+              />
+            </div>
           </div>
         ) : (
           <>

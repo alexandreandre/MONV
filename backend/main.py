@@ -68,6 +68,20 @@ async def health():
 async def get_templates():
     return [
         {
+            "id": "boutique-padel-site-web",
+            "title": "Boutiques de padel",
+            "description": "Clubs et magasins de padel à contacter pour une offre de site web",
+            "query": "Je cherche des boutiques de padel et clubs de padel en France pour leur proposer la création ou la refonte d'un site web",
+            "icon": "activity",
+        },
+        {
+            "id": "hotel-3-etoiles-marseille-rachat",
+            "title": "Hôtels 3 étoiles à Marseille",
+            "description": "Établissements hôteliers 3★ pour étude de potentiel rachat",
+            "query": "Je cherche des hôtels 3 étoiles à Marseille pour une analyse de potentiel rachat ou d'acquisition",
+            "icon": "hotel",
+        },
+        {
             "id": "startup-saas-paris",
             "title": "Startups SaaS à Paris",
             "description": "Startups SaaS de 10 à 50 salariés basées à Paris, créées depuis 2020",
