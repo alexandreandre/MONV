@@ -21,6 +21,7 @@ import TemplateCards from "@/components/TemplateCards";
 import Dashboard from "@/components/Dashboard";
 import CreditsPage from "@/components/CreditsPage";
 import ToastContainer, { type ToastData } from "@/components/Toast";
+import MobileHeader from "@/components/MobileHeader";
 import PipelineProgress, { type PipelineStep } from "@/components/PipelineProgress";
 import { ArrowRight } from "lucide-react";
 
@@ -39,6 +40,7 @@ export default function Home() {
   }, []);
   const [page, setPage] = useState<Page>("chat");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
@@ -312,23 +314,34 @@ export default function Home() {
     "Données INSEE & RCS",
   ];
 
+  const sidebarProps = {
+    user,
+    conversations,
+    conversationsLoading,
+    currentConvId,
+    onNewChat: handleNewChat,
+    onSelectConversation: handleSelectConversation,
+    onNavigate: setPage,
+    onLogout: handleLogout,
+    collapsed: sidebarCollapsed,
+    onToggle: () => setSidebarCollapsed(!sidebarCollapsed),
+    mobileOpen: sidebarMobileOpen,
+    onMobileClose: () => setSidebarMobileOpen(false),
+  };
+
   if (page === "dashboard" && user) {
     return (
       <div className="flex h-screen bg-surface-0">
-        <Sidebar
-          user={user}
-          conversations={conversations}
-          conversationsLoading={conversationsLoading}
-          currentConvId={currentConvId}
-          onNewChat={handleNewChat}
-          onSelectConversation={handleSelectConversation}
-          onNavigate={setPage}
-          onLogout={handleLogout}
-          collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
-        <div className="flex-1 overflow-y-auto scrollbar-thin">
-          <Dashboard onBack={handleNewChat} />
+        <Sidebar {...sidebarProps} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <MobileHeader
+            user={user}
+            onMenuOpen={() => setSidebarMobileOpen(true)}
+            onNavigateCredits={() => setPage("credits")}
+          />
+          <div className="flex-1 overflow-y-auto scrollbar-thin">
+            <Dashboard onBack={handleNewChat} />
+          </div>
         </div>
         <ToastContainer toasts={toasts} onRemove={removeToast} />
       </div>
@@ -338,26 +351,22 @@ export default function Home() {
   if (page === "credits" && user) {
     return (
       <div className="flex h-screen bg-surface-0">
-        <Sidebar
-          user={user}
-          conversations={conversations}
-          conversationsLoading={conversationsLoading}
-          currentConvId={currentConvId}
-          onNewChat={handleNewChat}
-          onSelectConversation={handleSelectConversation}
-          onNavigate={setPage}
-          onLogout={handleLogout}
-          collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
-        <div className="flex-1 overflow-y-auto scrollbar-thin">
-          <CreditsPage
+        <Sidebar {...sidebarProps} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <MobileHeader
             user={user}
-            onCreditsUpdated={(n) =>
-              setUser(user ? { ...user, credits: n, credits_unlimited: user.credits_unlimited } : null)
-            }
-            onBack={handleNewChat}
+            onMenuOpen={() => setSidebarMobileOpen(true)}
+            onNavigateCredits={() => setPage("credits")}
           />
+          <div className="flex-1 overflow-y-auto scrollbar-thin">
+            <CreditsPage
+              user={user}
+              onCreditsUpdated={(n) =>
+                setUser(user ? { ...user, credits: n, credits_unlimited: user.credits_unlimited } : null)
+              }
+              onBack={handleNewChat}
+            />
+          </div>
         </div>
         <ToastContainer toasts={toasts} onRemove={removeToast} />
       </div>
@@ -366,34 +375,28 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-surface-0">
-      {user && (
-        <Sidebar
-          user={user}
-          conversations={conversations}
-          conversationsLoading={conversationsLoading}
-          currentConvId={currentConvId}
-          onNewChat={handleNewChat}
-          onSelectConversation={handleSelectConversation}
-          onNavigate={setPage}
-          onLogout={handleLogout}
-          collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
-      )}
+      {user && <Sidebar {...sidebarProps} />}
 
-      <div className="flex-1 flex flex-col h-full">
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        {user && (
+          <MobileHeader
+            user={user}
+            onMenuOpen={() => setSidebarMobileOpen(true)}
+            onNavigateCredits={() => setPage("credits")}
+          />
+        )}
         {messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 overflow-y-auto">
-            <div className="max-w-2xl w-full text-center mb-10">
-              <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white mb-3">
+            <div className="max-w-2xl w-full text-center mb-8 sm:mb-10">
+              <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white mb-3">
                 MONV
               </h1>
-              <p className="text-lg text-gray-400 max-w-md mx-auto leading-relaxed">
+              <p className="text-base sm:text-lg text-gray-400 max-w-md mx-auto leading-relaxed">
                 Trouvez n&apos;importe quelle entreprise en France.
                 Décrivez ce que vous cherchez, récupérez votre liste.
               </p>
 
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-4 sm:mt-5">
                 {CAPABILITIES.map((cap) => (
                   <span
                     key={cap}
@@ -405,11 +408,11 @@ export default function Home() {
               </div>
 
               {!user && (
-                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 px-2 sm:px-0">
                   <button
                     type="button"
                     onClick={() => openAuth("register")}
-                    className="inline-flex items-center gap-2 bg-white text-gray-950 px-6 py-2.5 rounded-lg font-semibold hover:bg-gray-200 transition-colors text-sm"
+                    className="inline-flex items-center justify-center gap-2 bg-white text-gray-950 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 active:bg-gray-300 transition-colors text-sm w-full sm:w-auto min-h-[44px]"
                   >
                     S&apos;inscrire — 5 crédits offerts
                     <ArrowRight size={15} />
@@ -417,7 +420,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => openAuth("login")}
-                    className="inline-flex items-center justify-center px-6 py-2.5 rounded-lg font-semibold text-sm text-white border border-gray-700 hover:bg-white/[0.06] hover:border-gray-600 transition-colors"
+                    className="inline-flex items-center justify-center px-6 py-3 rounded-lg font-semibold text-sm text-white border border-gray-700 hover:bg-white/[0.06] active:bg-white/[0.1] hover:border-gray-600 transition-colors w-full sm:w-auto min-h-[44px]"
                   >
                     Se connecter
                   </button>

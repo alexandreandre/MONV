@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   MapPin,
+  Building,
 } from "lucide-react";
 
 interface Props {
@@ -68,7 +69,177 @@ const CURRENCY_COLS = new Set([
   "capital_social",
 ]);
 
+const PRIMARY_COLS = new Set(["nom", "ville", "libelle_activite", "effectif_label", "chiffre_affaires"]);
+
 const ROWS_PER_PAGE = 5;
+
+function formatValue(col: string, val: any) {
+  if (val === null || val === undefined || val === "") return "—";
+  if (CURRENCY_COLS.has(col)) {
+    const num = Number(val);
+    if (isNaN(num)) return String(val);
+    if (Math.abs(num) >= 1_000_000)
+      return `${(num / 1_000_000).toFixed(1)}\u202fM\u202f\u20ac`;
+    if (Math.abs(num) >= 1_000)
+      return `${(num / 1_000).toFixed(0)}\u202fk\u202f\u20ac`;
+    return `${num}\u202f\u20ac`;
+  }
+  if (col === "effectif_financier") {
+    const num = Number(val);
+    if (isNaN(num)) return String(val);
+    return num === Math.floor(num) ? String(Math.floor(num)) : String(num);
+  }
+  if (col === "annee_dernier_ca") {
+    const n = Number(val);
+    if (!isNaN(n)) return String(Math.floor(n));
+    return String(val);
+  }
+  if (col === "date_creation" || col === "date_cloture_exercice") {
+    if (typeof val === "string" && val.length >= 10) {
+      const d = new Date(val);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString("fr-FR", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+      }
+    }
+  }
+  return String(val);
+}
+
+function MobileCard({
+  row,
+  visibleCols,
+}: {
+  row: Record<string, any>;
+  visibleCols: string[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const primaryCols = visibleCols.filter((c) => PRIMARY_COLS.has(c));
+  const secondaryCols = visibleCols.filter((c) => !PRIMARY_COLS.has(c));
+  const hasSecondary = secondaryCols.length > 0;
+
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-surface-1 p-4 hover:border-white/[0.12] transition-colors">
+      <div className="flex items-start gap-3">
+        <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center">
+          <Building size={14} className="text-gray-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-white truncate">
+            {row.nom || "—"}
+          </p>
+          {row.ville && (
+            <p className="text-xs text-gray-500 mt-0.5 truncate">
+              {row.ville}
+              {row.code_postal ? ` (${row.code_postal})` : ""}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {row.lien_annuaire && (
+            <a
+              href={row.lien_annuaire}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-lg text-gray-500 hover:text-white active:bg-white/[0.06] transition-colors"
+              aria-label="Fiche annuaire"
+            >
+              <ExternalLink size={14} />
+            </a>
+          )}
+          {row.google_maps_url && (
+            <a
+              href={row.google_maps_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-lg text-gray-500 hover:text-blue-400 active:bg-white/[0.06] transition-colors"
+              aria-label="Google Maps"
+            >
+              <MapPin size={14} />
+            </a>
+          )}
+        </div>
+      </div>
+
+      {primaryCols.filter((c) => c !== "nom" && c !== "ville").length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+          {primaryCols
+            .filter((c) => c !== "nom" && c !== "ville")
+            .map((col) => (
+              <div key={col} className="flex items-baseline gap-1.5">
+                <span className="text-[10px] text-gray-600 uppercase tracking-wider">
+                  {COL_LABELS[col] || col}
+                </span>
+                <span className="text-xs text-gray-300">
+                  {formatValue(col, row[col])}
+                </span>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {hasSecondary && (
+        <>
+          {expanded && (
+            <div className="mt-3 pt-3 border-t border-white/[0.04] space-y-2">
+              {secondaryCols.map((col) => {
+                const val = formatValue(col, row[col]);
+                if (val === "—") return null;
+                return (
+                  <div key={col} className="flex justify-between items-baseline gap-2">
+                    <span className="text-[10px] text-gray-600 uppercase tracking-wider flex-shrink-0">
+                      {COL_LABELS[col] || col}
+                    </span>
+                    <span className="text-xs text-gray-400 text-right truncate">
+                      {col === "site_web" && row[col] ? (
+                        <a
+                          href={
+                            String(row[col]).startsWith("http")
+                              ? row[col]
+                              : `https://${row[col]}`
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-400 active:text-blue-300"
+                        >
+                          {String(row[col]).replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                        </a>
+                      ) : col === "telephone" && row[col] ? (
+                        <a href={`tel:${row[col]}`} className="text-gray-400 active:text-white">
+                          {row[col]}
+                        </a>
+                      ) : (
+                        val
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="mt-2 text-[11px] text-gray-500 hover:text-gray-300 active:text-white transition-colors flex items-center gap-1"
+          >
+            {expanded ? (
+              <>
+                <ChevronUp size={12} /> Moins
+              </>
+            ) : (
+              <>
+                <ChevronDown size={12} /> Plus de détails
+              </>
+            )}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function ResultsTable({
   data,
@@ -87,11 +258,9 @@ export default function ResultsTable({
   const [filterText, setFilterText] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
 
-  /** Colonnes déclarées par l'API : toujours affichées (aperçu souvent partiel sur 10 lignes). */
   const visibleCols = columns.filter(
     (c) => c !== "lien_annuaire" && c !== "google_maps_url"
   );
-  const hasGoogleMaps = data.some((r) => r.google_maps_url);
 
   const filtered = useMemo(() => {
     if (!filterText.trim()) return data;
@@ -133,69 +302,92 @@ export default function ResultsTable({
     setCurrentPage(0);
   };
 
-  const formatValue = (col: string, val: any) => {
-    if (val === null || val === undefined || val === "") return "—";
-    if (CURRENCY_COLS.has(col)) {
-      const num = Number(val);
-      if (isNaN(num)) return String(val);
-      if (Math.abs(num) >= 1_000_000)
-        return `${(num / 1_000_000).toFixed(1)}\u202fM\u202f\u20ac`;
-      if (Math.abs(num) >= 1_000)
-        return `${(num / 1_000).toFixed(0)}\u202fk\u202f\u20ac`;
-      return `${num}\u202f\u20ac`;
-    }
-    if (col === "effectif_financier") {
-      const num = Number(val);
-      if (isNaN(num)) return String(val);
-      return num === Math.floor(num) ? String(Math.floor(num)) : String(num);
-    }
-    if (col === "annee_dernier_ca") {
-      const n = Number(val);
-      if (!isNaN(n)) return String(Math.floor(n));
-      return String(val);
-    }
-    if (
-      col === "date_creation" ||
-      col === "date_cloture_exercice"
-    ) {
-      if (typeof val === "string" && val.length >= 10) {
-        const d = new Date(val);
-        if (!isNaN(d.getTime())) {
-          return d.toLocaleDateString("fr-FR", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          });
-        }
-      }
-    }
-    return String(val);
-  };
+  const filterBar = data.length > 3 && (
+    <div className="px-3 py-2 border-b border-white/[0.04]">
+      <div className="relative">
+        <Search
+          size={13}
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600"
+        />
+        <input
+          type="text"
+          value={filterText}
+          onChange={(e) => {
+            setFilterText(e.target.value);
+            setCurrentPage(0);
+          }}
+          placeholder="Filtrer les résultats..."
+          className="w-full bg-surface-2 border border-white/[0.06] rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/[0.16] transition-colors min-h-[44px]"
+        />
+      </div>
+    </div>
+  );
+
+  const pagination = totalPages > 1 && (
+    <div className="border-t border-white/[0.04] px-4 py-2 flex items-center justify-between">
+      <p className="text-xs text-gray-600">
+        {filtered.length === data.length
+          ? `${data.length} résultats (aperçu)`
+          : `${filtered.length} sur ${data.length} (filtré)`}
+      </p>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+          disabled={currentPage === 0}
+          className="p-2 rounded-lg text-gray-500 hover:text-white active:bg-white/[0.06] disabled:opacity-30 disabled:cursor-not-allowed min-w-[44px] min-h-[44px] flex items-center justify-center"
+        >
+          <ChevronLeft size={15} />
+        </button>
+        <span className="text-xs tabular-nums text-gray-500 px-2">
+          {currentPage + 1}/{totalPages}
+        </span>
+        <button
+          onClick={() =>
+            setCurrentPage(Math.min(totalPages - 1, currentPage + 1))
+          }
+          disabled={currentPage >= totalPages - 1}
+          className="p-2 rounded-lg text-gray-500 hover:text-white active:bg-white/[0.06] disabled:opacity-30 disabled:cursor-not-allowed min-w-[44px] min-h-[44px] flex items-center justify-center"
+        >
+          <ChevronRight size={15} />
+        </button>
+      </div>
+    </div>
+  );
+
+  const exportBar = total > data.length && (
+    <div className="border-t border-white/[0.04] px-4 py-3">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <p className="text-sm text-gray-500">
+          <span className="text-white font-medium tabular-nums">{data.length}</span> sur{" "}
+          <span className="text-white font-medium tabular-nums">{total}</span> résultats
+        </p>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => onExport(searchId, "xlsx")}
+            disabled={exporting || !canExport}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white text-gray-950 px-3 py-2 text-sm font-medium hover:bg-gray-200 active:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-1 sm:flex-initial min-h-[44px]"
+          >
+            <Download size={13} />
+            {exporting ? "Export..." : `Excel (${creditsRequired} cr.)`}
+          </button>
+          <button
+            onClick={() => onExport(searchId, "csv")}
+            disabled={exporting || !canExport}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/[0.1] active:bg-white/[0.15] disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
+          >
+            CSV
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="mt-3 rounded-xl border border-white/[0.06] bg-surface-1 overflow-hidden animate-fade-in">
-      {data.length > 3 && (
-        <div className="px-3 py-2 border-b border-white/[0.04]">
-          <div className="relative">
-            <Search
-              size={13}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600"
-            />
-            <input
-              type="text"
-              value={filterText}
-              onChange={(e) => {
-                setFilterText(e.target.value);
-                setCurrentPage(0);
-              }}
-              placeholder="Filtrer les résultats..."
-              className="w-full bg-surface-2 border border-white/[0.06] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/[0.16] transition-colors"
-            />
-          </div>
-        </div>
-      )}
+      {filterBar}
 
-      <div className="overflow-x-auto scrollbar-thin">
+      {/* Desktop: table */}
+      <div className="hidden sm:block overflow-x-auto scrollbar-thin">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-white/[0.03]">
@@ -305,64 +497,23 @@ export default function ResultsTable({
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="border-t border-white/[0.04] px-4 py-2 flex items-center justify-between">
-          <p className="text-xs text-gray-600">
-            {filtered.length === data.length
-              ? `${data.length} résultats (aperçu)`
-              : `${filtered.length} sur ${data.length} (filtré)`}
+      {/* Mobile: cards */}
+      <div className="sm:hidden">
+        {pageData.length === 0 ? (
+          <p className="px-4 py-6 text-center text-gray-600 text-sm">
+            Aucun résultat ne correspond au filtre.
           </p>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-              disabled={currentPage === 0}
-              className="p-1 rounded text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft size={15} />
-            </button>
-            <span className="text-xs tabular-nums text-gray-500 px-2">
-              {currentPage + 1}/{totalPages}
-            </span>
-            <button
-              onClick={() =>
-                setCurrentPage(Math.min(totalPages - 1, currentPage + 1))
-              }
-              disabled={currentPage >= totalPages - 1}
-              className="p-1 rounded text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronRight size={15} />
-            </button>
+        ) : (
+          <div className="p-3 space-y-2">
+            {pageData.map((row, i) => (
+              <MobileCard key={i} row={row} visibleCols={visibleCols} />
+            ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {total > data.length && (
-        <div className="border-t border-white/[0.04] px-4 py-3 flex items-center justify-between">
-          <p className="text-sm text-gray-500">
-            <span className="text-white font-medium tabular-nums">{data.length}</span> sur{" "}
-            <span className="text-white font-medium tabular-nums">{total}</span> résultats
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onExport(searchId, "xlsx")}
-              disabled={exporting || !canExport}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-white text-gray-950 px-3 py-1.5 text-sm font-medium hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <Download size={13} />
-              {exporting
-                ? "Export..."
-                : `Excel (${creditsRequired} cr.)`}
-            </button>
-            <button
-              onClick={() => onExport(searchId, "csv")}
-              disabled={exporting || !canExport}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-1.5 text-sm font-medium text-gray-300 hover:bg-white/[0.1] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              CSV
-            </button>
-          </div>
-        </div>
-      )}
+      {pagination}
+      {exportBar}
     </div>
   );
 }

@@ -37,16 +37,16 @@ export default function CreditsPage({ user, onCreditsUpdated, onBack }: Props) {
   ];
 
   return (
-    <div className="max-w-3xl mx-auto py-10 px-4 sm:px-6">
+    <div className="max-w-3xl mx-auto py-6 sm:py-10 px-4 sm:px-6">
       <button
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 transition-colors mb-6"
+        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 active:text-white transition-colors mb-6 min-h-[44px]"
       >
         <ArrowLeft size={14} />
         Retour au chat
       </button>
 
-      <div className="flex items-baseline justify-between mb-8">
+      <div className="flex items-baseline justify-between mb-6 sm:mb-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Crédits</h1>
           <p className="text-gray-500 text-sm mt-1">
@@ -102,10 +102,10 @@ export default function CreditsPage({ user, onCreditsUpdated, onBack }: Props) {
               <button
                 onClick={() => handleBuy(pack.id)}
                 disabled={buying === pack.id || !!user.credits_unlimited}
-                className={`mt-4 w-full rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                className={`mt-4 w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors min-h-[44px] ${
                   isPopular
-                    ? "bg-white text-gray-950 hover:bg-gray-200"
-                    : "bg-white/[0.06] text-gray-300 hover:bg-white/[0.1]"
+                    ? "bg-white text-gray-950 hover:bg-gray-200 active:bg-gray-300"
+                    : "bg-white/[0.06] text-gray-300 hover:bg-white/[0.1] active:bg-white/[0.15]"
                 } disabled:opacity-50`}
               >
                 {buying === pack.id ? "Traitement..." : "Acheter"}

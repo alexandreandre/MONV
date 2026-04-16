@@ -53,10 +53,10 @@ export default function Dashboard({ onBack }: Props) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-10 px-4 sm:px-6">
+    <div className="max-w-3xl mx-auto py-6 sm:py-10 px-4 sm:px-6">
       <button
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 transition-colors mb-6"
+        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 active:text-white transition-colors mb-6 min-h-[44px]"
       >
         <ArrowLeft size={14} />
         Nouvelle recherche
@@ -104,7 +104,7 @@ export default function Dashboard({ onBack }: Props) {
               key={item.id}
               className="rounded-xl border border-white/[0.06] bg-surface-1 p-4 hover:border-white/[0.12] transition-colors"
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white font-medium truncate">
                     {item.query}
@@ -130,9 +130,9 @@ export default function Dashboard({ onBack }: Props) {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-end sm:self-auto">
                   {item.exported ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-green-400/80 bg-green-400/8 px-2 py-1 rounded">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-green-400/80 bg-green-400/8 px-2 py-1.5 rounded">
                       <FileSpreadsheet size={11} />
                       Exporté
                     </span>
@@ -140,7 +140,7 @@ export default function Dashboard({ onBack }: Props) {
                     <button
                       onClick={() => handleExport(item.id)}
                       disabled={exportingId === item.id}
-                      className="inline-flex items-center gap-1 text-xs bg-white text-gray-950 px-3 py-1.5 rounded-lg font-medium hover:bg-gray-200 disabled:opacity-50 transition-colors"
+                      className="inline-flex items-center gap-1 text-xs bg-white text-gray-950 px-3 py-2 rounded-lg font-medium hover:bg-gray-200 active:bg-gray-300 disabled:opacity-50 transition-colors min-h-[44px]"
                     >
                       <Download size={11} />
                       {exportingId === item.id ? "Export..." : "Exporter"}

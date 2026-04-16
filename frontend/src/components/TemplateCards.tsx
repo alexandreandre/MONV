@@ -46,7 +46,7 @@ export default function TemplateCards({ templates, onSelect }: Props) {
         <button
           key={t.id}
           onClick={() => onSelect(t.query)}
-          className="group flex items-start gap-3 text-left rounded-lg border border-white/[0.06] bg-surface-1 px-4 py-3 hover:border-white/[0.12] hover:bg-surface-2 transition-all duration-150"
+          className="group flex items-start gap-3 text-left rounded-lg border border-white/[0.06] bg-surface-1 px-4 py-3.5 hover:border-white/[0.12] hover:bg-surface-2 active:bg-surface-2 transition-all duration-150 min-h-[44px]"
         >
           <span className="text-gray-600 mt-0.5 flex-shrink-0 group-hover:text-gray-400 transition-colors">
             {ICONS[t.icon] || <Building size={16} />}

@@ -104,12 +104,12 @@ export default function QcmCard({ payload, onSubmit, disabled }: Props) {
                     disabled={submitted || disabled}
                     onClick={() => toggle(q.id, opt.id, q.multiple ?? false)}
                     className={`
-                      inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm
+                      inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm min-h-[44px]
                       border transition-all duration-150
                       ${
                         isSelected
                           ? "bg-white text-gray-950 border-white"
-                          : "bg-transparent border-white/[0.12] text-gray-400 hover:border-white/[0.25] hover:text-white"
+                          : "bg-transparent border-white/[0.12] text-gray-400 hover:border-white/[0.25] hover:text-white active:bg-white/[0.06]"
                       }
                       ${submitted ? "opacity-50 cursor-default" : "cursor-pointer"}
                     `}
@@ -140,10 +140,10 @@ export default function QcmCard({ payload, onSubmit, disabled }: Props) {
         onClick={handleSubmit}
         disabled={!canSubmit || submitted || disabled}
         className={`
-          inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+          inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all min-h-[44px] w-full sm:w-auto justify-center
           ${
             canSubmit && !submitted
-              ? "bg-white text-gray-950 hover:bg-gray-200"
+              ? "bg-white text-gray-950 hover:bg-gray-200 active:bg-gray-300"
               : "bg-white/[0.06] text-gray-600 cursor-not-allowed"
           }
         `}

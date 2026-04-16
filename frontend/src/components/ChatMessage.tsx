@@ -51,7 +51,7 @@ export default function ChatMessage({
         </div>
       )}
 
-      <div className={`max-w-[80%] ${isUser ? "order-first" : ""}`}>
+      <div className={`max-w-[92%] sm:max-w-[80%] ${isUser ? "order-first" : ""}`}>
         <div
           className={`rounded-2xl px-4 py-3 ${
             isUser

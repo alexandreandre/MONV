@@ -47,11 +47,11 @@ export default function AuthModal({
     "w-full rounded-lg bg-surface-2 border border-white/[0.08] px-3.5 py-2.5 text-sm text-white placeholder-gray-600 focus:border-white/[0.2] focus:ring-1 focus:ring-white/[0.1] outline-none transition-colors";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="relative w-full max-w-sm rounded-2xl bg-surface-1 border border-white/[0.08] p-7 shadow-2xl animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="relative w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-surface-1 border border-white/[0.08] p-6 sm:p-7 shadow-2xl animate-fade-in max-h-[95vh] overflow-y-auto">
         <button
           onClick={onClose}
-          className="absolute right-3.5 top-3.5 p-1 rounded-md text-gray-600 hover:text-gray-300 hover:bg-white/[0.06] transition-colors"
+          className="absolute right-3.5 top-3.5 p-2 rounded-lg text-gray-600 hover:text-gray-300 hover:bg-white/[0.06] active:bg-white/[0.1] transition-colors"
         >
           <X size={18} />
         </button>
@@ -120,7 +120,7 @@ export default function AuthModal({
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-white text-gray-950 px-4 py-2.5 text-sm font-semibold hover:bg-gray-200 disabled:opacity-50 transition-colors"
+            className="w-full rounded-lg bg-white text-gray-950 px-4 py-3 text-sm font-semibold hover:bg-gray-200 active:bg-gray-300 disabled:opacity-50 transition-colors min-h-[44px]"
           >
             {loading
               ? "Chargement..."
