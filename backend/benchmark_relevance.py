@@ -63,9 +63,9 @@ QUERIES = [
      "target": "cabinets d'expertise comptable"},
 
     # ── Mode client ───────────────────────────────────────────────
-    {"id": "C-01", "query": "Cliniques vétérinaires en Bretagne", "mode": "client",
+    {"id": "C-01", "query": "Cliniques vétérinaires en Bretagne", "mode": "benchmark",
      "target": "cabinets et cliniques vétérinaires"},
-    {"id": "C-02", "query": "Concessions automobiles à Lyon", "mode": "client",
+    {"id": "C-02", "query": "Concessions automobiles à Lyon", "mode": "benchmark",
      "target": "concessionnaires / vendeurs automobiles"},
 
     # ── Mode rachat ───────────────────────────────────────────────
@@ -255,7 +255,7 @@ async def run_benchmark():
         print(f"  Temps moyen : {avg_time:.0f}ms")
 
         # Par mode
-        for mode in ("prospection", "sous_traitant", "client", "rachat"):
+        for mode in ("prospection", "sous_traitant", "benchmark", "rachat"):
             mode_rs = [r for r in valid if r["mode"] == mode]
             if mode_rs:
                 ms = sum(r["avg_score_filtered"] for r in mode_rs) / len(mode_rs)
