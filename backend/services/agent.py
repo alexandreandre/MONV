@@ -352,8 +352,8 @@ def _strip_leading_article_phrase(line: str) -> str:
     return s
 
 
-def _titlecase_project_fr(words: list[str]) -> str:
-    """Casse de titre légère pour un nom de projet (particules courtes au milieu)."""
+def _project_folder_display_fr(words: list[str]) -> str:
+    """Casse lisible type « Boîte de nuit Marseille » : premier et dernier mot capitalisés."""
     if not words:
         return ""
     n = len(words)
@@ -362,13 +362,11 @@ def _titlecase_project_fr(words: list[str]) -> str:
         core = raw.strip(".,;:!?").strip()
         if not core:
             continue
-        lowc = core.lower()
+        low = core.lower()
         if i == 0 or i == n - 1:
             out.append(core[:1].upper() + core[1:].lower())
-        elif lowc in _PROJECT_TITLE_SMALL:
-            out.append(lowc)
         else:
-            out.append(core[:1].upper() + core[1:].lower())
+            out.append(low)
     return " ".join(out)
 
 
@@ -433,7 +431,7 @@ def heuristic_atelier_project_folder_name(pitch: str) -> str:
     words = line.split()
     if len(words) > 7:
         words = words[:7]
-    titled = _titlecase_project_fr(words)
+    titled = _project_folder_display_fr(words)
     if not titled:
         return "Projet Atelier"
     out = titled[:80].strip()

@@ -20,6 +20,7 @@ from services.agent import (  # noqa: E402
     coerce_dossier,
     dossier_metadata_json,
     heuristic_atelier_conversation_title,
+    heuristic_atelier_project_folder_name,
 )
 from models.schemas import (  # noqa: E402
     AgentSynthesis,
@@ -55,6 +56,16 @@ def test_heuristic_atelier_title_uses_first_sentence_when_short():
     t = heuristic_atelier_conversation_title(pitch, max_len=80)
     assert "tacos" in t.lower()
     assert "rennes" in t.lower()
+
+
+def test_heuristic_project_folder_name_strips_intent_and_formats():
+    pitch = "Je veux créer une boite de nuit à marseille"
+    n = heuristic_atelier_project_folder_name(pitch)
+    assert "je veux" not in n.lower()
+    assert "créer" not in n.lower()
+    assert "marseille" in n.lower()
+    assert n.split()[0][0].isupper()
+    assert n.split()[-1][0].isupper()
 
 
 def test_fallback_questions_cover_core_topics():
