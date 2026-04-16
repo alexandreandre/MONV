@@ -30,6 +30,7 @@ MONV est une application **full stack** : un chat guide la recherche, des modèl
 MONV/
 ├── backend/                 # API FastAPI (Python)
 │   ├── main.py              # Application, CORS, routers, /api/health, /api/templates
+│   ├── benchmark_pipeline.py  # Script / bench optionnel sur le pipeline
 │   ├── config.py            # Paramètres (Pydantic Settings) + .env
 │   ├── requirements.txt
 │   ├── supabase/migrations/
@@ -52,6 +53,8 @@ MONV/
 │   │   ├── sirene.py        # Recherche Entreprises (data.gouv.fr)
 │   │   ├── pappers.py       # Enrichissement (clé optionnelle)
 │   │   ├── google_places.py # Commerces de niche + recoupement SIRENE (clé optionnelle)
+│   │   ├── signals.py       # Signaux métier (dirigeants, finances, etc.) sur les résultats
+│   │   ├── geocoding.py     # Géocodage des adresses pour carte / export
 │   │   └── export.py        # Génération Excel / CSV
 │   └── utils/
 │       ├── llm.py           # Client OpenAI-compatible → OpenRouter
@@ -62,8 +65,10 @@ MONV/
 │   ├── next.config.js         # Rewrite /api/* → backend :8000
 │   └── src/
 │       ├── app/               # layout, page principale
-│       ├── components/        # Chat, tableau, auth, crédits, etc.
-│       └── lib/api.ts         # Client HTTP + types
+│       ├── components/        # Chat, tableau, carte, auth, crédits, etc.
+│       └── lib/
+│           ├── api.ts         # Client HTTP + types
+│           └── landingTemplates.ts  # Modèles d’exemple (landing ; aligner avec GET /api/templates)
 ├── prospection_pme.py         # Script CLI hors MONV (dataset Excel via API gouv)
 └── README.md
 ```
@@ -158,7 +163,7 @@ Si tu changes le port du backend, mets à jour `destination` dans `frontend/next
 1. Ouvre `http://localhost:3000`.
 2. Crée un compte ou connecte-toi (JWT stocké côté navigateur).
 3. Les nouveaux comptes reçoivent **5 crédits** gratuits (`FREE_CREDITS` dans `config.py`).
-4. Décris ta cible en langage naturel ou choisis un **modèle** proposé par l’API `GET /api/templates`.
+4. Décris ta cible en langage naturel ou choisis un **modèle** (cartes sur la landing via `landingTemplates.ts`, même jeu exposé par `GET /api/templates`).
 5. Si les critères manquent, MONV peut afficher un **QCM de clarification**.
 6. Après exécution du plan, un **aperçu** (jusqu’à 10 lignes) apparaît dans le chat ; l’export complet consomme les crédits indiqués pour la recherche.
 7. L’**historique** des recherches est disponible côté API (`/api/search/history`) et dans l’UI (tableau de bord selon l’implémentation actuelle).
@@ -174,7 +179,7 @@ Le flux principal est dans `routers/chat.py` :
 2. **Couche 1 — Guard** (`services/guard`) : intention structurée, entités, besoin de clarification.
 3. **Couche 1b — Conversationalist** : génération d’un **QCM** si clarification nécessaire.
 4. **Couche 2 — Orchestrateur** (`services/orchestrator`) : plan d’appels (SIRENE / Pappers), colonnes, **crédits estimés** ; peut redemander une clarification.
-5. **Couche 3 — API Engine** (`services/api_engine`) : exécution déterministe, déduplication par SIREN, appels SIRENE / Pappers / **Google Places** selon le plan, enrichissements ciblés (dirigeants, finances, liens Maps).
+5. **Couche 3 — API Engine** (`services/api_engine`) : exécution déterministe, déduplication par SIREN, appels SIRENE / Pappers / **Google Places** selon le plan, enrichissements ciblés (dirigeants, finances, liens Maps), **géocodage** (`geocoding`) et **signaux** métier (`signals`).
 6. Persistance : conversation, messages, ligne dans `search_history` avec `results_json` pour l’export ultérieur.
 
 Les appels LLM passent par `utils/llm.py` (client **OpenAI** pointant sur **OpenRouter**).

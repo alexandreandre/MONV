@@ -95,6 +95,7 @@ export interface Conversation {
   title: string;
   created_at: string;
   updated_at: string;
+  mode?: string | null;
   messages: Message[];
 }
 
@@ -109,6 +110,7 @@ export interface Template {
   description: string;
   query: string;
   icon: string;
+  mode?: string;
 }
 
 export interface SearchHistoryItem {

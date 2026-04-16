@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     GUARD_MODEL: str = "anthropic/claude-3.5-haiku"
     # Couche 2 — Orchestrateur plan d'exécution (le meilleur, précis)
     ORCHESTRATOR_MODEL: str = "anthropic/claude-3.5-sonnet"
+    # Post-filtrage des lignes de résultats (rapide, JSON fiable via OpenRouter)
+    RELEVANCE_FILTER_MODEL: str = "openai/gpt-4o-mini"
 
     # ── APIs externes ─────────────────────────────────────────────
     PAPPERS_API_KEY: str = ""

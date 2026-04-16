@@ -5,6 +5,13 @@ Transforme l'intent structuré en plan d'exécution API.
 
 import json
 from models.schemas import GuardResult, ExecutionPlan, APICall
+from services.modes import (
+    Mode,
+    addendum_for_mode,
+    credits_floor_for_mode,
+    normalize_mode,
+    reorder_columns_for_mode,
+)
 
 # Colonnes financières / effectif (Pappers) — ajoutées à la liste affichée si Pappers est utilisé
 FINANCIAL_AND_SIZE_COLUMNS: list[str] = [
@@ -356,19 +363,24 @@ def _get_tranche_codes(taille_min: int | None, taille_max: int | None) -> list[s
     return codes
 
 
-async def run_orchestrator(guard_result: GuardResult) -> ExecutionPlan:
+async def run_orchestrator(
+    guard_result: GuardResult,
+    mode: str | None = None,
+) -> ExecutionPlan:
+    active_mode: Mode = normalize_mode(mode)
+    system_prompt = ORCHESTRATOR_SYSTEM_PROMPT + addendum_for_mode(active_mode)
     guard_json = json.dumps(guard_result.model_dump(), ensure_ascii=False, default=str)
 
     try:
         result = await llm_json_call(
             model=settings.ORCHESTRATOR_MODEL,
-            system=ORCHESTRATOR_SYSTEM_PROMPT,
+            system=system_prompt,
             messages=[{"role": "user", "content": f"Intent structuré :\n{guard_json}"}],
             max_tokens=2048,
             temperature=0.0,
         )
     except Exception:
-        return _build_fallback_plan(guard_result)
+        return _build_fallback_plan(guard_result, active_mode)
 
     api_calls = []
     for call in result.get("api_calls", []):
@@ -389,12 +401,12 @@ async def run_orchestrator(guard_result: GuardResult) -> ExecutionPlan:
         ))
 
     if not api_calls:
-        return _build_fallback_plan(guard_result)
+        return _build_fallback_plan(guard_result, active_mode)
 
     # S'assurer qu'il y a au moins un appel SIRENE ou Google Places pour la source primaire
     has_search = any(c.action == "search" and c.source in ("sirene", "google_places") for c in api_calls)
     if not has_search:
-        fb = _build_fallback_plan(guard_result)
+        fb = _build_fallback_plan(guard_result, active_mode)
         sirene_calls = [c for c in fb.api_calls if c.source == "sirene" and c.action == "search"]
         for sc in sirene_calls:
             sc.priority = 1
@@ -408,10 +420,16 @@ async def run_orchestrator(guard_result: GuardResult) -> ExecutionPlan:
             if col not in columns:
                 columns.append(col)
     columns = extend_columns_for_plan(columns, api_calls)
+    columns = reorder_columns_for_mode(columns, active_mode)
+
+    estimated = max(
+        int(result.get("estimated_credits", 1) or 1),
+        credits_floor_for_mode(active_mode),
+    )
 
     return ExecutionPlan(
         api_calls=api_calls,
-        estimated_credits=result.get("estimated_credits", 1),
+        estimated_credits=estimated,
         description=result.get("description", "Recherche en cours..."),
         columns=columns,
         clarification_needed=result.get("clarification_needed", False),
@@ -447,7 +465,10 @@ def _naf_range_to_section(code_naf: str | None) -> str | None:
     return section
 
 
-def _build_fallback_plan(guard_result: GuardResult) -> ExecutionPlan:
+def _build_fallback_plan(
+    guard_result: GuardResult,
+    mode: Mode = "prospection",
+) -> ExecutionPlan:
     """Build a plan without LLM when the orchestrator fails."""
     e = guard_result.entities
 
@@ -543,6 +564,18 @@ def _build_fallback_plan(guard_result: GuardResult) -> ExecutionPlan:
             source="pappers", action="get_finances", params={}, priority=3,
         ))
 
+    # Mode rachat ou client : ajouter automatiquement l'enrichissement Pappers
+    # si une clé est configurée. Sans clé, l'API engine ignore l'appel.
+    if mode in ("rachat", "client") and settings.PAPPERS_API_KEY:
+        if not any(c.source == "pappers" and c.action == "get_finances" for c in api_calls):
+            api_calls.append(APICall(
+                source="pappers", action="get_finances", params={}, priority=3,
+            ))
+        if not any(c.source == "pappers" and c.action == "get_dirigeants" for c in api_calls):
+            api_calls.append(APICall(
+                source="pappers", action="get_dirigeants", params={}, priority=3,
+            ))
+
     credits = 1
     if guard_result.intent == "recherche_dirigeant":
         credits = 3
@@ -550,6 +583,7 @@ def _build_fallback_plan(guard_result: GuardResult) -> ExecutionPlan:
         credits = 3
     if niche_naf_codes:
         credits = max(credits, 2)
+    credits = max(credits, credits_floor_for_mode(mode))
 
     columns = _default_columns(guard_result.intent)
     if any(c.source == "google_places" for c in api_calls):
@@ -557,6 +591,7 @@ def _build_fallback_plan(guard_result: GuardResult) -> ExecutionPlan:
             if col not in columns:
                 columns.append(col)
     columns = extend_columns_for_plan(columns, api_calls)
+    columns = reorder_columns_for_mode(columns, mode)
 
     return ExecutionPlan(
         api_calls=api_calls,

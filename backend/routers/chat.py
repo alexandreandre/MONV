@@ -6,7 +6,8 @@ Pipeline en 4 couches + conversation :
   Couche 1  — Guard        (modèle moyen)  : intent + entités
   Couche 1b — Conversation (modèle moyen)  : clarification multi-tour
   Couche 2  — Orchestrator (meilleur modèle): plan d'exécution API
-  Couche 3  — API Engine   (déterministe)  : exécution SIRENE / Pappers
+  Couche 3  — API Engine   (déterministe)  : exécution SIRENE / Pappers / Places
+  Couche 3b — Pertinence  (LLM rapide)     : filtre des lignes hors cible
 """
 
 import asyncio
@@ -38,6 +39,12 @@ from services.guard import run_guard
 from services.conversationalist import generate_qcm
 from services.orchestrator import run_orchestrator
 from services.api_engine import execute_plan
+from services.relevance import filter_results_by_relevance
+from services.modes import (
+    MODE_LABELS,
+    Mode,
+    normalize_mode,
+)
 from services.sirene import patch_sirene_calls_from_guard_entities
 from routers.auth import get_current_user
 from utils.credits_policy import credits_for_api, user_has_unlimited_credits
@@ -94,17 +101,23 @@ async def send_message(
   try:
     now = datetime.now(timezone.utc)
 
+    requested_mode: Mode = normalize_mode(req.mode)
+
     if req.conversation_id:
         conv = await conversation_get(supabase, req.conversation_id, user.id)
         if not conv:
             raise HTTPException(404, "Conversation non trouvée")
+        # Une conversation existante garde son mode initial pour cohérence d'historique.
+        active_mode: Mode = normalize_mode(conv.mode) if conv.mode else requested_mode
     else:
+        active_mode = requested_mode
         conv = Conversation(
             id=gen_uuid(),
             user_id=user.id,
             title=req.message[:60],
             created_at=now,
             updated_at=now,
+            mode=active_mode,
         )
         await conversation_insert(supabase, conv)
 
@@ -208,7 +221,7 @@ async def send_message(
         return _build_response(conv.id, response_messages)
 
     # ── Couche 2 — Orchestrateur (meilleur modèle) ─────────────────
-    plan = await run_orchestrator(guard_result)
+    plan = await run_orchestrator(guard_result, mode=active_mode)
 
     plog(
         "orchestrator_plan",
@@ -256,11 +269,35 @@ async def send_message(
     patch_sirene_calls_from_guard_entities(plan, guard_result.entities)
     search_results = await execute_plan(plan)
 
+    relevance_meta: dict = {}
+    if search_results.total > 0:
+        filtered_rows, rel_stats = await filter_results_by_relevance(
+            search_results.results,
+            user_query=req.message,
+            guard_result=guard_result,
+            mode=active_mode,
+        )
+        search_results.results = filtered_rows
+        search_results.total = len(filtered_rows)
+        relevance_meta = {
+            k: rel_stats[k]
+            for k in (
+                "relevance_skipped",
+                "relevance_skip_reason",
+                "relevance_before",
+                "relevance_after",
+                "relevance_removed",
+                "relevance_fallback_unfiltered",
+            )
+            if k in rel_stats
+        }
+
     plog(
         "execute_plan_done",
         total=search_results.total,
         credits_required=search_results.credits_required,
         columns=search_results.columns,
+        relevance=relevance_meta or None,
     )
 
     total = search_results.total
@@ -303,6 +340,7 @@ async def send_message(
         exported=False,
         export_path=None,
         created_at=datetime.now(timezone.utc),
+        mode=active_mode,
     )
 
     async def _bg_insert_search_history() -> None:
@@ -315,6 +353,12 @@ async def send_message(
     # ── Construire le message de résultats ─────────────────────────
     credits_needed = search_results.credits_required
     preview_text = f"J'ai trouvé **{total} entreprises** correspondant à ta recherche."
+    removed = relevance_meta.get("relevance_removed") if relevance_meta else 0
+    if isinstance(removed, int) and removed > 0:
+        preview_text += (
+            f" J'en ai écarté **{removed}** peu alignées avec ta requête après "
+            "vérification automatique."
+        )
     if total > 10:
         solde = (
             "**crédits illimités**"
@@ -325,6 +369,10 @@ async def send_message(
             f" Voici les 10 premières. "
             f"**Exporter tout = {credits_needed} crédits** (tu en as {solde})."
         )
+
+    # Cadre d'analyse pour le mode Rachat — sans recommandation personnalisée.
+    if active_mode == "rachat":
+        preview_text += "\n\n" + _build_rachat_framing(search_results.results)
 
     map_points = [
         {
@@ -338,6 +386,7 @@ async def send_message(
             "telephone": r.telephone,
             "site_web": r.site_web,
             "lien_annuaire": r.lien_annuaire,
+            "signaux": [s.model_dump() for s in r.signaux] if r.signaux else [],
         }
         for r in search_results.results
         if r.latitude is not None and r.longitude is not None
@@ -356,6 +405,9 @@ async def send_message(
             "columns": search_results.columns,
             "preview": [r.model_dump() for r in search_results.results[:10]],
             "map_points": map_points,
+            "mode": active_mode,
+            "mode_label": MODE_LABELS.get(active_mode, active_mode),
+            "relevance": relevance_meta or None,
         }, ensure_ascii=False, default=str),
         created_at=datetime.now(timezone.utc),
     )
@@ -408,6 +460,7 @@ async def list_conversations(
             title=c.title,
             created_at=c.created_at,
             updated_at=c.updated_at,
+            mode=c.mode,
             messages=[],
         )
         for c in convs
@@ -431,6 +484,7 @@ async def get_conversation(
         title=conv.title,
         created_at=conv.created_at,
         updated_at=conv.updated_at,
+        mode=conv.mode,
         messages=[
             MessageOut(
                 id=m.id, role=m.role, content=m.content,
@@ -451,3 +505,52 @@ async def _get_conversation_history(supabase: Client, conv_id: str) -> list[dict
         if m.role in ("user", "assistant"):
             history.append({"role": m.role, "content": m.content})
     return history
+
+
+# ── Cadre d'analyse Rachat ────────────────────────────────────────────────────
+#
+# On ne formule AUCUNE recommandation chiffrée ni avis personnalisé : on liste
+# les indicateurs collectés, ce qui manque, et les questions à investiguer.
+
+def _build_rachat_framing(results: list) -> str:  # results: list[CompanyResult]
+    if not results:
+        return ""
+
+    sample = results[:50]
+    nb = len(sample)
+
+    nb_with_ca = sum(1 for r in sample if getattr(r, "chiffre_affaires", None))
+    nb_with_resultat = sum(1 for r in sample if getattr(r, "resultat_net", None) is not None)
+    nb_with_dirigeant = sum(1 for r in sample if getattr(r, "dirigeant_nom", None))
+    nb_with_age_societe = sum(1 for r in sample if getattr(r, "date_creation", None))
+
+    lines = [
+        "---",
+        "**Cadre d'analyse — mode Rachat**",
+        "",
+        f"Sur les {nb} fiches affichées :",
+        f"- {nb_with_ca}/{nb} avec un chiffre d'affaires connu",
+        f"- {nb_with_resultat}/{nb} avec un résultat net connu",
+        f"- {nb_with_dirigeant}/{nb} avec un dirigeant identifié",
+        f"- {nb_with_age_societe}/{nb} avec une date de création connue",
+        "",
+        "**Hypothèses à valider avant tout contact :**",
+        "1. La cible est-elle effectivement à céder (signal de transmission, "
+        "âge dirigeant, absence de relève) ?",
+        "2. La rentabilité affichée est-elle structurelle (3 derniers exercices) "
+        "ou conjoncturelle ?",
+        "3. La structure juridique permet-elle une reprise simple "
+        "(SARL/SAS vs holding complexe) ?",
+        "",
+        "**Questions à investiguer (hors champ MONV) :**",
+        "- Niveau d'endettement réel (compte courant associés, leasing) — "
+        "à demander en data room.",
+        "- Dépendance client / fournisseur (top 3 clients = ?% du CA).",
+        "- Conditions de bail commercial / propriété des actifs.",
+        "- Audit social (turnover, conventions, primes d'ancienneté).",
+        "",
+        "_Ce cadre est purement indicatif. Il ne constitue ni un conseil "
+        "juridique, ni un conseil financier, ni une valorisation. Toute "
+        "décision d'acquisition doit s'appuyer sur un audit professionnel._",
+    ]
+    return "\n".join(lines)

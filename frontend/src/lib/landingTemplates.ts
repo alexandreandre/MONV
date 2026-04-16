@@ -1,6 +1,7 @@
 import type { Template } from "./api";
 
-/** Exemples affichés sur la landing — source unique côté client (sans attente réseau). */
+/** Exemples affichés sur la landing — source unique côté client (sans attente réseau).
+ *  Le champ `mode` permet au sélecteur de mode de filtrer les templates pertinents. */
 export const LANDING_TEMPLATES: Template[] = [
   {
     id: "boutique-padel-site-web",
@@ -10,6 +11,7 @@ export const LANDING_TEMPLATES: Template[] = [
     query:
       "Je cherche des boutiques de padel et clubs de padel pour leur proposer la création ou la refonte d'un site web",
     icon: "activity",
+    mode: "prospection",
   },
   {
     id: "hotel-3-etoiles-marseille-rachat",
@@ -19,6 +21,7 @@ export const LANDING_TEMPLATES: Template[] = [
     query:
       "Je cherche des hôtels 3 étoiles pour une analyse de potentiel rachat ou d'acquisition",
     icon: "hotel",
+    mode: "rachat",
   },
   {
     id: "startup-saas-paris",
@@ -28,6 +31,7 @@ export const LANDING_TEMPLATES: Template[] = [
     query:
       "Je cherche des startups SaaS à Paris, entre 10 et 50 salariés, créées depuis 2020",
     icon: "rocket",
+    mode: "prospection",
   },
   {
     id: "prestataire-informatique",
@@ -36,6 +40,7 @@ export const LANDING_TEMPLATES: Template[] = [
     query:
       "Je cherche un prestataire informatique en Île-de-France, ESN ou agence de développement",
     icon: "monitor",
+    mode: "sous_traitant",
   },
   {
     id: "fournisseur-btp",
@@ -44,6 +49,7 @@ export const LANDING_TEMPLATES: Template[] = [
     query:
       "Trouve-moi des fournisseurs de matériaux de construction, PME avec plus de 10 salariés",
     icon: "truck",
+    mode: "sous_traitant",
   },
   {
     id: "cabinet-comptable",
@@ -51,6 +57,7 @@ export const LANDING_TEMPLATES: Template[] = [
     description: "Experts-comptables et cabinets d'audit à Lyon et alentours",
     query: "Je cherche un cabinet comptable ou expert-comptable à Lyon",
     icon: "calculator",
+    mode: "sous_traitant",
   },
   {
     id: "pme-industrielles-rhone-alpes",
@@ -60,6 +67,7 @@ export const LANDING_TEMPLATES: Template[] = [
     query:
       "Trouve-moi des PME industrielles en Rhône-Alpes avec un chiffre d'affaires supérieur à 1 million d'euros",
     icon: "factory",
+    mode: "rachat",
   },
   {
     id: "agence-communication",
@@ -68,6 +76,7 @@ export const LANDING_TEMPLATES: Template[] = [
     query:
       "Je cherche des agences de communication et marketing à Bordeaux",
     icon: "megaphone",
+    mode: "prospection",
   },
   {
     id: "btp-marseille",
@@ -76,6 +85,7 @@ export const LANDING_TEMPLATES: Template[] = [
     query:
       "Je cherche des entreprises du BTP à Marseille entre 20 et 200 salariés",
     icon: "building",
+    mode: "prospection",
   },
   {
     id: "cabinet-avocats",
@@ -85,5 +95,33 @@ export const LANDING_TEMPLATES: Template[] = [
     query:
       "Trouve-moi des cabinets d'avocats en droit des affaires à Paris",
     icon: "scale",
+    mode: "sous_traitant",
+  },
+  {
+    id: "client-portefeuille-siren",
+    title: "Mes clients existants",
+    description: "Collez des SIREN pour enrichir CA, dirigeants et signaux",
+    query:
+      "J'ai ces SIREN dans mon portefeuille, enrichis-moi les fiches : 552032534, 552081317, 542065479",
+    icon: "briefcase",
+    mode: "client",
+  },
+  {
+    id: "client-segmentation-secteur",
+    title: "Comptes BTP existants",
+    description: "Analyser et segmenter mes clients du BTP",
+    query:
+      "Voici mes comptes clients dans le BTP, analyse leur santé financière et leurs signaux récents",
+    icon: "building",
+    mode: "client",
+  },
+  {
+    id: "rachat-restaurant-paris",
+    title: "Restaurants à reprendre",
+    description: "Restaurants traditionnels à Paris (signaux transmission)",
+    query:
+      "Je cherche des restaurants traditionnels à Paris, créés il y a au moins 15 ans, pour étudier des opportunités de reprise",
+    icon: "utensils",
+    mode: "rachat",
   },
 ];

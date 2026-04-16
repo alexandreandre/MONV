@@ -7,7 +7,7 @@ alwaysApply: false
 # Backend (`backend/`)
 
 - **Point d’entrée** : `main:app` dans `backend/main.py` ; lancer avec `uvicorn main:app --reload --port 8000` **depuis le répertoire `backend/`** pour que `.env` et la résolution des chemins (`EXPORTS_DIR`, etc.) restent correctes.
-- **Structure** : `routers/` (auth, chat, search, credits), `services/` (filtre, guard, orchestrateur, SIRENE, Pappers, Google Places, export…), `models/` (client Supabase, schémas Pydantic), `utils/` (`llm`, `pipeline_log`, `cache`, politique crédits).
+- **Structure** : `routers/` (auth, chat, search, credits), `services/` (filtre, guard, conversationalist, orchestrateur, SIRENE, Pappers, Google Places, signaux, géocodage, export), `models/` (client Supabase, schémas Pydantic), `utils/` (`llm`, `pipeline_log`, `cache`, politique crédits).
 - **Imports** : suivre le style existant (`from config`, `from models`, `from services`…). Pas de refactors transverses non demandés.
 - **Logging** : pipeline via `utils.pipeline_log` (`configure_pipeline_logging`, `plog`) ; éviter les `print` en logique durable.
 - **Portée** : chaque ligne du diff doit servir la tâche ; pas de « drive-by » hors demande.

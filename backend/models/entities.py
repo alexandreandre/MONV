@@ -68,6 +68,7 @@ class Conversation:
     title: str
     created_at: datetime
     updated_at: datetime
+    mode: str | None = None
 
     @classmethod
     def from_row(cls, row: dict) -> Conversation:
@@ -77,16 +78,20 @@ class Conversation:
             title=row.get("title") or "Nouvelle recherche",
             created_at=parse_timestamp(row.get("created_at")),
             updated_at=parse_timestamp(row.get("updated_at")),
+            mode=row.get("mode"),
         )
 
     def to_insert_row(self) -> dict:
-        return {
+        d: dict = {
             "id": self.id,
             "user_id": self.user_id,
             "title": self.title,
             "created_at": _iso(self.created_at),
             "updated_at": _iso(self.updated_at),
         }
+        if self.mode is not None:
+            d["mode"] = self.mode
+        return d
 
 
 @dataclass
@@ -139,6 +144,7 @@ class SearchHistory:
     exported: bool
     export_path: str | None
     created_at: datetime
+    mode: str | None = None
 
     @classmethod
     def from_row(cls, row: dict) -> SearchHistory:
@@ -155,6 +161,7 @@ class SearchHistory:
             exported=bool(row.get("exported", False)),
             export_path=row.get("export_path"),
             created_at=parse_timestamp(row.get("created_at")),
+            mode=row.get("mode"),
         )
 
     def to_insert_row(self) -> dict:
@@ -176,4 +183,6 @@ class SearchHistory:
             d["results_json"] = self.results_json
         if self.export_path is not None:
             d["export_path"] = self.export_path
+        if self.mode is not None:
+            d["mode"] = self.mode
         return d

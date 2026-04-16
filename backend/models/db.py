@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -23,6 +24,38 @@ _client: Client | None = None
 # qui lisent en même temps provoquent « Resource temporarily unavailable ».
 # Ce verrou sérialise tous les appels PostgREST.
 _sb_lock = threading.Lock()
+
+# Si la migration `002_modes.sql` n’a pas été appliquée sur le projet Supabase,
+# PostgREST renvoie PGRST204 sur insert avec `mode`. On retente sans cette clé.
+_mode_column_warned = False
+
+
+def _missing_mode_column_error(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    if "mode" not in text:
+        return False
+    if "pgrst204" in text:
+        return True
+    if "schema cache" in text and "column" in text:
+        return True
+    if "could not find" in text and "mode" in text:
+        return True
+    return False
+
+
+def _warn_mode_column_once() -> None:
+    global _mode_column_warned
+    if _mode_column_warned:
+        return
+    _mode_column_warned = True
+    print(
+        "[MONV] La colonne SQL `mode` est absente (migration non appliquée). "
+        "Les conversations / recherches sont enregistrées sans mode persistant. "
+        "Exécutez `backend/supabase/migrations/002_modes.sql` dans le SQL Editor Supabase, "
+        "puis rechargez le schéma PostgREST si besoin.",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def get_supabase() -> Client:
@@ -136,7 +169,20 @@ async def conversation_get(client: Client, conv_id: str, user_id: str) -> Conver
 
 
 async def conversation_insert(client: Client, conv: Conversation) -> None:
-    await sb_run(lambda: client.table("conversations").insert(conv.to_insert_row()).execute())
+    row = conv.to_insert_row()
+
+    def _insert(payload: dict):
+        return client.table("conversations").insert(payload).execute()
+
+    try:
+        await sb_run(lambda: _insert(row))
+    except Exception as e:
+        if "mode" in row and _missing_mode_column_error(e):
+            _warn_mode_column_once()
+            without = {k: v for k, v in row.items() if k != "mode"}
+            await sb_run(lambda: _insert(without))
+            return
+        raise
 
 
 async def conversation_touch(client: Client, conv_id: str) -> None:
@@ -202,11 +248,22 @@ async def message_insert(client: Client, msg: Message) -> None:
 
 
 async def search_history_insert(client: Client, record: SearchHistory) -> SearchHistory:
-    def q():
-        r = client.table("search_history").insert(record.to_insert_row()).execute()
+    row = record.to_insert_row()
+
+    def _insert(payload: dict):
+        r = client.table("search_history").insert(payload).execute()
         return r.data or []
 
-    rows = await sb_run(q)
+    try:
+        rows = await sb_run(lambda: _insert(row))
+    except Exception as e:
+        if "mode" in row and _missing_mode_column_error(e):
+            _warn_mode_column_once()
+            without = {k: v for k, v in row.items() if k != "mode"}
+            rows = await sb_run(lambda: _insert(without))
+        else:
+            raise
+
     return SearchHistory.from_row(rows[0])
 
 

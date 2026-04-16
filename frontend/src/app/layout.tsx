@@ -11,7 +11,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "MONV — Trouvez n'importe quelle entreprise en France",
   description:
-    "Décrivez ce que vous cherchez, récupérez votre liste. Clients, prestataires, fournisseurs, partenaires — trouvez toute entreprise en France.",
+    "Décrivez ce que vous cherchez, récupérez votre liste. Clients, prestataires, sous-traitants, partenaires — trouvez toute entreprise en France.",
 };
 
 export default function RootLayout({

@@ -50,6 +50,9 @@ class TokenOut(BaseModel):
 class ChatRequest(BaseModel):
     conversation_id: str | None = None
     message: str
+    # 4 modes d'usage : prospection (défaut), sous_traitant, client, rachat.
+    # Voir backend/services/modes.py. Validation tolérante côté serveur.
+    mode: str | None = None
 
 
 class MessageOut(BaseModel):
@@ -66,6 +69,7 @@ class ConversationOut(BaseModel):
     title: str
     created_at: datetime
     updated_at: datetime
+    mode: str | None = None
     messages: list[MessageOut] = []
 
 

@@ -8,6 +8,8 @@ import { Building, Phone, Globe, ExternalLink } from "lucide-react";
 
 interface Props {
   data: Record<string, any>[];
+  /** Par défaut h-[420px] sm:h-[480px] ; passer h-full quand le parent impose la hauteur. */
+  className?: string;
 }
 
 const markerIcon = new L.Icon({
@@ -34,7 +36,9 @@ function FitBounds({ positions }: { positions: [number, number][] }) {
   return null;
 }
 
-export default function ResultsMap({ data }: Props) {
+const DEFAULT_MAP_BOX = "h-[420px] sm:h-[480px]";
+
+export default function ResultsMap({ data, className }: Props) {
   const geoData = useMemo(
     () => data.filter((r) => r.latitude != null && r.longitude != null),
     [data],
@@ -47,9 +51,13 @@ export default function ResultsMap({ data }: Props) {
 
   const defaultCenter: [number, number] = [46.603354, 1.888334]; // centre France
 
+  const boxClass = className?.trim() ? className : DEFAULT_MAP_BOX;
+
   if (geoData.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+      <div
+        className={`flex min-h-0 w-full flex-col items-center justify-center px-4 text-center rounded-lg border border-white/[0.06] bg-surface-2/40 ${boxClass}`}
+      >
         <div className="w-12 h-12 rounded-xl bg-white/[0.04] flex items-center justify-center mb-3">
           <Building size={20} className="text-gray-600" />
         </div>
@@ -64,7 +72,7 @@ export default function ResultsMap({ data }: Props) {
   }
 
   return (
-    <div className="relative w-full h-[420px] sm:h-[480px] rounded-lg overflow-hidden">
+    <div className={`relative w-full rounded-lg overflow-hidden ${boxClass}`}>
       <MapContainer
         center={defaultCenter}
         zoom={6}

@@ -5,6 +5,7 @@ import ResultsTable from "./ResultsTable";
 import QcmCard from "./QcmCard";
 import { AlertCircle } from "lucide-react";
 import type { Message, QcmPayload } from "@/lib/api";
+import { MODE_META, normalizeMode, type Mode } from "@/lib/modes";
 
 interface Props {
   message: Message;
@@ -13,6 +14,8 @@ interface Props {
   onExport: (searchId: string, format: "xlsx" | "csv") => void;
   exporting: boolean;
   onQcmSubmit?: (answers: string) => void;
+  /** Mode de la conversation — affiché en badge sur les messages utilisateur. */
+  conversationMode?: Mode | null;
 }
 
 export default function ChatMessage({
@@ -22,6 +25,7 @@ export default function ChatMessage({
   onExport,
   exporting,
   onQcmSubmit,
+  conversationMode = null,
 }: Props) {
   const isUser = message.role === "user";
   const isError = message.message_type === "error";
@@ -30,6 +34,14 @@ export default function ChatMessage({
     : null;
 
   const isQcm = message.message_type === "qcm" && meta?.questions;
+
+  const messageMode: Mode | null = (() => {
+    const raw = meta?.mode ?? conversationMode;
+    if (raw == null || raw === "") return null;
+    const m = normalizeMode(raw);
+    return m === "prospection" ? null : m;
+  })();
+  const showUserBadge = isUser && messageMode != null;
 
   return (
     <div
@@ -52,6 +64,20 @@ export default function ChatMessage({
       )}
 
       <div className={`max-w-[92%] sm:max-w-[80%] ${isUser ? "order-first" : ""}`}>
+        {showUserBadge && messageMode && (
+          <div className="flex justify-end mb-1">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${MODE_META[messageMode].badgeBg} ${MODE_META[messageMode].badgeText}`}
+            >
+              {(() => {
+                const Icon = MODE_META[messageMode].icon;
+                return <Icon size={10} />;
+              })()}
+              {MODE_META[messageMode].label}
+            </span>
+          </div>
+        )}
+
         <div
           className={`rounded-2xl px-4 py-3 ${
             isUser

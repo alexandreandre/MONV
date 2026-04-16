@@ -19,6 +19,7 @@ import {
   CircleDollarSign,
   AlertTriangle,
   Filter,
+  List,
 } from "lucide-react";
 
 const ResultsMap = dynamic(() => import("./ResultsMap"), { ssr: false });
@@ -139,7 +140,11 @@ function SignalBadges({ signals }: { signals: Signal[] }) {
 
 const PRIMARY_COLS = new Set(["nom", "ville", "libelle_activite", "effectif_label", "chiffre_affaires"]);
 
-const ROWS_PER_PAGE = 5;
+/** Aligné sur l’aperçu API (10 lignes) : une seule page dans le fil de discussion. */
+const ROWS_PER_PAGE = 10;
+
+/** Même hauteur que la carte : évite un saut de scroll du fil au basculement tableau/carte. */
+const RESULTS_BODY_H = "h-[420px] sm:h-[480px]";
 
 function formatValue(col: string, val: any) {
   if (val === null || val === undefined || val === "") return "—";
@@ -343,6 +348,30 @@ export default function ResultsTable({
 
   const hasGeoData = mapPoints.length > 0;
 
+  const filteredMapPoints = useMemo(() => {
+    let pts = mapPoints;
+    if (filterText.trim()) {
+      const q = filterText.toLowerCase();
+      pts = pts.filter((r) => {
+        const fields = [
+          r.nom,
+          r.ville,
+          r.adresse,
+          r.code_postal,
+          r.libelle_activite,
+          r.telephone,
+        ];
+        return fields.some((v) => v != null && String(v).toLowerCase().includes(q));
+      });
+    }
+    if (signalFilter) {
+      pts = pts.filter((r) =>
+        (r.signaux || []).some((s: Signal) => s.type === signalFilter)
+      );
+    }
+    return pts;
+  }, [mapPoints, signalFilter, filterText]);
+
   const visibleCols = columns.filter(
     (c) => c !== "lien_annuaire" && c !== "google_maps_url"
   );
@@ -503,15 +532,21 @@ export default function ResultsTable({
         <div className="flex items-center gap-2 w-full sm:w-auto">
           {hasGeoData && (
             <button
+              type="button"
               onClick={() => setViewMode(viewMode === "map" ? "table" : "map")}
-              className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors min-h-[44px] ${
-                viewMode === "map"
-                  ? "bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800"
-                  : "bg-white/[0.06] text-gray-300 hover:bg-white/[0.1] active:bg-white/[0.15]"
-              }`}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/[0.1] active:bg-white/[0.15] transition-colors min-h-[44px]"
             >
-              <MapPin size={13} />
-              Carte
+              {viewMode === "map" ? (
+                <>
+                  <List size={13} />
+                  Tableau
+                </>
+              ) : (
+                <>
+                  <MapPin size={13} />
+                  Carte
+                </>
+              )}
             </button>
           )}
           <button
@@ -537,19 +572,22 @@ export default function ResultsTable({
   return (
     <div className="mt-3 rounded-xl border border-white/[0.06] bg-surface-1 overflow-hidden animate-fade-in">
       {signalChips}
-      {viewMode === "table" && filterBar}
+      {filterBar}
 
-      {viewMode === "map" ? (
-        <div className="p-3">
-          <ResultsMap data={mapPoints} />
-        </div>
-      ) : (
-        <>
-          {/* Desktop: table */}
-          <div className="hidden sm:block overflow-x-auto scrollbar-thin">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-white/[0.03]">
+      <div className="px-3 pt-3 pb-3">
+        <div
+          className={`${RESULTS_BODY_H} flex min-h-0 flex-col overflow-hidden rounded-lg border border-white/[0.04]`}
+        >
+          {viewMode === "map" ? (
+            <ResultsMap data={filteredMapPoints} className="min-h-0 w-full flex-1" />
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {/* Desktop: table */}
+              <div className="hidden min-h-0 flex-1 flex-col overflow-hidden sm:flex">
+                <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto scrollbar-thin">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 z-[1] bg-surface-1 shadow-[0_1px_0_0_rgba(255,255,255,0.04)]">
+                      <tr className="bg-white/[0.03]">
                   {visibleCols.map((col) => (
                     <th
                       key={col}
@@ -660,26 +698,29 @@ export default function ResultsTable({
                 )}
               </tbody>
             </table>
-          </div>
-
-          {/* Mobile: cards */}
-          <div className="sm:hidden">
-            {pageData.length === 0 ? (
-              <p className="px-4 py-6 text-center text-gray-600 text-sm">
-                Aucun résultat ne correspond au filtre.
-              </p>
-            ) : (
-              <div className="p-3 space-y-2">
-                {pageData.map((row, i) => (
-                  <MobileCard key={i} row={row} visibleCols={visibleCols} />
-                ))}
+                </div>
               </div>
-            )}
-          </div>
 
-          {pagination}
-        </>
-      )}
+              {/* Mobile: cards */}
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:hidden">
+                {pageData.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-gray-600 text-sm">
+                    Aucun résultat ne correspond au filtre.
+                  </p>
+                ) : (
+                  <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-2 pt-3">
+                    {pageData.map((row, i) => (
+                      <MobileCard key={i} row={row} visibleCols={visibleCols} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {pagination}
+            </div>
+          )}
+        </div>
+      </div>
       {exportBar}
     </div>
   );

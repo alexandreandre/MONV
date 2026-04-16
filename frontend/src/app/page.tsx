@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useCallback,
 } from "react";
@@ -19,11 +20,18 @@ import {
   type ExportResponse,
 } from "@/lib/api";
 import { LANDING_TEMPLATES } from "@/lib/landingTemplates";
+import {
+  DEFAULT_MODE,
+  MODE_META,
+  normalizeMode,
+  type Mode,
+} from "@/lib/modes";
 import AuthModal from "@/components/AuthModal";
 import Sidebar from "@/components/Sidebar";
 import ChatInput from "@/components/ChatInput";
 import ChatMessage from "@/components/ChatMessage";
 import TemplateCards from "@/components/TemplateCards";
+import ModeSelector from "@/components/ModeSelector";
 import Dashboard from "@/components/Dashboard";
 import CreditsPage from "@/components/CreditsPage";
 import ToastContainer, { type ToastData } from "@/components/Toast";
@@ -64,7 +72,15 @@ export default function Home() {
   const [conversationsLoading, setConversationsLoading] = useState(false);
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const templates = LANDING_TEMPLATES;
+  /** Mode pour les NOUVELLES recherches (landing). Une conversation existante
+   *  garde le mode avec lequel elle a été créée — déduit côté serveur. */
+  const [selectedMode, setSelectedMode] = useState<Mode>(DEFAULT_MODE);
+  /** Mode de la conversation actuellement chargée (utilisé pour le badge des messages). */
+  const [activeConversationMode, setActiveConversationMode] = useState<Mode | null>(null);
+  const templates = useMemo(
+    () => LANDING_TEMPLATES.filter((t) => normalizeMode(t.mode) === selectedMode),
+    [selectedMode]
+  );
 
   const [sending, setSending] = useState(false);
   const [pipelineStep, setPipelineStep] = useState<PipelineStep>("filtering");
@@ -174,6 +190,7 @@ export default function Home() {
   const handleNewChat = () => {
     setCurrentConvId(null);
     setMessages([]);
+    setActiveConversationMode(null);
     setPage("chat");
   };
 
@@ -185,6 +202,11 @@ export default function Home() {
         `/chat/conversations/${id}`
       );
       setMessages(conv.messages);
+      setActiveConversationMode(
+        conv.mode != null && String(conv.mode).trim() !== ""
+          ? normalizeMode(conv.mode)
+          : null
+      );
     } catch {
       addToast("error", "Impossible de charger la conversation.");
     }
@@ -218,14 +240,18 @@ export default function Home() {
       setSending(true);
       const cleanupProgress = simulatePipelineProgress();
 
+      const modeForRequest: Mode = activeConversationMode ?? selectedMode;
+
       try {
         const res = await apiPost<ChatResponse>("/chat/send", {
           conversation_id: currentConvId,
           message: text,
+          mode: modeForRequest,
         });
 
         if (!currentConvId) {
           setCurrentConvId(res.conversation_id);
+          setActiveConversationMode(modeForRequest);
         }
 
         setMessages((prev) => {
@@ -259,7 +285,16 @@ export default function Home() {
       cleanupProgress();
       setSending(false);
     },
-    [user, sessionHint, currentConvId, loadConversations, addToast, openAuth]
+    [
+      user,
+      sessionHint,
+      currentConvId,
+      loadConversations,
+      addToast,
+      openAuth,
+      selectedMode,
+      activeConversationMode,
+    ]
   );
 
   const handleQcmSubmit = useCallback(
@@ -268,14 +303,18 @@ export default function Home() {
       setSending(true);
       const cleanupProgress = simulatePipelineProgress();
 
+      const modeForRequest: Mode = activeConversationMode ?? selectedMode;
+
       try {
         const res = await apiPost<ChatResponse>("/chat/send", {
           conversation_id: currentConvId,
           message: text,
+          mode: modeForRequest,
         });
 
         if (!currentConvId) {
           setCurrentConvId(res.conversation_id);
+          setActiveConversationMode(modeForRequest);
         }
 
         setMessages((prev) => [...prev, ...res.messages]);
@@ -301,7 +340,14 @@ export default function Home() {
       cleanupProgress();
       setSending(false);
     },
-    [user, currentConvId, loadConversations, addToast]
+    [
+      user,
+      currentConvId,
+      loadConversations,
+      addToast,
+      selectedMode,
+      activeConversationMode,
+    ]
   );
 
   const handleExport = async (searchId: string, format: "xlsx" | "csv") => {
@@ -339,7 +385,7 @@ export default function Home() {
 
   const CAPABILITIES = [
     "Clients & prospects",
-    "Prestataires & fournisseurs",
+    "Prestataires & sous-traitants",
     "Étude de marché",
     "Données INSEE & RCS",
   ];
@@ -479,22 +525,39 @@ export default function Home() {
               </div>
 
               {(user || sessionHint) && (
+                <div className="w-full max-w-2xl mb-4">
+                  <ModeSelector
+                    value={selectedMode}
+                    onChange={setSelectedMode}
+                    disabled={sending || !user}
+                  />
+                </div>
+              )}
+
+              {(user || sessionHint) && (
                 <div className="w-full max-w-2xl mb-8">
                   <ChatInput
                     onSend={handleSend}
                     disabled={sending || !user}
+                    placeholder={MODE_META[selectedMode].placeholder}
                   />
                 </div>
               )}
 
               <div className="w-full max-w-3xl">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider text-center mb-3">
-                  Exemples de recherches
+                  Exemples — mode {MODE_META[selectedMode].label}
                 </p>
-                <TemplateCards
-                  templates={templates}
-                  onSelect={handleTemplateSelect}
-                />
+                {templates.length > 0 ? (
+                  <TemplateCards
+                    templates={templates}
+                    onSelect={handleTemplateSelect}
+                  />
+                ) : (
+                  <p className="text-center text-xs text-gray-600 py-6 border border-dashed border-white/[0.06] rounded-lg">
+                    Aucun exemple pour ce mode — décris ta recherche directement.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -511,6 +574,7 @@ export default function Home() {
                     onExport={handleExport}
                     exporting={exporting}
                     onQcmSubmit={handleQcmSubmit}
+                    conversationMode={activeConversationMode}
                   />
                 ))}
 
@@ -522,9 +586,22 @@ export default function Home() {
 
             <div className="border-t border-gray-800/60 px-4 py-3 bg-surface-0">
               <div className="max-w-3xl mx-auto">
-                <ChatInput onSend={handleSend} disabled={sending} />
+                <ChatInput
+                  onSend={handleSend}
+                  disabled={sending}
+                  placeholder={
+                    MODE_META[activeConversationMode ?? selectedMode].placeholder
+                  }
+                />
                 <p className="text-center text-[11px] text-gray-600 mt-2">
-                  Données publiques INSEE & RCS — résultats indicatifs
+                  {activeConversationMode && activeConversationMode !== "prospection" ? (
+                    <>
+                      Mode <span className="text-gray-400">{MODE_META[activeConversationMode].label}</span>
+                      {" "}— données publiques INSEE & RCS, résultats indicatifs
+                    </>
+                  ) : (
+                    "Données publiques INSEE & RCS — résultats indicatifs"
+                  )}
                 </p>
               </div>
             </div>
