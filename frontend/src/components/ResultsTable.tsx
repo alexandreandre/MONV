@@ -19,8 +19,6 @@ import {
   CircleDollarSign,
   AlertTriangle,
   Filter,
-  Map as MapIcon,
-  List,
 } from "lucide-react";
 
 const ResultsMap = dynamic(() => import("./ResultsMap"), { ssr: false });
@@ -503,6 +501,19 @@ export default function ResultsTable({
           <span className="text-white font-medium tabular-nums">{total}</span> résultats
         </p>
         <div className="flex items-center gap-2 w-full sm:w-auto">
+          {hasGeoData && (
+            <button
+              onClick={() => setViewMode(viewMode === "map" ? "table" : "map")}
+              className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors min-h-[44px] ${
+                viewMode === "map"
+                  ? "bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800"
+                  : "bg-white/[0.06] text-gray-300 hover:bg-white/[0.1] active:bg-white/[0.15]"
+              }`}
+            >
+              <MapPin size={13} />
+              Carte
+            </button>
+          )}
           <button
             onClick={() => onExport(searchId, "xlsx")}
             disabled={exporting || !canExport}
@@ -523,38 +534,8 @@ export default function ResultsTable({
     </div>
   );
 
-  const viewToggle = hasGeoData && (
-    <div className="px-3 pt-3 pb-1 flex items-center justify-between">
-      <div className="flex items-center bg-white/[0.04] rounded-lg p-0.5">
-        <button
-          onClick={() => setViewMode("table")}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-            viewMode === "table"
-              ? "bg-white/[0.1] text-white shadow-sm"
-              : "text-gray-500 hover:text-gray-300"
-          }`}
-        >
-          <List size={13} />
-          Tableau
-        </button>
-        <button
-          onClick={() => setViewMode("map")}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-            viewMode === "map"
-              ? "bg-white/[0.1] text-white shadow-sm"
-              : "text-gray-500 hover:text-gray-300"
-          }`}
-        >
-          <MapIcon size={13} />
-          Carte
-        </button>
-      </div>
-    </div>
-  );
-
   return (
     <div className="mt-3 rounded-xl border border-white/[0.06] bg-surface-1 overflow-hidden animate-fade-in">
-      {viewToggle}
       {signalChips}
       {viewMode === "table" && filterBar}
 
