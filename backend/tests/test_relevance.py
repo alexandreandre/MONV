@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, patch
 os.environ.setdefault("SKIP_DB_VERIFY_ON_STARTUP", "true")
 os.environ.setdefault("SUPABASE_URL", "https://placeholder.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_KEY", "placeholder-service-key")
-os.environ.setdefault("OPENROUTER_API_KEY", "test-key-for-relevance")
 
 from config import settings  # noqa: E402
 from models.schemas import CompanyResult, GuardEntity, GuardResult  # noqa: E402
@@ -36,7 +35,7 @@ def test_row_for_relevance_check_shape():
     d = row_for_relevance_check(7, r)
     assert d["id"] == 7
     assert d["nom"] == "Club Test"
-    assert "libelle_activite" in d
+    assert d.get("activite") == "Enseignement de disciplines sportives"
 
 
 def test_filter_keeps_rows_per_llm_decisions():
@@ -49,14 +48,15 @@ def test_filter_keeps_rows_per_llm_decisions():
     async def fake_llm_json_call(model, system, messages, max_tokens=2048, temperature=0.0):
         payload = (messages[0].get("content") or "") if messages else ""
         if "Yoga Zen" in payload:
+            # Seuil niche 6 : une ligne < 6 est exclue.
             return {
-                "decisions": [
-                    {"id": 0, "keep": True},
-                    {"id": 1, "keep": False},
-                    {"id": 2, "keep": True},
+                "scores": [
+                    {"id": 0, "s": 8},
+                    {"id": 1, "s": 3},
+                    {"id": 2, "s": 7},
                 ]
             }
-        return {"decisions": []}
+        return {"scores": []}
 
     async def run():
         with patch.object(relevance_mod, "llm_json_call", new_callable=AsyncMock, side_effect=fake_llm_json_call):
@@ -100,10 +100,11 @@ def test_filter_fallback_when_all_rejected():
     ]
 
     async def fake_llm_json_call(*args, **kwargs):
+        # Seuil niche 6 : tout en dessous → liste vide puis repli sur brut.
         return {
-            "decisions": [
-                {"id": 0, "keep": False},
-                {"id": 1, "keep": False},
+            "scores": [
+                {"id": 0, "s": 2},
+                {"id": 1, "s": 1},
             ]
         }
 
