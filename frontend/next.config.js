@@ -7,6 +7,11 @@ const backendBase =
 
 const nextConfig = {
   output: "standalone",
+  // Rewrites passent par un proxy http avec timeout par défaut de 30s ; les recherches
+  // chat (SIRENE / Google Places) peuvent dépasser ce délai → ECONNRESET et 500 côté Next.
+  experimental: {
+    proxyTimeout: 300_000, // 5 min (ms)
+  },
   async rewrites() {
     return [
       {
