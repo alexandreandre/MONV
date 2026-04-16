@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import dynamic from "next/dynamic";
 import {
   Download,
   ExternalLink,
@@ -18,7 +19,11 @@ import {
   CircleDollarSign,
   AlertTriangle,
   Filter,
+  Map as MapIcon,
+  List,
 } from "lucide-react";
+
+const ResultsMap = dynamic(() => import("./ResultsMap"), { ssr: false });
 
 interface Signal {
   type: string;
@@ -37,6 +42,7 @@ interface Props {
   creditsUnlimited?: boolean;
   onExport: (searchId: string, format: "xlsx" | "csv") => void;
   exporting: boolean;
+  mapPoints?: Record<string, any>[];
 }
 
 const COL_LABELS: Record<string, string> = {
@@ -327,6 +333,7 @@ export default function ResultsTable({
   creditsUnlimited = false,
   onExport,
   exporting,
+  mapPoints = [],
 }: Props) {
   const canExport = creditsUnlimited || userCredits >= creditsRequired;
   const [sortCol, setSortCol] = useState<string | null>(null);
@@ -334,6 +341,9 @@ export default function ResultsTable({
   const [filterText, setFilterText] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
   const [signalFilter, setSignalFilter] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"table" | "map">("table");
+
+  const hasGeoData = mapPoints.length > 0;
 
   const visibleCols = columns.filter(
     (c) => c !== "lien_annuaire" && c !== "google_maps_url"
@@ -513,144 +523,182 @@ export default function ResultsTable({
     </div>
   );
 
+  const viewToggle = hasGeoData && (
+    <div className="px-3 pt-3 pb-1 flex items-center justify-between">
+      <div className="flex items-center bg-white/[0.04] rounded-lg p-0.5">
+        <button
+          onClick={() => setViewMode("table")}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+            viewMode === "table"
+              ? "bg-white/[0.1] text-white shadow-sm"
+              : "text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          <List size={13} />
+          Tableau
+        </button>
+        <button
+          onClick={() => setViewMode("map")}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+            viewMode === "map"
+              ? "bg-white/[0.1] text-white shadow-sm"
+              : "text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          <MapIcon size={13} />
+          Carte
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="mt-3 rounded-xl border border-white/[0.06] bg-surface-1 overflow-hidden animate-fade-in">
+      {viewToggle}
       {signalChips}
-      {filterBar}
+      {viewMode === "table" && filterBar}
 
-      {/* Desktop: table */}
-      <div className="hidden sm:block overflow-x-auto scrollbar-thin">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-white/[0.03]">
-              {visibleCols.map((col) => (
-                <th
-                  key={col}
-                  onClick={() => toggleSort(col)}
-                  className="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-300 whitespace-nowrap select-none"
-                >
-                  <span className="inline-flex items-center gap-1">
-                    {COL_LABELS[col] || col}
-                    {sortCol === col &&
-                      (sortAsc ? (
-                        <ChevronUp size={11} />
-                      ) : (
-                        <ChevronDown size={11} />
-                      ))}
-                  </span>
-                </th>
-              ))}
-              <th className="px-3 py-2 text-[11px] font-medium text-gray-500 uppercase tracking-wider">
-                Liens
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/[0.04]">
-            {pageData.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={visibleCols.length + 1}
-                  className="px-3 py-6 text-center text-gray-600 text-sm"
-                >
-                  Aucun résultat ne correspond au filtre.
-                </td>
-              </tr>
-            ) : (
-              pageData.map((row, i) => (
-                <tr
-                  key={i}
-                  className="hover:bg-white/[0.02] transition-colors"
-                >
+      {viewMode === "map" ? (
+        <div className="p-3">
+          <ResultsMap data={mapPoints} />
+        </div>
+      ) : (
+        <>
+          {/* Desktop: table */}
+          <div className="hidden sm:block overflow-x-auto scrollbar-thin">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-white/[0.03]">
                   {visibleCols.map((col) => (
-                    <td
+                    <th
                       key={col}
-                      className={`px-3 py-2 text-gray-400 ${
-                        col === "signaux" ? "whitespace-normal" : "whitespace-nowrap max-w-[220px] truncate"
-                      } ${col === "nom" ? "font-medium text-white" : ""}`}
-                      title={col !== "signaux" ? formatValue(col, row[col]) : undefined}
+                      onClick={() => toggleSort(col)}
+                      className="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-300 whitespace-nowrap select-none"
                     >
-                      {col === "signaux" ? (
-                        <SignalBadges signals={row.signaux || []} />
-                      ) : col === "variation_ca_pct" && row[col] != null ? (
-                        <span className={Number(row[col]) >= 0 ? "text-emerald-400" : "text-amber-400"}>
-                          {formatValue(col, row[col])}
-                        </span>
-                      ) : col === "site_web" && row[col] ? (
-                        <a
-                          href={
-                            String(row[col]).startsWith("http")
-                              ? row[col]
-                              : `https://${row[col]}`
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-400 hover:text-blue-300 truncate"
-                        >
-                          {String(row[col])
-                            .replace(/^https?:\/\//, "")
-                            .replace(/\/$/, "")}
-                        </a>
-                      ) : col === "telephone" && row[col] ? (
-                        <a
-                          href={`tel:${row[col]}`}
-                          className="text-gray-400 hover:text-white"
-                        >
-                          {row[col]}
-                        </a>
-                      ) : (
-                        formatValue(col, row[col])
-                      )}
-                    </td>
+                      <span className="inline-flex items-center gap-1">
+                        {COL_LABELS[col] || col}
+                        {sortCol === col &&
+                          (sortAsc ? (
+                            <ChevronUp size={11} />
+                          ) : (
+                            <ChevronDown size={11} />
+                          ))}
+                      </span>
+                    </th>
                   ))}
-                  <td className="px-3 py-2">
-                    <span className="inline-flex items-center gap-1.5">
-                      {row.lien_annuaire && (
-                        <a
-                          href={row.lien_annuaire}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-gray-500 hover:text-white transition-colors"
-                          title="Fiche annuaire"
-                        >
-                          <ExternalLink size={13} />
-                        </a>
-                      )}
-                      {row.google_maps_url && (
-                        <a
-                          href={row.google_maps_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-gray-500 hover:text-blue-400 transition-colors"
-                          title="Voir sur Google Maps"
-                        >
-                          <MapPin size={13} />
-                        </a>
-                      )}
-                    </span>
-                  </td>
+                  <th className="px-3 py-2 text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+                    Liens
+                  </th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile: cards */}
-      <div className="sm:hidden">
-        {pageData.length === 0 ? (
-          <p className="px-4 py-6 text-center text-gray-600 text-sm">
-            Aucun résultat ne correspond au filtre.
-          </p>
-        ) : (
-          <div className="p-3 space-y-2">
-            {pageData.map((row, i) => (
-              <MobileCard key={i} row={row} visibleCols={visibleCols} />
-            ))}
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {pageData.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={visibleCols.length + 1}
+                      className="px-3 py-6 text-center text-gray-600 text-sm"
+                    >
+                      Aucun résultat ne correspond au filtre.
+                    </td>
+                  </tr>
+                ) : (
+                  pageData.map((row, i) => (
+                    <tr
+                      key={i}
+                      className="hover:bg-white/[0.02] transition-colors"
+                    >
+                      {visibleCols.map((col) => (
+                        <td
+                          key={col}
+                          className={`px-3 py-2 text-gray-400 ${
+                            col === "signaux" ? "whitespace-normal" : "whitespace-nowrap max-w-[220px] truncate"
+                          } ${col === "nom" ? "font-medium text-white" : ""}`}
+                          title={col !== "signaux" ? formatValue(col, row[col]) : undefined}
+                        >
+                          {col === "signaux" ? (
+                            <SignalBadges signals={row.signaux || []} />
+                          ) : col === "variation_ca_pct" && row[col] != null ? (
+                            <span className={Number(row[col]) >= 0 ? "text-emerald-400" : "text-amber-400"}>
+                              {formatValue(col, row[col])}
+                            </span>
+                          ) : col === "site_web" && row[col] ? (
+                            <a
+                              href={
+                                String(row[col]).startsWith("http")
+                                  ? row[col]
+                                  : `https://${row[col]}`
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-400 hover:text-blue-300 truncate"
+                            >
+                              {String(row[col])
+                                .replace(/^https?:\/\//, "")
+                                .replace(/\/$/, "")}
+                            </a>
+                          ) : col === "telephone" && row[col] ? (
+                            <a
+                              href={`tel:${row[col]}`}
+                              className="text-gray-400 hover:text-white"
+                            >
+                              {row[col]}
+                            </a>
+                          ) : (
+                            formatValue(col, row[col])
+                          )}
+                        </td>
+                      ))}
+                      <td className="px-3 py-2">
+                        <span className="inline-flex items-center gap-1.5">
+                          {row.lien_annuaire && (
+                            <a
+                              href={row.lien_annuaire}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gray-500 hover:text-white transition-colors"
+                              title="Fiche annuaire"
+                            >
+                              <ExternalLink size={13} />
+                            </a>
+                          )}
+                          {row.google_maps_url && (
+                            <a
+                              href={row.google_maps_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gray-500 hover:text-blue-400 transition-colors"
+                              title="Voir sur Google Maps"
+                            >
+                              <MapPin size={13} />
+                            </a>
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
 
-      {pagination}
+          {/* Mobile: cards */}
+          <div className="sm:hidden">
+            {pageData.length === 0 ? (
+              <p className="px-4 py-6 text-center text-gray-600 text-sm">
+                Aucun résultat ne correspond au filtre.
+              </p>
+            ) : (
+              <div className="p-3 space-y-2">
+                {pageData.map((row, i) => (
+                  <MobileCard key={i} row={row} visibleCols={visibleCols} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {pagination}
+        </>
+      )}
       {exportBar}
     </div>
   );

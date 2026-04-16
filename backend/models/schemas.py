@@ -185,6 +185,8 @@ class CompanyResult(BaseModel):
     site_web: str | None = None
     lien_annuaire: str | None = None
     google_maps_url: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     signaux: list[BusinessSignal] = []
 
 

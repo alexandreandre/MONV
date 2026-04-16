@@ -326,6 +326,23 @@ async def send_message(
             f"**Exporter tout = {credits_needed} crédits** (tu en as {solde})."
         )
 
+    map_points = [
+        {
+            "nom": r.nom,
+            "latitude": r.latitude,
+            "longitude": r.longitude,
+            "adresse": r.adresse,
+            "code_postal": r.code_postal,
+            "ville": r.ville,
+            "libelle_activite": r.libelle_activite,
+            "telephone": r.telephone,
+            "site_web": r.site_web,
+            "lien_annuaire": r.lien_annuaire,
+        }
+        for r in search_results.results
+        if r.latitude is not None and r.longitude is not None
+    ]
+
     result_msg = Message(
         id=gen_uuid(),
         conversation_id=conv.id,
@@ -338,6 +355,7 @@ async def send_message(
             "credits_required": credits_needed,
             "columns": search_results.columns,
             "preview": [r.model_dump() for r in search_results.results[:10]],
+            "map_points": map_points,
         }, ensure_ascii=False, default=str),
         created_at=datetime.now(timezone.utc),
     )

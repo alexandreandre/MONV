@@ -138,6 +138,10 @@ def _parse_place(place: dict) -> CompanyResult | None:
     # Type principal lisible (ex. "Magasin d'articles de sport")
     primary_type_label = (place.get("primaryTypeDisplayName") or {}).get("text")
 
+    loc = place.get("location") or {}
+    lat = loc.get("latitude")
+    lng = loc.get("longitude")
+
     return CompanyResult(
         siren="",
         nom=name,
@@ -150,6 +154,8 @@ def _parse_place(place: dict) -> CompanyResult | None:
         site_web=website,
         google_maps_url=maps_url,
         lien_annuaire=maps_url,
+        latitude=lat,
+        longitude=lng,
     )
 
 

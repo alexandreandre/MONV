@@ -10,6 +10,7 @@ from services.pappers import search_pappers, get_company_dirigeants, get_company
 from services.google_places import search_google_places
 from services.orchestrator import extend_columns_for_plan
 from services.signals import detect_signals
+from services.geocoding import geocode_results
 from utils.pipeline_log import plog
 
 MAX_TOTAL_RESULTS = settings.MAX_RESULTS_PER_QUERY * 4
@@ -251,6 +252,8 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
          total_with_signals=sum(1 for r in all_results if r.signaux),
          total_results=len(all_results))
 
+    await geocode_results(all_results)
+
     return SearchResults(
         total=len(all_results),
         results=all_results,
@@ -315,6 +318,10 @@ def _merge_fields(existing: CompanyResult, new: CompanyResult) -> None:
         existing.telephone = new.telephone
     if new.google_maps_url and not existing.google_maps_url:
         existing.google_maps_url = new.google_maps_url
+    if new.latitude is not None and existing.latitude is None:
+        existing.latitude = new.latitude
+    if new.longitude is not None and existing.longitude is None:
+        existing.longitude = new.longitude
     if new.tranche_effectif and not existing.tranche_effectif:
         existing.tranche_effectif = new.tranche_effectif
         existing.effectif_label = new.effectif_label

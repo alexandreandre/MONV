@@ -84,6 +84,7 @@ export default function ChatMessage({
             creditsUnlimited={creditsUnlimited}
             onExport={onExport}
             exporting={exporting}
+            mapPoints={meta.map_points || []}
           />
         )}
       </div>
