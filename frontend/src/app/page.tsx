@@ -41,6 +41,15 @@ import { ArrowRight } from "lucide-react";
 
 type Page = "chat" | "dashboard" | "credits";
 
+function isAbortError(e: unknown): boolean {
+  return (
+    (typeof DOMException !== "undefined" &&
+      e instanceof DOMException &&
+      e.name === "AbortError") ||
+    (e instanceof Error && e.name === "AbortError")
+  );
+}
+
 /** Premier mot du nom affiché comme prénom (donnée actuelle côté API : un seul champ `name`). */
 function displayFirstName(fullName: string): string | null {
   const w = fullName.trim().split(/\s+/)[0];
@@ -87,6 +96,7 @@ export default function Home() {
   const [exporting, setExporting] = useState(false);
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const sendAbortRef = useRef<AbortController | null>(null);
 
   const addToast = useCallback(
     (type: ToastData["type"], message: string, duration?: number) => {
@@ -220,6 +230,10 @@ export default function Home() {
     return () => timers.forEach(clearTimeout);
   };
 
+  const handleStopSend = useCallback(() => {
+    sendAbortRef.current?.abort();
+  }, []);
+
   const handleSend = useCallback(
     async (text: string) => {
       if (!user) {
@@ -240,14 +254,24 @@ export default function Home() {
       setSending(true);
       const cleanupProgress = simulatePipelineProgress();
 
+      sendAbortRef.current?.abort();
+      const controller = new AbortController();
+      sendAbortRef.current = controller;
+
       const modeForRequest: Mode = activeConversationMode ?? selectedMode;
 
       try {
-        const res = await apiPost<ChatResponse>("/chat/send", {
-          conversation_id: currentConvId,
-          message: text,
-          mode: modeForRequest,
-        });
+        const res = await apiPost<ChatResponse>(
+          "/chat/send",
+          {
+            conversation_id: currentConvId,
+            message: text,
+            mode: modeForRequest,
+          },
+          { signal: controller.signal }
+        );
+
+        if (controller.signal.aborted) return;
 
         if (!currentConvId) {
           setCurrentConvId(res.conversation_id);
@@ -270,6 +294,11 @@ export default function Home() {
 
         await loadConversations();
       } catch (err: any) {
+        if (isAbortError(err)) {
+          setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+          addToast("info", "Requête annulée.");
+          return;
+        }
         const errorMsg: Message = {
           id: "err-" + Date.now(),
           role: "assistant",
@@ -280,10 +309,13 @@ export default function Home() {
         };
         setMessages((prev) => [...prev, errorMsg]);
         addToast("error", err.message || "Erreur de communication avec le serveur.");
+      } finally {
+        if (sendAbortRef.current === controller) {
+          sendAbortRef.current = null;
+        }
+        cleanupProgress();
+        setSending(false);
       }
-
-      cleanupProgress();
-      setSending(false);
     },
     [
       user,
@@ -303,14 +335,24 @@ export default function Home() {
       setSending(true);
       const cleanupProgress = simulatePipelineProgress();
 
+      sendAbortRef.current?.abort();
+      const controller = new AbortController();
+      sendAbortRef.current = controller;
+
       const modeForRequest: Mode = activeConversationMode ?? selectedMode;
 
       try {
-        const res = await apiPost<ChatResponse>("/chat/send", {
-          conversation_id: currentConvId,
-          message: text,
-          mode: modeForRequest,
-        });
+        const res = await apiPost<ChatResponse>(
+          "/chat/send",
+          {
+            conversation_id: currentConvId,
+            message: text,
+            mode: modeForRequest,
+          },
+          { signal: controller.signal }
+        );
+
+        if (controller.signal.aborted) return;
 
         if (!currentConvId) {
           setCurrentConvId(res.conversation_id);
@@ -325,6 +367,10 @@ export default function Home() {
         setUser(updatedUser);
         await loadConversations();
       } catch (err: any) {
+        if (isAbortError(err)) {
+          addToast("info", "Requête annulée.");
+          return;
+        }
         const errorMsg: Message = {
           id: "err-" + Date.now(),
           role: "assistant",
@@ -335,10 +381,13 @@ export default function Home() {
         };
         setMessages((prev) => [...prev, errorMsg]);
         addToast("error", err.message || "Erreur de communication avec le serveur.");
+      } finally {
+        if (sendAbortRef.current === controller) {
+          sendAbortRef.current = null;
+        }
+        cleanupProgress();
+        setSending(false);
       }
-
-      cleanupProgress();
-      setSending(false);
     },
     [
       user,
@@ -539,6 +588,8 @@ export default function Home() {
                   <ChatInput
                     onSend={handleSend}
                     disabled={sending || !user}
+                    loading={sending}
+                    onStop={handleStopSend}
                     placeholder={MODE_META[selectedMode].placeholder}
                   />
                 </div>
@@ -589,6 +640,8 @@ export default function Home() {
                 <ChatInput
                   onSend={handleSend}
                   disabled={sending}
+                  loading={sending}
+                  onStop={handleStopSend}
                   placeholder={
                     MODE_META[activeConversationMode ?? selectedMode].placeholder
                   }

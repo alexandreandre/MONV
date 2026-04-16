@@ -12,11 +12,20 @@ function getHeaders(): HeadersInit {
   return headers;
 }
 
-export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+export type ApiFetchOptions = {
+  signal?: AbortSignal;
+};
+
+export async function apiPost<T>(
+  path: string,
+  body: unknown,
+  options?: ApiFetchOptions
+): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify(body),
+    signal: options?.signal,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Erreur serveur" }));

@@ -1,17 +1,22 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ArrowUp, Loader2 } from "lucide-react";
+import { ArrowUp, Loader2, Square } from "lucide-react";
 
 interface Props {
   onSend: (message: string) => void;
   disabled: boolean;
+  /** Requête en cours : affiche le bouton d’arrêt au lieu de l’envoi. */
+  loading?: boolean;
+  onStop?: () => void;
   placeholder?: string;
 }
 
 export default function ChatInput({
   onSend,
   disabled,
+  loading = false,
+  onStop,
   placeholder = "Décrivez l'entreprise que vous cherchez...",
 }: Props) {
   const [value, setValue] = useState("");
@@ -27,7 +32,7 @@ export default function ChatInput({
 
   const handleSubmit = () => {
     const trimmed = value.trim();
-    if (!trimmed || disabled) return;
+    if (!trimmed || disabled || loading) return;
     onSend(trimmed);
     setValue("");
   };
@@ -53,21 +58,33 @@ export default function ChatInput({
         rows={1}
         className="flex-1 resize-none bg-transparent text-white placeholder-gray-600 outline-none px-2 py-1.5 text-sm leading-relaxed max-h-[200px]"
       />
-      <button
-        onClick={handleSubmit}
-        disabled={disabled || !hasContent}
-        className={`flex-shrink-0 p-2 rounded-lg transition-all ${
-          hasContent && !disabled
-            ? "bg-white text-gray-950 hover:bg-gray-200"
-            : "bg-white/[0.06] text-gray-600 cursor-not-allowed"
-        }`}
-      >
-        {disabled ? (
-          <Loader2 size={16} className="animate-spin" />
-        ) : (
-          <ArrowUp size={16} />
-        )}
-      </button>
+      {loading ? (
+        <button
+          type="button"
+          onClick={() => onStop?.()}
+          title="Arrêter la requête"
+          className="flex-shrink-0 p-2 rounded-lg transition-all bg-white/[0.12] text-white border border-white/[0.14] hover:bg-white/[0.18]"
+        >
+          <Square size={16} fill="currentColor" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={disabled || !hasContent}
+          className={`flex-shrink-0 p-2 rounded-lg transition-all ${
+            hasContent && !disabled
+              ? "bg-white text-gray-950 hover:bg-gray-200"
+              : "bg-white/[0.06] text-gray-600 cursor-not-allowed"
+          }`}
+        >
+          {disabled ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <ArrowUp size={16} />
+          )}
+        </button>
+      )}
     </div>
   );
 }
