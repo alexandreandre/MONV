@@ -1,84 +1,74 @@
 ---
 name: frontend-design
 description: >-
-  Améliore l’UI/UX du frontend à partir d’une description en langage naturel
-  tout en évitant le rendu générique « fait par IA ». Couvre typographie,
-  couleurs, espacements, états interactifs, responsive, accessibilité et
-  cohérence avec le design system existant. À utiliser lorsque l’utilisateur
-  demande de polir le design, de rendre une page plus professionnelle,
-  d’éviter l’esthétique cliché IA, ou attache explicitement ce skill.
+  Pousse l’UI comme en atelier : intention claire, détails qui tiennent la route,
+  zéro esthétique « sortie LLM ». S’appuie sur le thème et le code existants ;
+  typographie, rythme, états, responsive, a11y. À utiliser pour peaufiner un
+  écran, un flux, ou quand l’utilisateur veut du sérieux sans look template.
 ---
 
-# Frontend design — UI crédible et non générique
+# Frontend design — atelier, pas moodboard générique
 
-## Objectif
+## Ce qu’on cherche
 
-Transformer ou affiner une interface **sans** tomber dans les motifs visuels reconnaissables d’outils IA : le résultat doit sembler **délibéré**, **contextuel** et **aligné** sur le produit et le code déjà en place.
+Une interface qui **assume un parti pris** : on devrait pouvoir expliquer *pourquoi* ce rayon, ce gris, ce rythme — comme en soutenance d’école d’art, pas comme une slide « best practices ».
 
-## Quand utiliser ce skill
+L’agent ne « décore » pas : il **cadre** (hiérarchie, silence, accent), il **ancre** dans le produit et les tokens déjà là, et il évite les tics visuels que tout le monde reconnaît comme sortis d’un prompt.
 
-- Demande d’**améliorer le design** d’un écran, d’un composant ou d’un flux (souvent décrit en mots).
-- Exigence explicite de **ne pas** ressembler à une démo / template / sortie IA.
-- Besoin de **cohérence visuelle**, **états UI** (hover, focus, disabled, chargement, vide, erreur), **responsive** ou **accessibilité** côté frontend.
+## Quand sortir ce skill
 
----
+- Polissage UI, refonte légère, « ça fait cheap / démo ».
+- Besoin d’états complets, de mobile qui respire, de focus clavier qui ne fait pas honte.
+- Consigne explicite : pas d’air **template IA** / **SaaS clipart**.
 
-## Signaux « look IA » à éviter absolument
+## Le « jury » : ce qui te fait recaler
 
-L’agent doit **refuser ces défauts par défaut** et proposer des alternatives ancrées dans le projet :
+Pas une liste de honte — des **signaux** que le rendu est lazy. Contre-chaque fois par quelque chose de **mesurable** dans le repo (variable, composant voisin, copie réelle).
 
-| À éviter | Pourquoi | Piste de remplacement |
-|----------|----------|------------------------|
-| Dégradés violets / bleus « tech » sans lien avec la marque | Cliché immédiat | Couleurs du thème existant, surfaces neutres, une seule accentuation |
-| Coins ultra-arrondis partout + ombres douces identiques | Uniformisation cheap | Rayons et ombres **hiérarchisés** (1–2 niveaux max utiles) |
-| Grilles de 3 cartes identiques + icônes génériques | Pattern « landing » | Variété de mise en page, vrais libellés, hiérarchie typographique |
-| Typo système générique sans échelle | Manque de caractère | Échelle de tailles (ex. modulaire), graisses et interlignage cohérents |
-| Micro-animations sur tout | Bruit visuel | Motion **fonctionnelle** (feedback, transition d’état) |
-| Texte marketing creux (« Empower your workflow ») | Incohérent produit | Copie **concrète** ou textes existants du repo |
-| Dark mode « gris uniforme » | Froid et artificiel | Surfaces en **nuances**, bordures subtiles, contraste maîtrisé |
+| Signal | Lecture jury | Plutôt |
+|--------|--------------|--------|
+| Gradient violet / bleu « tech » hors charte | Tu caches l’absence d’idée | 1 accent documenté, surfaces neutres qui portent le contenu |
+| `rounded-3xl` + ombre diffuse partout | Une seule recette pour tout | 2 niveaux max de relief (ex. surface / élévation), rayons **gradués** selon l’importance |
+| Grille 3×3 de cartes clones + pictos stock | Tu remplis la page, tu ne la conçois pas | Casser la grille : pleine largeur, listes denses, détails typographiques, **vrais** libellés |
+| Inter / système par défaut, tailles au pif | Tu n’as pas construit d’échelle | Échelle modulaire (ex. 12/14/16/20/28), interlignage et tracking cohérents |
+| Motion sur chaque hover | Bruit, pas feedback | Mouvement **utile** : transition d’état, apparition de contenu ; `prefers-reduced-motion` si le stack le permet |
+| Copy type « Unlock / Empower / Seamless » | Tu parles à personne | Textes du produit ou faits utilisateur ; silence > slogan |
+| Dark mode plat gris | Tu as inversé les couleurs, pas conçu le sombre | Nuances de surface, bordures presque invisibles, hiérarchie par luminance |
 
-Si l’utilisateur impose une direction forte (charte, maquette), **elle prime** sur ce tableau.
+**Maquette ou charte imposée** → elle gagne sur ce tableau.
 
----
+## Principes (version studio)
 
-## Principes de design frontend (à appliquer)
+1. **Reconnaissance** — Lire tokens, thème, 2–3 écrans proches. Le style existe déjà : on l’étend, on ne clone pas un second design system.
+2. **Une idée par zone** — Foyer unique ; le reste est support (métadonnées plus fines, moins saturées). Pas tout en `font-semibold`.
+3. **Rythme** — Grille ou base d’espacement ; aligner les **bords** et les **gouttières** entre blocs frères. Les yeux sentent les 3 px « au hasard ».
+4. **Couleur avec parcimonie** — Accent rare = accent qui compte. États sémantiques alignés sur l’existant ; contrastes tenables (WCAG sur texte et contrôles).
+5. **États = partie du design** — `:focus-visible`, disabled, loading, vide, erreur : même niveau de soin que le happy path.
+6. **Mobile** — Longueur de ligne, zones tactiles, info critique jamais réservée au seul hover.
+7. **Texture légère** — Grain, bordure 1px, léger décalage de teinte : OK si ça **sert** la hiérarchie, pas si c’est du bruit.
 
-1. **Lire d’abord** les composants, tokens CSS/Tailwind, thème et pages voisines : réutiliser variables, classes et patterns existants plutôt que d’inventer un second style.
-2. **Hiérarchie** : un seul point focal par zone ; titres / corps / métadonnées clairement différenciés (taille, graisse, couleur, espacement — pas tout en gras).
-3. **Espacement** : grille ou échelle cohérente (ex. multiples d’une base) ; éviter les marges « au feeling » différentes entre sections sœurs.
-4. **Couleur** : peu de couleurs d’accent ; états sémantiques (succès, erreur, avertissement) alignés sur le design system ; contraste **WCAG** pour texte et contrôles.
-5. **États** : hover, focus visible (`:focus-visible`), active, disabled, loading, empty — au moins ceux pertinents au composant.
-6. **Responsive** : lecture confortable sur mobile (tap targets, line-length, pas de hover-only pour l’info critique).
-7. **Motion** : courtes, discrètes ; `prefers-reduced-motion` respecté quand le stack le permet.
-8. **Densité** : adapter à l’usage (outil pro vs marketing) plutôt qu’une densité « défaut IA ».
+## Démarche (courte, sérieuse)
 
----
+1. Cartographier fichiers + parents visuels.
+2. Noter contraintes : tokens, lib UI, densité métier (outil vs vitrine).
+3. Traduire la demande en **décisions** (ex. « métadonnées en 12px muted, titres en 20 semibold »), pas en « rendre plus joli ».
+4. Itérer par petites touches cohérentes ; pas de refactor hors sujet.
+5. Passer le filtre : focus clavier, breakpoints, thème clair/sombre si présent.
 
-## Workflow recommandé
+## Check avant de dire « c’est bon »
 
-1. **Cartographier** : fichiers concernés (composants, styles globaux, assets).
-2. **Extraire les contraintes** : design tokens, composants parent, librairie UI (MUI, shadcn, etc.).
-3. **Traduire la description utilisateur** en changements **mesurables** (espacement, tailles, couleurs, structure, copie).
-4. **Implémenter** en petites itérations cohérentes ; pas de refactor massif hors périmètre design.
-5. **Vérifier** : contrastes, focus clavier, breakpoints, thème clair/sombre si applicable.
+- [ ] Tu peux défendre chaque choix fort en une phrase (intention).
+- [ ] Aucun cliché IA ajouté sans lien produit.
+- [ ] Tokens / primitives du projet d’abord.
+- [ ] États + a11y de base traités.
+- [ ] Responsive aligné sur le reste de l’app.
+- [ ] Aucune punchline marketing collée sans demande.
 
----
+## Livrable agent
 
-## Checklist avant de considérer la tâche terminée
+- Diff **ciblé** sur les fichiers UI concernés.
+- Si plusieurs directions tiennent la route : **en choisir une**, cohérente avec le code, et l’expliquer en 2–3 phrases (en français si la conversation est en français).
 
-- [ ] Aucun motif « template IA » introduit sans justification produit
-- [ ] Réutilisation des tokens / classes / primitives du projet quand ils existent
-- [ ] États interactifs et accessibilité de base (focus, contrastes) traités
-- [ ] Comportement responsive cohérent avec le reste de l’app
-- [ ] Copie factuelle ou existante ; pas de slogans génériques ajoutés sans demande
+## Sources
 
----
-
-## Livrable attendu côté agent
-
-- Modifications **ciblées** dans les fichiers UI concernés.
-- Si plusieurs directions sont valides, **choisir une** alignée sur le code existant et la décrire brièvement à l’utilisateur (en français si la conversation est en français).
-
-## Ressources optionnelles
-
-Pour approfondir (lecture seulement si le besoin est spécifique), l’agent peut s’appuyer sur la documentation du design system ou des composants **déjà présents** dans le dépôt plutôt que sur des références externes génériques.
+Priorité absolue au **dépôt** (composants, tokens, patterns). Éviter les tutos génériques et les galeries « inspiration » vides — elles réinjectent le même look que tu veux fuir.
