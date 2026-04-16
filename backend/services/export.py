@@ -60,6 +60,9 @@ COLUMN_LABELS = {
     "signaux": "Signaux business",
 }
 
+# Ordre de secours si la liste de colonnes ne recoupe pas le DataFrame (données anciennes / schéma).
+_FALLBACK_COLUMN_ORDER: list[str] = list(COLUMN_LABELS.keys())
+
 INTENT_LABELS_FR: dict[str, str] = {
     "recherche_entreprise": "Liste / ciblage d'entreprises",
     "recherche_dirigeant": "Recherche orientée dirigeants",
@@ -126,7 +129,7 @@ def _flatten_signals(val: object) -> str:
 
 def _results_to_dataframe(results: SearchResults, *, rename: bool = True) -> pd.DataFrame:
     """Convertit les résultats en DataFrame (colonnes internes, renommage optionnel)."""
-    data = [r.model_dump() for r in results.results]
+    data = [r.model_dump(mode="python") for r in results.results]
     df = pd.DataFrame(data)
     if df.empty:
         return df
@@ -140,6 +143,18 @@ def _results_to_dataframe(results: SearchResults, *, rename: bool = True) -> pd.
     if "effectif_label" in df.columns and "effectif_label" not in cols_to_keep:
         cols_to_keep.append("effectif_label")
 
+    if not cols_to_keep:
+        seen: set[str] = set()
+        cols_to_keep = []
+        for c in _FALLBACK_COLUMN_ORDER:
+            if c in df.columns and c not in seen:
+                cols_to_keep.append(c)
+                seen.add(c)
+        for c in df.columns:
+            if c not in seen:
+                cols_to_keep.append(c)
+                seen.add(c)
+
     df = df[cols_to_keep]
     if rename:
         df = df.rename(columns={c: COLUMN_LABELS.get(c, c) for c in df.columns})
@@ -147,8 +162,9 @@ def _results_to_dataframe(results: SearchResults, *, rename: bool = True) -> pd.
 
 
 def _style_header_row(ws, row_idx: int = 1) -> None:
-    header_fill = PatternFill("solid", fgColor="0F172A")
-    header_font = Font(bold=True, color="FFFFFF", size=10)
+    # Fond clair + texte sombre : lisible dans Excel / Numbers en mode sombre (évite en-têtes « invisibles »).
+    header_fill = PatternFill("solid", fgColor="FFE2E8F0")
+    header_font = Font(bold=True, color="FF0F172A", size=10)
     for cell in ws[row_idx]:
         cell.fill = header_fill
         cell.font = header_font
@@ -390,7 +406,7 @@ def generate_excel(
     entities: dict[str, Any] | None = None,
     credits_used: int | None = None,
 ) -> str:
-    """Génère un classeur Excel (résultats + info + synthèse) et renvoie le chemin."""
+    """Génère un classeur Excel : onglets dans l'ordre Résultats, Synthèse, Info."""
     df_display = _results_to_dataframe(results, rename=True)
     df_raw = _results_to_dataframe(results, rename=False)
 
@@ -410,8 +426,9 @@ def generate_excel(
         ws.freeze_panes = "A2"
 
         wb = writer.book
-        wb.create_sheet("Info", 0)
-        wb.create_sheet("Synthèse", 1)
+        wb.create_sheet("Synthèse")
+        wb.create_sheet("Info")
+        _fill_synthese_sheet(wb["Synthèse"], df_raw, intent, entities)
         _fill_info_sheet(
             wb["Info"],
             query_text=query_text,
@@ -420,7 +437,8 @@ def generate_excel(
             total=results.total,
             credits_used=credits_used,
         )
-        _fill_synthese_sheet(wb["Synthèse"], df_raw, intent, entities)
+
+        wb.active = 0
 
     return str(filepath)
 
