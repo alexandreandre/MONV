@@ -5,6 +5,36 @@ Transforme l'intent structuré en plan d'exécution API.
 
 import json
 from models.schemas import GuardResult, ExecutionPlan, APICall
+
+# Colonnes financières / effectif (Pappers) — ajoutées à la liste affichée si Pappers est utilisé
+FINANCIAL_AND_SIZE_COLUMNS: list[str] = [
+    "categorie_entreprise",
+    "annee_dernier_ca",
+    "date_cloture_exercice",
+    "chiffre_affaires",
+    "resultat_net",
+    "marge_brute",
+    "ebe",
+    "capitaux_propres",
+    "effectif_financier",
+    "capital_social",
+]
+
+
+def extend_columns_for_plan(columns: list[str], api_calls: list[APICall]) -> list[str]:
+    """Complète l'ordre des colonnes avec les champs financiers lorsque Pappers est dans le plan."""
+    if not any(c.source == "pappers" for c in api_calls):
+        out = list(columns)
+        if "categorie_entreprise" not in out:
+            out.append("categorie_entreprise")
+        return out
+    seen = set(columns)
+    out = list(columns)
+    for col in FINANCIAL_AND_SIZE_COLUMNS:
+        if col not in seen:
+            seen.add(col)
+            out.append(col)
+    return out
 from utils.llm import llm_json_call
 from config import settings
 
@@ -128,6 +158,14 @@ EXEMPLE — « boutiques de padel en PACA » :
     "columns": ["nom", "siren", "siret", "activite_principale", "libelle_activite", "adresse", "code_postal", "ville", "departement", "region", "forme_juridique", "tranche_effectif", "effectif_label", "date_creation", "telephone", "site_web", "google_maps_url"]
 }
 
+RÈGLE CRITIQUE — IGNORER LE MOTIF BUSINESS :
+L'intent peut contenir des mots-clés comme "rachat", "acquisition", "investissement", "analyse de marché",
+"prospection", "croissance", etc. Ces mots décrivent POURQUOI l'utilisateur cherche, PAS CE QU'il cherche.
+- NE JAMAIS mettre ces mots dans le paramètre "q" d'un appel SIRENE
+- NE JAMAIS les inclure dans le "query" de Google Places
+- Se concentrer UNIQUEMENT sur les critères objectifs : secteur, activité, zone, taille
+Exemple : intent dit mots_cles=["hôtel", "3 étoiles", "rachat"] → utiliser "hôtel 3 étoiles" pour Google Places et activite_principale="55.10Z" pour SIRENE, IGNORER "rachat"
+
 RÈGLES GÉNÉRALES :
 - Si l'utilisateur demande des dirigeants ou du CA, ajoute une étape Pappers APRÈS la recherche SIRENE principale
 - Mets TOUJOURS une recherche SIRENE en priority=1 comme source principale, même si Pappers est utilisé pour l'enrichissement
@@ -229,7 +267,57 @@ NICHE_NAF_MAPPING: dict[str, list[str]] = {
     "salle de sport": ["93.13Z", "93.12Z"],
     "club": ["93.12Z", "93.11Z"],
     "piscine": ["93.11Z", "93.12Z"],
+    "hotel": ["55.10Z"],
+    "hôtel": ["55.10Z"],
+    "hotels": ["55.10Z"],
+    "hôtels": ["55.10Z"],
+    "hébergement": ["55.10Z", "55.20Z", "55.30Z"],
+    "hebergement": ["55.10Z", "55.20Z", "55.30Z"],
+    "camping": ["55.30Z"],
+    "gîte": ["55.20Z"],
+    "gite": ["55.20Z"],
+    "chambre d'hôtes": ["55.20Z"],
+    "auberge": ["55.10Z", "55.20Z"],
+    "résidence de tourisme": ["55.20Z"],
+    "pharmacie": ["47.73Z"],
+    "opticien": ["47.78A"],
+    "boucherie": ["47.22Z"],
+    "supermarché": ["47.11F"],
+    "supermarche": ["47.11F"],
+    "librairie": ["47.61Z"],
+    "agence immobilière": ["68.31Z"],
+    "agence immobiliere": ["68.31Z"],
+    "cabinet comptable": ["69.20Z"],
+    "cabinet avocat": ["69.10Z"],
+    "cabinet médical": ["86.21Z"],
+    "cabinet medical": ["86.21Z"],
+    "dentiste": ["86.23Z"],
+    "crèche": ["88.91A"],
+    "creche": ["88.91A"],
+    "auto-école": ["85.53Z"],
+    "auto-ecole": ["85.53Z"],
 }
+
+
+_INTENT_NOISE: set[str] = {
+    "rachat", "acquisition", "investissement", "revente", "cession",
+    "reprise", "fusion", "croissance", "diversification", "partenariat",
+    "collaboration", "analyse", "potentiel", "benchmark", "étude",
+    "audit", "veille", "diagnostic", "comparaison", "évaluation",
+    "prospection", "démarche", "approche", "ciblage", "qualification",
+    "leads", "recherche", "cherche", "trouve", "besoin", "intéressé",
+    "souhaite", "stratégie", "strategie", "opportunité", "opportunite",
+    "marché", "marche", "rentabilité", "rentabilite", "projet",
+    "objectif", "but", "ambition", "expansion", "développement",
+    "developpement", "implantation", "consolidation",
+}
+
+
+def _search_only_keywords(entities) -> list[str]:
+    """Filtre les mots-clés pour ne garder que ceux pertinents pour la recherche."""
+    raw = entities.mots_cles or []
+    cleaned = [w for w in raw if w.lower().strip() not in _INTENT_NOISE]
+    return cleaned
 
 
 def _detect_niche_naf_codes(entities) -> list[str]:
@@ -312,6 +400,7 @@ async def run_orchestrator(guard_result: GuardResult) -> ExecutionPlan:
         for col in ("telephone", "site_web", "google_maps_url"):
             if col not in columns:
                 columns.append(col)
+    columns = extend_columns_for_plan(columns, api_calls)
 
     return ExecutionPlan(
         api_calls=api_calls,
@@ -378,12 +467,14 @@ def _build_fallback_plan(guard_result: GuardResult) -> ExecutionPlan:
 
     api_calls: list[APICall] = []
 
-    if e.mots_cles and _has_google_places_key():
+    search_keywords = _search_only_keywords(e)
+
+    if search_keywords and _has_google_places_key():
         location = e.localisation or e.region or e.departement or ""
         if niche_naf_codes:
-            gp_query = e.mots_cles[0]
+            gp_query = search_keywords[0]
         else:
-            gp_query = " ".join(e.mots_cles)
+            gp_query = " ".join(search_keywords)
             if e.secteur and e.secteur.lower() not in gp_query.lower():
                 gp_query = f"{e.secteur} {gp_query}".strip()
         api_calls.append(APICall(
@@ -406,9 +497,9 @@ def _build_fallback_plan(guard_result: GuardResult) -> ExecutionPlan:
                 source="sirene", action="search", params=params, priority=1,
             ))
 
-        if e.mots_cles:
+        if search_keywords:
             q_params: dict = {
-                "q": e.mots_cles[0],
+                "q": search_keywords[0],
                 "per_page": 25,
                 "etat_administratif": "A",
             }
@@ -429,8 +520,8 @@ def _build_fallback_plan(guard_result: GuardResult) -> ExecutionPlan:
             params["section_activite_principale"] = range_section
         if tranche_param:
             params["tranche_effectif_salarie"] = tranche_param
-        if e.mots_cles:
-            params["q"] = " ".join(e.mots_cles)
+        if search_keywords:
+            params["q"] = " ".join(search_keywords)
         api_calls.append(APICall(
             source="sirene", action="search", params=params, priority=1,
         ))
@@ -458,6 +549,7 @@ def _build_fallback_plan(guard_result: GuardResult) -> ExecutionPlan:
         for col in ("telephone", "site_web", "google_maps_url"):
             if col not in columns:
                 columns.append(col)
+    columns = extend_columns_for_plan(columns, api_calls)
 
     return ExecutionPlan(
         api_calls=api_calls,
@@ -476,6 +568,7 @@ def _default_columns(intent: str, *, with_google_places: bool = False) -> list[s
         "nom",
         "siren",
         "siret",
+        "categorie_entreprise",
         "activite_principale",
         "libelle_activite",
         "adresse",

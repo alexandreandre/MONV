@@ -99,6 +99,17 @@ RÈGLES :
 - Si l'utilisateur dit "PME" sans préciser la taille → taille_min=10, taille_max=249
 - "startup" → taille_min=1, taille_max=49, date_creation_apres=date récente
 
+RÈGLE CRITIQUE — mots_cles = CRITÈRES DE RECHERCHE uniquement :
+"mots_cles" ne doit contenir QUE les termes utiles pour IDENTIFIER / TROUVER les entreprises cibles.
+NE JAMAIS inclure dans mots_cles les mots qui décrivent le MOTIF ou L'INTENTION de l'utilisateur.
+Exemples de mots à EXCLURE de mots_cles :
+- Motifs business : rachat, acquisition, investissement, revente, cession, reprise, fusion, croissance, diversification, partenariat, collaboration
+- Analyse : analyse, potentiel, benchmark, étude, audit, veille, diagnostic, comparaison, évaluation
+- Prospection : prospection, démarche, approche, ciblage, qualification, leads
+- Général : recherche, cherche, trouve, besoin, intéressé, souhaite
+Seuls les termes qui DÉCRIVENT l'activité, le produit, ou le type d'entreprise recherchée sont pertinents.
+Exemple : "hôtels 3 étoiles à Marseille pour un rachat" → mots_cles=["hôtel", "3 étoiles"], PAS ["hôtel", "3 étoiles", "rachat"]
+
 IMPORTANT — Types de recherche à traiter identiquement :
 - "Je cherche un prestataire/fournisseur X" → recherche_entreprise (secteur = X)
 - "Trouve-moi un comptable/avocat/agence" → recherche_entreprise (secteur = comptabilité/juridique/communication)
@@ -106,6 +117,29 @@ IMPORTANT — Types de recherche à traiter identiquement :
 - "Quels sont mes concurrents en X à Y ?" → recherche_entreprise (secteur = X, zone = Y)
 - Toute recherche d'entreprise, quel que soit le motif, est une recherche_entreprise.
 """
+
+
+_INTENT_NOISE_WORDS: set[str] = {
+    "rachat", "acquisition", "investissement", "revente", "cession",
+    "reprise", "fusion", "croissance", "diversification", "partenariat",
+    "collaboration", "analyse", "potentiel", "benchmark", "étude",
+    "audit", "veille", "diagnostic", "comparaison", "évaluation",
+    "prospection", "démarche", "approche", "ciblage", "qualification",
+    "leads", "recherche", "cherche", "trouve", "besoin", "intéressé",
+    "souhaite", "stratégie", "strategie", "opportunité", "opportunite",
+    "marché", "marche", "rentabilité", "rentabilite", "projet",
+    "objectif", "but", "ambition", "expansion", "développement",
+    "developpement", "implantation", "consolidation",
+}
+
+
+def _clean_mots_cles(raw: list[str]) -> list[str]:
+    """Retire les mots décrivant l'intention business de l'utilisateur, pas la cible de recherche."""
+    cleaned = [
+        w for w in raw
+        if w.lower().strip() not in _INTENT_NOISE_WORDS
+    ]
+    return cleaned if cleaned else raw[:1]
 
 
 async def run_guard(user_message: str, conversation_history: list[dict] | None = None) -> GuardResult:
@@ -148,7 +182,7 @@ async def run_guard(user_message: str, conversation_history: list[dict] | None =
         ca_max=entities_raw.get("ca_max"),
         date_creation_apres=entities_raw.get("date_creation_apres"),
         date_creation_avant=entities_raw.get("date_creation_avant"),
-        mots_cles=entities_raw.get("mots_cles", []),
+        mots_cles=_clean_mots_cles(entities_raw.get("mots_cles", [])),
         forme_juridique=entities_raw.get("forme_juridique"),
     )
 
