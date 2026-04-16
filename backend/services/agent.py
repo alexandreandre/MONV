@@ -26,17 +26,22 @@ from typing import Any
 
 from config import settings
 from models.schemas import (
-    AgentSynthesis,
-    BusinessCanvas,
     BusinessDossier,
-    FlowEdge,
-    FlowMap,
     GuardResult,
-    ProjectBrief,
-    QcmOption,
     QcmQuestion,
     SegmentBrief,
     SegmentResult,
+)
+from services.atelier_constants import ATELIER_MODE_LABEL
+from services.atelier_coerce import coerce_dossier
+from services.atelier_heuristics import (
+    heuristic_atelier_conversation_title,
+    heuristic_atelier_project_folder_name,
+)
+from services.atelier_qcm import (
+    _FALLBACK_ATELIER_QUESTIONS,
+    finalize_atelier_qcm as _finalize_atelier_qcm,
+    parse_qcm_raw as _parse_qcm_raw,
 )
 from services.api_engine import execute_plan
 from services.guard import run_guard
@@ -47,7 +52,10 @@ from utils.llm import llm_call, llm_json_call
 from utils.pipeline_log import plog
 
 
-ATELIER_MODE_LABEL = "atelier"
+def _atelier_business_model() -> str:
+    """Modèle dédié Atelier (plan + dossier). Défaut : orchestrateur."""
+    m = (settings.ATELIER_BUSINESS_MODEL or "").strip()
+    return m or settings.ORCHESTRATOR_MODEL
 
 
 # ─── Couche 1 : QCM de clarification ─────────────────────────────────────────
@@ -128,154 +136,6 @@ Réponds UNIQUEMENT avec un JSON strict :
 """
 
 
-_FALLBACK_ATELIER_QUESTIONS: list[QcmQuestion] = [
-    QcmQuestion(
-        id="cible",
-        question="À qui s'adresse ton offre principalement ?",
-        options=[
-            QcmOption(id="b2c", label="Particuliers (B2C)"),
-            QcmOption(id="b2b", label="Entreprises (B2B)"),
-            QcmOption(id="b2b2c", label="Les deux (B2B2C)"),
-            QcmOption(id="admin", label="Administrations / Collectivités"),
-            QcmOption(id="autre", label="Autre", free_text=True),
-        ],
-        multiple=False,
-    ),
-    QcmQuestion(
-        id="modele_revenus",
-        question="Quel modèle de revenus envisages-tu ?",
-        options=[
-            QcmOption(id="vente", label="Ventes directes"),
-            QcmOption(id="abo", label="Abonnement / récurrent"),
-            QcmOption(id="commission", label="Commission / place de marché"),
-            QcmOption(id="service", label="Services / prestations"),
-            QcmOption(id="licence", label="Licence / SaaS"),
-            QcmOption(id="autre", label="Autre", free_text=True),
-        ],
-        multiple=False,
-    ),
-    QcmQuestion(
-        id="budget",
-        question="Quelle enveloppe prévois-tu pour le lancement ?",
-        options=[
-            QcmOption(id="lt20k", label="Moins de 20 k€"),
-            QcmOption(id="20_80k", label="20 k€ – 80 k€"),
-            QcmOption(id="80_250k", label="80 k€ – 250 k€"),
-            QcmOption(id="250k_1m", label="250 k€ – 1 M€"),
-            QcmOption(id="gt1m", label="Plus de 1 M€"),
-            QcmOption(id="autre", label="Autre", free_text=True),
-        ],
-        multiple=False,
-    ),
-    QcmQuestion(
-        id="ambition",
-        question="Quelle taille vises-tu à 2-3 ans ?",
-        options=[
-            QcmOption(id="solo", label="Solo / indépendant"),
-            QcmOption(id="tpe", label="Très petite équipe (2-9)"),
-            QcmOption(id="pme", label="PME (10-50)"),
-            QcmOption(id="scale", label="Scale-up (50+)"),
-            QcmOption(id="autre", label="Autre", free_text=True),
-        ],
-        multiple=False,
-    ),
-]
-
-
-def _parse_qcm_raw(raw: dict) -> tuple[str, list[QcmQuestion]]:
-    intro = raw.get("intro", "Affinons ton projet en quelques questions :")
-    questions: list[QcmQuestion] = []
-    for q in raw.get("questions", []) or []:
-        options: list[QcmOption] = []
-        has_autre = False
-        for o in q.get("options", []) or []:
-            opt = QcmOption(
-                id=str(o.get("id", "") or ""),
-                label=str(o.get("label", "") or ""),
-                free_text=bool(o.get("free_text", False)),
-            )
-            if opt.free_text:
-                has_autre = True
-            options.append(opt)
-        if not has_autre:
-            options.append(QcmOption(id="autre", label="Autre", free_text=True))
-        questions.append(QcmQuestion(
-            id=str(q.get("id", "") or ""),
-            question=str(q.get("question", "") or ""),
-            options=options,
-            multiple=bool(q.get("multiple", False)),
-        ))
-    return intro, questions
-
-
-# Ordre logique d'affichage (funnel) si le modèle mélange les questions.
-_ATELIER_QCM_STEP_ORDER: dict[str, int] = {
-    "cible": 0,
-    "modele_revenus": 1,
-    "localisation": 2,
-    "budget": 3,
-    "canaux": 4,
-    "ambition": 5,
-}
-
-# Lorsque le pitch couvre déjà tous les axes : une seule étape de validation.
-_PITCH_COMPLETE_CONFIRM_Q = QcmQuestion(
-    id="validation_dossier",
-    question=(
-        "Souhaites-tu ajouter une dernière précision avant que je génère "
-        "ton dossier complet ?"
-    ),
-    options=[
-        QcmOption(
-            id="pret",
-            label="Non, génère le dossier à partir de mon pitch",
-            free_text=False,
-        ),
-        QcmOption(
-            id="precision",
-            label="Oui, j'ai une précision à ajouter",
-            free_text=True,
-        ),
-    ],
-    multiple=False,
-)
-
-
-def _sort_atelier_questions(questions: list[QcmQuestion]) -> list[QcmQuestion]:
-    def rank(q: QcmQuestion) -> tuple[int, str]:
-        return (_ATELIER_QCM_STEP_ORDER.get(q.id, 50), q.id)
-
-    return sorted(questions, key=rank)
-
-
-def _finalize_atelier_qcm(
-    intro: str,
-    questions: list[QcmQuestion],
-) -> tuple[str, list[QcmQuestion]]:
-    """Filtre, déduplique, trie et plafonne le QCM ; complète si zéro question."""
-    seen: set[str] = set()
-    cleaned: list[QcmQuestion] = []
-    for q in questions:
-        qid = (q.id or "").strip()
-        if not qid or not (q.question or "").strip():
-            continue
-        if qid in seen:
-            continue
-        seen.add(qid)
-        cleaned.append(q)
-    ordered = _sort_atelier_questions(cleaned)[:5]
-
-    if not ordered:
-        intro_out = (
-            intro.strip()
-            or "Ton pitch est déjà très clair — une dernière étape avant le dossier."
-        )
-        return intro_out, [_PITCH_COMPLETE_CONFIRM_Q]
-
-    intro_out = intro.strip() or "Affinons ton projet :"
-    return intro_out, ordered
-
-
 _CONV_TITLE_SYSTEM = """\
 Tu nommes une conversation dans une liste latérale (type boîte mail).
 À partir du pitch d'un porteur de projet, produis UN libellé court en français.
@@ -303,139 +163,6 @@ Contraintes strictes :
 
 Réponds par UNE seule ligne : le nom du projet uniquement, sans préambule.
 """
-
-_PITCH_INTENT_PREFIXES: tuple[str, ...] = (
-    "je veux créer ",
-    "je veux lancer ",
-    "je veux monter ",
-    "je veux ouvrir ",
-    "je souhaite créer ",
-    "je souhaite lancer ",
-    "je souhaite monter ",
-    "je souhaite ouvrir ",
-    "j'aimerais créer ",
-    "j'aimerais lancer ",
-    "j'aimerais monter ",
-    "j'aimerais ouvrir ",
-    "je compte créer ",
-    "je compte lancer ",
-    "je compte monter ",
-    "je compte ouvrir ",
-    "mon projet : ",
-    "mon idée : ",
-    "idée : ",
-)
-
-def _strip_french_pitch_intent(line: str) -> str:
-    """Retire les préfixes du type « je veux créer » pour densifier le nom de projet."""
-    s = " ".join(line.split())
-    while True:
-        low = s.lower()
-        hit = False
-        for p in _PITCH_INTENT_PREFIXES:
-            if low.startswith(p):
-                s = s[len(p) :].lstrip()
-                hit = True
-                break
-        if not hit:
-            break
-    return s
-
-
-def _strip_leading_article_phrase(line: str) -> str:
-    """Retire un article en tête (« une boîte » → « boîte ») une seule fois."""
-    s = line.strip()
-    low = s.lower()
-    for art in ("une ", "un ", "des ", "les ", "la ", "le ", "l'", "d'"):
-        if low.startswith(art):
-            return s[len(art) :].lstrip()
-    return s
-
-
-def _project_folder_display_fr(words: list[str]) -> str:
-    """Casse lisible type « Boîte de nuit Marseille » : premier et dernier mot capitalisés."""
-    if not words:
-        return ""
-    n = len(words)
-    out: list[str] = []
-    for i, raw in enumerate(words):
-        core = raw.strip(".,;:!?").strip()
-        if not core:
-            continue
-        low = core.lower()
-        if i == 0 or i == n - 1:
-            out.append(core[:1].upper() + core[1:].lower())
-        else:
-            out.append(low)
-    return " ".join(out)
-
-
-def heuristic_atelier_conversation_title(pitch: str, max_len: int = 72) -> str:
-    """Titre de repli à partir du pitch : première phrase utile, découpe propre aux mots."""
-    line = " ".join((pitch or "").split())
-    if not line:
-        return "Projet Atelier"
-    lowered = line.lower()
-    for prefix in (
-        "bonjour ",
-        "salut ",
-        "bonsoir ",
-        "hello ",
-        "coucou ",
-    ):
-        if lowered.startswith(prefix):
-            line = line[len(prefix) :].lstrip()
-            lowered = line.lower()
-            break
-    for sep in (".", "!", "?", "…"):
-        pos = line.find(sep)
-        if 8 <= pos <= max_len + 24:
-            line = line[:pos].strip()
-            break
-    if len(line) <= max_len:
-        return line or "Projet Atelier"
-    chunk = line[: max_len + 1]
-    if " " in chunk:
-        cut = chunk.rsplit(" ", 1)[0].strip()
-        if len(cut) >= 8:
-            return cut + "…"
-    return line[:max_len].rstrip() + "…"
-
-
-def heuristic_atelier_project_folder_name(pitch: str) -> str:
-    """Nom de dossier projet de repli : pitch nettoyé, quelques mots, lieu conservé."""
-    line = " ".join((pitch or "").split())
-    if not line:
-        return "Projet Atelier"
-    lowered = line.lower()
-    for prefix in (
-        "bonjour ",
-        "salut ",
-        "bonsoir ",
-        "hello ",
-        "coucou ",
-    ):
-        if lowered.startswith(prefix):
-            line = line[len(prefix) :].lstrip()
-            lowered = line.lower()
-            break
-    line = _strip_french_pitch_intent(line)
-    line = _strip_leading_article_phrase(line)
-    if not line.strip():
-        return "Projet Atelier"
-    for sep in (".", "!", "?", "…"):
-        pos = line.find(sep)
-        if 8 <= pos <= 90:
-            line = line[:pos].strip()
-            break
-    words = line.split()
-    if len(words) > 7:
-        words = words[:7]
-    titled = _project_folder_display_fr(words)
-    if not titled:
-        return "Projet Atelier"
-    out = titled[:80].strip()
-    return out or "Projet Atelier"
 
 
 async def suggest_atelier_conversation_title(pitch: str) -> str:
@@ -549,103 +276,126 @@ async def generate_atelier_qcm(pitch: str) -> tuple[str, list[QcmQuestion]]:
     )
 
 
-# ─── Couche 2 : génération du dossier complet ───────────────────────────────
+# ─── Couche 2 : plan stratégique puis dossier (2 appels, modèle dédié .env) ───
 
-_ATELIER_DOSSIER_SYSTEM = """\
-Tu es l'Atelier MONV, un copilote business qui aide un porteur de projet à
-structurer la création de son entreprise. Tu reçois :
-  - un pitch initial en langage naturel
-  - un ensemble de réponses à un court QCM (format libre)
+_ATELIER_STRATEGIC_PLAN_SYSTEM = """\
+Tu es un stratège senior (création / restructuration d'entreprise, chaîne de valeur,
+modèles B2B, B2C, places de marché, SaaS, retail, services, industrie).
 
-Ta mission : produire un DOSSIER structuré qui servira de point de départ
-concret à la création. Le dossier alimente directement des composants UI —
-aucune phrase de conversation, aucun markdown, UNIQUEMENT du JSON valide.
+Tu reçois le pitch d'un porteur de projet et ses réponses à un QCM court.
 
-Contraintes rédactionnelles :
-- Tout le texte est en FRANÇAIS, factuel, concret, pas d'emoji
-- Les bullets du canvas sont courts (5-12 mots) et orientés action
-- Le `nom` du projet est une proposition courte (1-3 mots), pas une phrase
-- Le `tagline` tient en une ligne (80 caractères max)
-- `cible` est l'un de : "B2C", "B2B", "B2B2C", "Administrations", "Les deux"
-- `budget` est une fourchette en euros, ex: "20 k€ – 80 k€"
-- `ambition` décrit la taille visée à 2-3 ans
+MISSION — Produire un PLAN STRATÉGIQUE interne (pas le dossier final). Ce plan
+sera la SEULE feuille de route pour un second modèle qui rédigera le JSON livrable.
 
-Pour les SEGMENTS de recherche d'entreprises (CLE DU DISPOSITIF) :
-- Tu dois proposer entre 3 et 5 segments qui seront chacun exécutés par le
-  pipeline MONV (recherche d'entreprises réelles via SIRENE / Google Places /
-  Pappers).
-- Chaque segment a un `mode` parmi : "prospection", "sous_traitant", "rachat"
-  (JAMAIS "atelier" ni "client").
-- Utilise "sous_traitant" pour : fournisseurs, prestataires, comptable,
-  avocat, agence web, expert-comptable, logistique, etc.
-- Utilise "prospection" pour : clients B2B cibles, concurrents directs,
-  acteurs du marché, partenaires prescripteurs.
-- Utilise "rachat" pour : cibles d'acquisition potentielles (UNIQUEMENT si le
-  porteur évoque une stratégie de reprise/fusion, sinon ignore ce segment).
-- Le `query` de chaque segment est une requête NATURELLE en français qui
-  sera passée au Guard MONV (ex: "Je cherche des fournisseurs de poissons
-  frais et sakés japonais à Lyon pour un restaurant").
-- Le `query` doit inclure la ZONE GÉOGRAPHIQUE issue du pitch (ville, dept
-  ou région) — sans zone, la recherche est dégradée.
-- `key` est un identifiant court ASCII (fournisseurs, clients_b2b,
-  concurrents, prestataires, cibles_rachat).
-- `icon` est l'un de : "truck", "target", "users", "briefcase", "landmark",
-  "building", "factory", "megaphone", "scale", "calculator".
+Exigences d'intelligence :
+- Identifie l'ARCHÉTYPE réel du business (ne force pas un schéma « fournisseur →
+  nous → client » si ce n'est pas pertinent : marketplace, B2B2C, licence,
+  franchise, agence, médiation, infra, abonnement + usage, etc.).
+- Décris les INTERMÉDIAIRES, plateformes, régulateurs, prescripteurs, intégrateurs,
+  revendeurs, SI tiers, si la valeur le demande.
+- Anticipe où la chaîne se CASSE (dépendances, concentration, conformité).
+- Propose une TOPOLOGIE de schéma : "radial" (écosystème équilibré), "horizontal"
+  (chaîne ou pipeline lisible de gauche à droite), "vertical" (empilement étapes /
+  marchés superposés).
 
-Format de réponse OBLIGATOIRE (JSON strict) :
+FORMAT JSON (critique) :
+- Guillemets doubles `"` pour les clés et chaînes ; échapper `\"` dans le texte.
+- Aucun saut de ligne à l'intérieur d'une valeur string ; phrases courtes.
+- Réponse = un seul objet `{ ... }` valide (pas tronqué).
+
+Réponds UNIQUEMENT avec un JSON strict :
 {
-  "brief": {
-    "nom": "...",
-    "tagline": "...",
-    "secteur": "...",
-    "localisation": "...",
-    "cible": "B2C|B2B|B2B2C|Administrations|Les deux",
-    "budget": "...",
-    "modele_revenus": "...",
-    "ambition": "..."
-  },
-  "canvas": {
-    "proposition_valeur": ["..."],
-    "segments_clients": ["..."],
-    "canaux": ["..."],
-    "relation_client": ["..."],
-    "sources_revenus": ["..."],
-    "ressources_cles": ["..."],
-    "activites_cles": ["..."],
-    "partenaires_cles": ["..."],
-    "structure_couts": ["..."]
-  },
-  "flows": {
-    "acteurs": ["Client final", "Entreprise", "Fournisseur principal", ...],
-    "flux_valeur": [{"origine": "Fournisseur principal", "destination": "Entreprise", "label": "Matières premières"}, ...],
-    "flux_financiers": [{"origine": "Client final", "destination": "Entreprise", "label": "Paiement"}, ...],
-    "flux_information": [{"origine": "Entreprise", "destination": "Client final", "label": "Facture / reçu"}, ...]
-  },
-  "segments": [
+  "archetype": "libellé court du modèle économique dominant",
+  "resume_chaine_valeur": "3 à 6 phrases factuelles en français",
+  "topologie": "radial|horizontal|vertical",
+  "justification_topologie": "1 phrase",
+  "acteurs_cles": [
     {
-      "key": "fournisseurs",
-      "label": "Fournisseurs clés",
-      "description": "Identifier des fournisseurs ou sous-traitants locaux pour les matières principales.",
-      "mode": "sous_traitant",
-      "query": "Je cherche des fournisseurs de ... à ...",
-      "icon": "truck"
+      "nom": "libellé unique court pour un nœud du schéma",
+      "role_metier": "ex. Prescripteur, Intégrateur, Client payeur, Régulateur",
+      "type": "interne|externe|marche|public|plateforme",
+      "rattachement_segment": "clé segment MONV ou null si pas de tableau dédié"
     }
   ],
-  "synthesis": {
-    "forces": ["..."],
-    "risques": ["..."],
-    "prochaines_etapes": ["..."],
-    "kpis": ["..."],
-    "budget_estimatif": "..."
-  }
+  "flux_valeur": [{"de": "...", "vers": "...", "nature": "...", "priorite": "haute|moyenne|basse"}],
+  "flux_financiers": [{"de": "...", "vers": "...", "nature": "...", "priorite": "haute|moyenne|basse"}],
+  "flux_information": [{"de": "...", "vers": "...", "nature": "...", "priorite": "haute|moyenne|basse"}],
+  "segments_recherche": [
+    {
+      "key": "identifiant_ascii",
+      "intention": "ce qu'on cherche dans la base entreprises",
+      "mode_suggere": "prospection|sous_traitant|rachat",
+      "pourquoi": "1 phrase utile au porteur"
+    }
+  ],
+  "alertes_structurelles": ["..."],
+  "hypotheses_a_valider": ["..."]
 }
 
 Règles :
-- Chaque liste du canvas a entre 3 et 6 éléments
-- `flux_*` ont entre 2 et 6 arcs chacun
-- `synthesis.forces` / `risques` : 3 à 5 éléments concrets chacun
-- `synthesis.prochaines_etapes` : 4 à 7 étapes ordonnées et actionnables
-- `synthesis.kpis` : 3 à 5 indicateurs mesurables
+- 4 à 12 entrées dans `acteurs_cles` selon la complexité réelle (pas toujours 3).
+- 3 à 5 objets dans `segments_recherche` (jamais « atelier » ni « client » comme mode).
+- Les noms dans `de`/`vers` doivent correspondre EXACTEMENT à des `nom` de `acteurs_cles`.
+"""
+
+
+_ATELIER_DOSSIER_FILL_SYSTEM = """\
+Tu es l'Atelier MONV : tu transformes un PLAN STRATÉGIQUE (JSON) + pitch + QCM
+en DOSSIER LIVRABLE pour l'interface utilisateur.
+
+Sortie : UN SEUL objet JSON (pas de markdown, pas de commentaires hors JSON).
+
+FORMAT JSON (critique) :
+- Guillemets doubles ; pas de newline dans les chaînes ; `detail` des arcs ≤ 200 car.
+- Objet complet et **terminé** (toutes accolades fermées).
+
+Contraintes rédactionnelles :
+- Tout en FRANÇAIS, factuel, sans emoji ni ton marketing creux.
+- Canvas : puces 5-12 mots, orientées action / test / décision.
+- `brief.nom` : 1-3 mots ; `brief.tagline` ≤ 80 caractères.
+- `brief.cible` : "B2C", "B2B", "B2B2C", "Administrations" ou "Les deux".
+- `brief.budget` : fourchette en euros lisible (ex. "20 k€ – 80 k€").
+
+SEGMENTS (pipeline MONV — clé du produit) :
+- 3 à 5 segments ; `mode` ∈ "prospection", "sous_traitant", "rachat" uniquement.
+- "rachat" seulement si le plan ou le pitch parle de reprise / acquisition.
+- Chaque `query` : phrase naturelle en français pour le Guard MONV, avec ZONE géo.
+- `key` : ascii court ; `icon` ∈ truck, target, users, briefcase, landmark, building,
+  factory, megaphone, scale, calculator.
+
+FLOWS — schéma riche et ADAPTÉ au business (interdit de recopier un triangle générique
+type « client final / ta structure / fournisseur » si le plan dit autre chose) :
+- `flows.diagram_title` : titre court du schéma (ex. « Chaîne B2B2C assurance »).
+- `flows.layout` : "radial", "horizontal" ou "vertical" — aligné sur le plan.
+- `flows.flow_insight` : UNE phrase qui aide à LIRE le schéma (pas du blabla produit).
+- `flows.acteurs` : liste d'objets
+  {"label": "...", "segment_key": "clé ou null", "role": "...", "hint": "...", "emphasis": "primary|secondary|null"}
+  Les `label` doivent être identiques aux chaînes utilisées dans les arcs.
+- Chaque segment dans `segments` doit avoir au moins un acteur avec le même `segment_key`.
+- `flux_valeur`, `flux_financiers`, `flux_information` : 2 à 12 arcs chacun si pertinent.
+  Chaque arc : {"origine": "...", "destination": "...", "label": "court", "detail": "précision au clic (1-2 phrases)", "pattern": "solid|dashed"}
+  Utilise `pattern":"dashed"` pour flux indirects, réglementaires, feedbacks légers.
+
+Canvas : chaque liste 3 à 6 éléments.
+
+Synthèse :
+- forces / risques : 3 à 5 points concrets ; prochaines_etapes : 4 à 7 étapes ordonnées ;
+  kpis : 3 à 5 indicateurs mesurables ; budget_estimatif si pertinent.
+
+Structure JSON exacte attendue :
+{
+  "brief": { "nom", "tagline", "secteur", "localisation", "cible", "budget", "modele_revenus", "ambition" },
+  "canvas": { "proposition_valeur", "segments_clients", "canaux", "relation_client", "sources_revenus", "ressources_cles", "activites_cles", "partenaires_cles", "structure_couts" },
+  "flows": {
+    "diagram_title", "layout", "flow_insight",
+    "acteurs": [...],
+    "flux_valeur": [...],
+    "flux_financiers": [...],
+    "flux_information": [...]
+  },
+  "segments": [ { "key", "label", "description", "mode", "query", "icon" } ],
+  "synthesis": { "forces", "risques", "prochaines_etapes", "kpis", "budget_estimatif" }
+}
 """
 
 
@@ -653,124 +403,49 @@ async def generate_dossier_skeleton(
     pitch: str,
     answers: str,
 ) -> dict[str, Any]:
-    """Appelle le LLM de niveau orchestrateur pour produire le squelette JSON
-    du dossier (brief + canvas + flows + segments + synthesis).
-
-    Les segments NE sont PAS encore exécutés : ils seront lancés ensuite via
-    `run_segment_searches` qui appelle le pipeline MONV classique.
-    """
-    user_payload = (
+    """Plan stratégique (LLM 1) puis squelette dossier (LLM 2), modèle `ATELIER_BUSINESS_MODEL`."""
+    model = _atelier_business_model()
+    user_base = (
         "Pitch initial :\n"
         f"{pitch.strip()}\n\n"
         "Réponses de clarification :\n"
         f"{(answers or '').strip()}\n"
     )
+    plan: dict[str, Any] = {}
+    try:
+        plan = await llm_json_call(
+            model=model,
+            system=_ATELIER_STRATEGIC_PLAN_SYSTEM,
+            messages=[{"role": "user", "content": user_base}],
+            max_tokens=4096,
+            temperature=0.25,
+            json_mode=True,
+            allow_json_repair=True,
+            repair_model=settings.FILTER_MODEL,
+        )
+        if not isinstance(plan, dict):
+            plan = {}
+    except Exception as exc:
+        plog("atelier_plan_fallback", error=str(exc)[:300])
+        plan = {}
+
+    plan_block = json.dumps(plan, ensure_ascii=False, indent=2) if plan else "{}"
+    user_fill = (
+        user_base
+        + "\n\n--- PLAN STRATÉGIQUE (respecte-le fidèlement ; complète seulement les détails manquants) ---\n"
+        + plan_block
+    )
     raw = await llm_json_call(
-        model=settings.ORCHESTRATOR_MODEL,
-        system=_ATELIER_DOSSIER_SYSTEM,
-        messages=[{"role": "user", "content": user_payload}],
-        max_tokens=3072,
+        model=model,
+        system=_ATELIER_DOSSIER_FILL_SYSTEM,
+        messages=[{"role": "user", "content": user_fill}],
+        max_tokens=8192,
         temperature=0.2,
+        json_mode=True,
+        allow_json_repair=True,
+        repair_model=settings.FILTER_MODEL,
     )
     return raw
-
-
-def coerce_dossier(raw: dict[str, Any]) -> tuple[
-    ProjectBrief, BusinessCanvas, FlowMap, list[SegmentBrief], AgentSynthesis
-]:
-    """Valide et nettoie la réponse LLM pour la rendre sûre à consommer.
-
-    Toute clé manquante est remplacée par un défaut silencieux : l'Atelier
-    doit toujours produire *quelque chose*, même si le LLM a été bavard.
-    """
-    b = raw.get("brief") or {}
-    brief = ProjectBrief(
-        nom=str(b.get("nom") or "Mon projet").strip()[:60] or "Mon projet",
-        tagline=str(b.get("tagline") or "").strip()[:140],
-        secteur=str(b.get("secteur") or "").strip()[:140],
-        localisation=str(b.get("localisation") or "").strip()[:140],
-        cible=str(b.get("cible") or "B2C").strip(),
-        budget=str(b.get("budget") or "").strip()[:80],
-        modele_revenus=str(b.get("modele_revenus") or "").strip()[:140],
-        ambition=str(b.get("ambition") or "").strip()[:140],
-    )
-
-    c = raw.get("canvas") or {}
-    def _lst(key: str) -> list[str]:
-        v = c.get(key) or []
-        return [str(x).strip() for x in v if str(x).strip()][:6]
-    canvas = BusinessCanvas(
-        proposition_valeur=_lst("proposition_valeur"),
-        segments_clients=_lst("segments_clients"),
-        canaux=_lst("canaux"),
-        relation_client=_lst("relation_client"),
-        sources_revenus=_lst("sources_revenus"),
-        ressources_cles=_lst("ressources_cles"),
-        activites_cles=_lst("activites_cles"),
-        partenaires_cles=_lst("partenaires_cles"),
-        structure_couts=_lst("structure_couts"),
-    )
-
-    f = raw.get("flows") or {}
-    def _edges(key: str) -> list[FlowEdge]:
-        out: list[FlowEdge] = []
-        for e in (f.get(key) or []):
-            if not isinstance(e, dict):
-                continue
-            o = str(e.get("origine") or e.get("from") or "").strip()
-            d = str(e.get("destination") or e.get("to") or "").strip()
-            lbl = str(e.get("label") or "").strip()
-            if o and d:
-                out.append(FlowEdge(origine=o[:60], destination=d[:60], label=lbl[:80]))
-        return out[:6]
-    flows = FlowMap(
-        acteurs=[str(x).strip()[:60] for x in (f.get("acteurs") or []) if str(x).strip()][:8],
-        flux_valeur=_edges("flux_valeur"),
-        flux_financiers=_edges("flux_financiers"),
-        flux_information=_edges("flux_information"),
-    )
-
-    segments_raw = raw.get("segments") or []
-    segments: list[SegmentBrief] = []
-    seen_keys: set[str] = set()
-    _allowed_modes: set[str] = {"prospection", "sous_traitant", "rachat"}
-    for s in segments_raw:
-        if not isinstance(s, dict):
-            continue
-        mode = str(s.get("mode") or "prospection").strip()
-        if mode not in _allowed_modes:
-            mode = "prospection"
-        key = str(s.get("key") or "").strip().lower()[:40] or f"segment_{len(segments)+1}"
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
-        query = str(s.get("query") or "").strip()
-        if not query:
-            continue
-        segments.append(SegmentBrief(
-            key=key,
-            label=str(s.get("label") or key.replace("_", " ").title())[:80],
-            description=str(s.get("description") or "").strip()[:240],
-            mode=mode,
-            query=query[:400],
-            icon=str(s.get("icon") or "building").strip()[:32],
-        ))
-        if len(segments) >= 5:
-            break
-
-    syn = raw.get("synthesis") or {}
-    def _lst2(key: str, lim: int = 6) -> list[str]:
-        v = syn.get(key) or []
-        return [str(x).strip() for x in v if str(x).strip()][:lim]
-    synthesis = AgentSynthesis(
-        forces=_lst2("forces"),
-        risques=_lst2("risques"),
-        prochaines_etapes=_lst2("prochaines_etapes", 7),
-        kpis=_lst2("kpis"),
-        budget_estimatif=(str(syn.get("budget_estimatif") or "").strip()[:140] or None),
-    )
-
-    return brief, canvas, flows, segments, synthesis
 
 
 # ─── Couche 3 : exécution des segments via le pipeline MONV ──────────────────

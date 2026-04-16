@@ -78,8 +78,8 @@ def _atelier_project_name_from_pitch(pitch: str) -> str:
 
 AGENT_WELCOME_COPY = (
     "Parfait, on structure ton projet. Réponds à quelques questions courtes "
-    "pour que je produise un dossier complet (business model, flux et "
-    "tableaux d'entreprises réelles à contacter)."
+    "pour que je produise un dossier complet : business model, schéma de flux "
+    "interactif et tableaux d'entreprises réelles à contacter."
 )
 
 
@@ -260,9 +260,17 @@ async def agent_send(
         )
 
         nb_usable = sum(1 for s in segment_results if s.total > 0)
+        seg_hint = (
+            f" ({nb_usable} segment(s) avec résultats)" if nb_usable else ""
+        )
         lead_line = (
-            f"Dossier **{brief.nom}** prêt : business model, flux et "
-            f"{nb_usable} tableau(x) d'entreprises réelles à activer."
+            f"Dossier **{brief.nom}** prêt.\n\n"
+            "- Parcours le **canvas**, puis la **cartographie des flux** (schéma interactif).\n"
+            f"- **Clique sur un acteur** relié à un segment pour ouvrir la liste d'entreprises "
+            f"correspondante{seg_hint}.\n"
+            "- Tu peux **continuer dans cette conversation** : pose une question ou une "
+            "recherche dans le champ en bas (mode prospection par défaut), ou ouvre un "
+            "**nouveau chat** pour repartir de zéro."
         )
 
         dossier_msg = Message(

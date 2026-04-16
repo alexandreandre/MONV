@@ -26,6 +26,7 @@ from models.schemas import (  # noqa: E402
     AgentSynthesis,
     BusinessCanvas,
     BusinessDossier,
+    FlowActor,
     FlowMap,
     ProjectBrief,
     QcmOption,
@@ -250,6 +251,9 @@ def test_coerce_dossier_parses_full_payload():
     assert isinstance(canvas, BusinessCanvas)
     assert "Cuisine authentique" in canvas.proposition_valeur
     assert isinstance(flows, FlowMap)
+    assert len(flows.acteurs) == 3
+    assert all(isinstance(a, FlowActor) for a in flows.acteurs)
+    assert flows.acteurs[0].label == "Client"
     assert len(flows.flux_valeur) == 2
     assert len(segments) == 2
     assert {s.mode for s in segments} <= {"prospection", "sous_traitant", "rachat"}
@@ -303,6 +307,54 @@ def test_coerce_dossier_survives_partial_payload():
     assert flows.flux_valeur == []
     assert segments == []
     assert synthesis.forces == []
+
+
+def test_coerce_dossier_flow_metadata_and_rich_edges():
+    raw = dict(_VALID_RAW_DOSSIER)
+    raw["flows"] = {
+        "diagram_title": "Chaîne test",
+        "layout": "horizontal",
+        "flow_insight": "Lecture synthétique.",
+        "acteurs": [
+            {"label": "A", "role": "Entrée", "hint": "Indice", "emphasis": "primary"},
+            {"label": "B", "segment_key": "fournisseurs"},
+        ],
+        "flux_valeur": [
+            {
+                "origine": "A",
+                "destination": "B",
+                "label": "Flux",
+                "detail": "Précision au clic.",
+                "pattern": "dashed",
+            }
+        ],
+        "flux_financiers": [],
+        "flux_information": [],
+    }
+    _, _, flows, segments, _ = coerce_dossier(raw)
+    assert flows.diagram_title == "Chaîne test"
+    assert flows.layout == "horizontal"
+    assert flows.flow_insight == "Lecture synthétique."
+    assert flows.acteurs[0].role == "Entrée"
+    assert flows.acteurs[0].emphasis == "primary"
+    assert flows.flux_valeur[0].detail == "Précision au clic."
+    assert flows.flux_valeur[0].pattern == "dashed"
+    assert len(segments) >= 1
+
+
+def test_coerce_dossier_acteurs_segment_key_invalid_dropped():
+    raw = dict(_VALID_RAW_DOSSIER)
+    raw["flows"] = {
+        **raw["flows"],
+        "acteurs": [
+            {"label": "Importateur", "segment_key": "fournisseurs"},
+            {"label": "Inconnu", "segment_key": "nope_pas_un_segment"},
+        ],
+    }
+    _, _, flows, segments, _ = coerce_dossier(raw)
+    assert {a.label for a in flows.acteurs} == {"Importateur", "Inconnu"}
+    assert flows.acteurs[0].segment_key == "fournisseurs"
+    assert flows.acteurs[1].segment_key is None
 
 
 def test_coerce_dossier_dedupes_segment_keys():

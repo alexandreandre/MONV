@@ -302,14 +302,38 @@ class FlowEdge(BaseModel):
     origine: str
     destination: str
     label: str
+    # Détail affiché au clic (analyse, risque, obligation, etc.)
+    detail: str | None = None
+    # "solid" (défaut) ou "dashed" (flux indirect, informationnel léger…)
+    pattern: str | None = None
+
+
+class FlowActor(BaseModel):
+    """Acteur du schéma de flux ; `segment_key` relie optionnellement au tableau MONV du même `key`."""
+    label: str
+    segment_key: str | None = None
+    # Identifiant stable optionnel (slug) — utile pour évolutions UI
+    actor_id: str | None = None
+    # Rôle métier court affiché sur le schéma (ex. « Prescripteur », « Infra »)
+    role: str | None = None
+    # Indice utilisateur (info-bulle) — pas un paragraphe marketing
+    hint: str | None = None
+    # "primary" = acteur central / pivot ; "secondary" = satellite
+    emphasis: str | None = None
 
 
 class FlowMap(BaseModel):
     """Cartographie à 3 couches — valeur, financier, information."""
-    acteurs: list[str] = []
+    acteurs: list[FlowActor] = []
     flux_valeur: list[FlowEdge] = []
     flux_financiers: list[FlowEdge] = []
     flux_information: list[FlowEdge] = []
+    # Métadonnées UI / lecture — toutes optionnelles pour rétrocompatibilité
+    diagram_title: str | None = None
+    # "radial" | "horizontal" | "vertical" — sinon le front choisit une heuristique
+    layout: str | None = None
+    # Une phrase d'orientation pour l'utilisateur (pas du remplissage)
+    flow_insight: str | None = None
 
 
 class SegmentBrief(BaseModel):

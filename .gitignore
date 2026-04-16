@@ -67,6 +67,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 pytestdebug.log
+backend/benchmark_atelier_report.json
 htmlcov/
 .mypy_cache/
 .dmypy.json
