@@ -13,7 +13,12 @@ os.environ.setdefault("SUPABASE_SERVICE_KEY", "placeholder-service-key")
 from config import settings  # noqa: E402
 from models.schemas import CompanyResult, GuardEntity, GuardResult  # noqa: E402
 from services import relevance as relevance_mod  # noqa: E402
-from services.relevance import filter_results_by_relevance, row_for_relevance_check  # noqa: E402
+from services.relevance import (  # noqa: E402
+    compute_relevance_scores,
+    filter_results_by_relevance,
+    relevance_flag_for_score,
+    row_for_relevance_check,
+)
 
 
 def _guard() -> GuardResult:
@@ -23,6 +28,32 @@ def _guard() -> GuardResult:
         confidence=0.9,
         original_query="boutiques padel",
     )
+
+
+def test_relevance_flag_for_score():
+    assert relevance_flag_for_score(7, 6) == "ok"
+    assert relevance_flag_for_score(5, 6) == "warning"
+    assert relevance_flag_for_score(4, 6) == "excluded"
+
+
+def test_compute_relevance_scores_single_row_has_avg():
+    rows = [CompanyResult(siren="111111111", nom="Seule")]
+
+    async def run():
+        with patch.object(settings, "OPENROUTER_API_KEY", "x"):
+            scores, th, st = await compute_relevance_scores(
+                rows,
+                user_query="q",
+                guard_result=_guard(),
+                mode="prospection",
+            )
+        return scores, th, st
+
+    scores, th, st = asyncio.run(run())
+    assert st["relevance_skipped"] is True
+    assert st["relevance_skip_reason"] == "single_row"
+    assert scores == [th]
+    assert "relevance_avg_score" in st
 
 
 def test_row_for_relevance_check_shape():

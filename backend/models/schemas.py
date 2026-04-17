@@ -348,6 +348,9 @@ class SegmentBrief(BaseModel):
     mode: str          # "prospection" | "sous_traitant" | "rachat"
     query: str         # requête qui sera passée au pipeline MONV
     icon: str = "building"  # nom Lucide pour l'UI
+    # Hors périmètre SIRENE / Pappers / Places France : pas d'appel pipeline
+    out_of_scope: bool = False
+    out_of_scope_note: str | None = None
 
 
 class SegmentResult(BaseModel):
@@ -366,6 +369,11 @@ class SegmentResult(BaseModel):
     preview: list[dict] = []
     map_points: list[dict] = []
     error: str | None = None
+    out_of_scope: bool = False
+    out_of_scope_note: str | None = None
+    # Agrégats segment (prévisualisation enrichie pertinence / dédup)
+    total_relevant: int | None = None
+    relevance_threshold: int | None = None
 
 
 class ProjectBrief(BaseModel):
@@ -375,9 +383,12 @@ class ProjectBrief(BaseModel):
     secteur: str          # description textuelle du secteur
     localisation: str     # ville, département ou région
     cible: str            # "B2B" | "B2C" | "B2B2C" | "Les deux"
-    budget: str           # fourchette en français
+    budget: str           # fourchette en français (phrase complète, non tronquée)
     modele_revenus: str   # modèle de revenus pressenti
     ambition: str         # taille visée à 2-3 ans
+    budget_min_eur: int | None = None
+    budget_max_eur: int | None = None
+    budget_hypotheses: list[str] = []
 
 
 class AgentSynthesis(BaseModel):
@@ -396,6 +407,12 @@ class BusinessDossier(BaseModel):
     flows: FlowMap
     segments: list[SegmentResult]
     synthesis: AgentSynthesis
+    version: int = 1
+    generated_at: datetime | None = None
+    total_raw: int = 0
+    total_unique: int = 0
+    total_relevant: int = 0
+    total_credits: int = 0
 
 
 class AgentResponse(BaseModel):

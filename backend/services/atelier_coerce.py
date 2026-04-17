@@ -28,15 +28,37 @@ def coerce_dossier(raw: dict[str, Any]) -> tuple[
     doit toujours produire *quelque chose*, même si le LLM a été bavard.
     """
     b = raw.get("brief") or {}
+
+    def _opt_int(v: object) -> int | None:
+        if v is None:
+            return None
+        try:
+            x = int(v)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return None
+        if x < 0 or x > 2_000_000_000:
+            return None
+        return x
+
+    hyp_raw = b.get("budget_hypotheses") or []
+    budget_hypotheses = [
+        str(x).strip()
+        for x in (hyp_raw if isinstance(hyp_raw, list) else [])
+        if str(x).strip()
+    ][:12]
+
     brief = ProjectBrief(
         nom=str(b.get("nom") or "Mon projet").strip()[:60] or "Mon projet",
         tagline=str(b.get("tagline") or "").strip()[:140],
         secteur=str(b.get("secteur") or "").strip()[:140],
         localisation=str(b.get("localisation") or "").strip()[:140],
         cible=str(b.get("cible") or "B2C").strip(),
-        budget=str(b.get("budget") or "").strip()[:80],
+        budget=str(b.get("budget") or "").strip()[:400],
         modele_revenus=str(b.get("modele_revenus") or "").strip()[:140],
         ambition=str(b.get("ambition") or "").strip()[:140],
+        budget_min_eur=_opt_int(b.get("budget_min_eur")),
+        budget_max_eur=_opt_int(b.get("budget_max_eur")),
+        budget_hypotheses=budget_hypotheses,
     )
 
     c = raw.get("canvas") or {}
@@ -72,16 +94,20 @@ def coerce_dossier(raw: dict[str, Any]) -> tuple[
             continue
         seen_keys.add(key)
         query = str(s.get("query") or "").strip()
-        if not query:
+        if not query and not bool(s.get("out_of_scope")):
             continue
+        oos = bool(s.get("out_of_scope"))
+        oos_note = str(s.get("out_of_scope_note") or "").strip()[:400] or None
         segments.append(
             SegmentBrief(
                 key=key,
                 label=str(s.get("label") or key.replace("_", " ").title())[:80],
                 description=str(s.get("description") or "").strip()[:240],
                 mode=mode,
-                query=query[:400],
+                query=(query[:400] if query else ""),
                 icon=str(s.get("icon") or "building").strip()[:32],
+                out_of_scope=oos,
+                out_of_scope_note=oos_note,
             )
         )
         if len(segments) >= 5:

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import defaultdict
 from typing import Any
 
 from config import settings
@@ -43,13 +44,21 @@ from services.atelier_qcm import (
     finalize_atelier_qcm as _finalize_atelier_qcm,
     parse_qcm_raw as _parse_qcm_raw,
 )
-from services.api_engine import execute_plan
+from services.api_engine import _dedup_key, execute_plan
 from services.guard import run_guard
 from services.orchestrator import run_orchestrator
 from services.modes import normalize_mode, Mode
+from services.relevance import (
+    compute_relevance_scores,
+    relevance_flag_for_score,
+    relevance_reason_excluded_fr,
+)
 from services.sirene import patch_sirene_calls_from_guard_entities
 from utils.llm import llm_call, llm_json_call
 from utils.pipeline_log import plog
+
+# Limite de lignes sérialisées par segment (metadata + search_history).
+_ATELIER_PREVIEW_MAX_ROWS = 400
 
 
 def _atelier_business_model() -> str:
@@ -66,67 +75,75 @@ def _atelier_business_model() -> str:
 # business plutôt que des questions de filtres de recherche.
 
 _ATELIER_QCM_SYSTEM = """\
-Tu es l'Atelier MONV, un agent qui accompagne un porteur de projet dans la
-conception de son entreprise. Tu reçois son pitch initial (une ou plusieurs
-phrases, parfois très détaillé).
+Tu es l'Atelier MONV : tu aides un porteur de projet à structurer son idée AVANT
+de générer un dossier (business model, schéma de flux, listes d'entreprises réelles).
+Tu reçois un pitch libre (parfois déjà très détaillé).
 
-MISSION — Avant de rédiger le QCM, raisonne sur la COMPLÉTUDE du pitch par
-rapport à ces axes (tu ne les cites pas tels quels à l'utilisateur) :
-- cible : à qui vend-on (B2C, B2B, B2B2C, administrations, mixte)
-- modele_revenus : comment l'argent est gagné (vente ponctuelle, abonnement,
-  pub, commission, marketplace, services, licence/SaaS, mixte…)
-- budget : enveloppe ou fourchette de lancement / premier run
-- localisation : zone géographique de déploiement ou d'étude (ville, région,
-  national) — indispensable pour les recherches d'entreprises réelles
-- ambition : taille d'équipe ou de structure visée à 2-3 ans
-- canaux : comment l'offre atteint les clients (web, physique, réseau, etc.)
+ANTI-PATTERN (à éviter) :
+- Ne pose PAS un questionnaire « start-up générique » (B2B/B2C + abonnement/SaaS +
+  budget minuscule) si le pitch décrit déjà un métier concret (restauration, retail,
+  artisanat, santé, logistique, import, etc.).
+- Les options doivent être ANCRÉES dans le pitch (noms de canaux, formats, zones,
+  types de clientèle que l'utilisateur a évoqués ou qui sont évidents pour ce métier).
+- Ne demande pas « Administration » si le projet ne concerne manifestement pas le public.
 
-NOMBRE DE QUESTIONS (adapter intelligemment, ne pas « remplir » mécaniquement) :
-- Pitch très flou ou < ~40 mots : jusqu'à 5 questions, les plus utiles d'abord.
-- Pitch moyen : 2 à 4 questions sur les axes encore ambigus.
-- Pitch déjà riche sur la plupart des axes : 1 seule question ciblée sur le
-  dernier point critique manquant, OU 2 questions si deux lacunes claires.
-- Pitch exceptionnellement complet sur tous les axes ci-dessus : renvoie
-  "questions": [] (tableau vide). Ne pose aucune question artificielle.
+AXES D'ANALYSE (interne — ne pas les lister à l'utilisateur) :
+- cible : qui paie / qui consomme (B2C, B2B, pros, mixte, événementiel…)
+- modele_revenus : ticket resto, vente à emporter/livraison, e-commerce, abonnement
+  box, licence, commission, services, mixte omnicanal…
+- localisation : lieu d'implantation ET, si vente à distance : zone de livraison /
+  expédition (ville, métropole, région, France, UE)
+- conformite / risques : alcools, santé, transport denrées, import/douanes, données,
+  marchés réglementés — UNE question courte si le pitch l'implique ou si ça change
+  la chaîne de valeur
+- canaux : acquisition, distribution, partenaires prescripteurs
+- budget : fourchette réaliste pour CE type d'activité (un restaurant haut de gamme
+  ou un local commercial ≠ un SaaS solo)
+- ambition : taille d'équipe / surface / volume à 2-3 ans
 
-ORDRE LOGIQUE dans le tableau "questions" (respecte cet ordre quand plusieurs
-questions sont nécessaires) :
-1) cible client / marché prioritaire
-2) modèle de revenus principal
-3) localisation / zone d'implantation ou d'étude (si encore floue alors qu'elle
-   compte pour le dossier)
-4) budget de lancement
-5) canaux / go-to-market
-6) ambition de taille
+NOMBRE DE QUESTIONS :
+- Pitch très flou ou < ~40 mots : jusqu'à 5 questions, les plus discriminantes d'abord.
+- Pitch moyen : 2 à 4 questions sur ce qui manque encore pour cadrer recherche + dossier.
+- Pitch déjà dense : 1 question très ciblée, ou 2 si deux incertitudes claires.
+- Pitch complet sur tous les axes utiles : "questions": [] (aucune question artificielle).
+
+ORDRE DES QUESTIONS (respecte cet ordre quand il y en a plusieurs) :
+1) cible / priorité marché
+2) modèle de revenus ou répartition des sources (multiple=true si mix fort)
+3) localisation physique + périmètre livraison / vente en ligne si pertinent
+4) canaux ou dépendances clés (go-to-market) si encore flou
+5) conformité / import / opérations critiques si le secteur le impose
+6) budget de lancement
+7) ambition de taille
+
+IDs PRÉFÉRÉS (snake_case) : "cible", "modele_revenus", "localisation", "canaux",
+"conformite", "budget", "ambition". Autres ids explicites acceptés si le pitch impose
+un angle unique (ex. "import_sake", "positionnement_prix").
 
 FORMAT DES QUESTIONS :
-- Utilise de préférence ces ids pour faciliter le traitement : "cible",
-  "modele_revenus", "localisation", "budget", "canaux", "ambition". Si un
-  sujet spécifique au pitch prime (ex. contrainte réglementaire), un id court
-  en snake_case explicite est accepté.
-- Chaque question : libellé clair, tutoiement, une seule intention par question.
-- 3 à 6 options pertinentes et contextualisées au pitch + TOUJOURS "Autre"
-  avec free_text=true (sauf si tu as déjà une option Autre).
-- "multiple": true uniquement pour "canaux" ou lorsque plusieurs réponses
-  combinées ont du sens (ex. sources de revenus parallèles).
+- Tutoiement, une intention par question, libellés concrets.
+- 4 à 6 options contextualisées + option "Autre" avec free_text=true (sauf doublon).
+- "multiple": true pour "canaux" ou "modele_revenus" quand l'utilisateur peut cocher
+  plusieurs sources ou canaux pertinents.
 
-TON DE L'INTRO (champ "intro", une phrase, tutoiement) :
-- Plusieurs lacunes : ton chaleureux du type « Super projet ! J'ai quelques
-  questions pour mieux cerner ton idée. »
-- Peu de lacunes : phrase courte du type « Quelques points à verrouiller pour
-  caler ton dossier et les recherches. »
-- Aucune question (pitch complet) : « Ton pitch est déjà très clair — je peux
-  enchaîner sur le dossier. »
+CHAMP "intro" (OBLIGATION) — deux paragraphes séparés par le littéral \\n\\n :
+1) Paragraphe 1 : TA LECTURE du pitch (2 à 4 phrases). Reformule promesse, format
+   (sur place / livraison / web…), différenciation ou niche, zone déjà mentionnée.
+   Montre que tu as compris le MÉTIER, pas seulement « un projet d'entreprise ».
+2) Paragraphe 2 : une phrase courte qui enchaîne vers le QCM (ex. ce que tu veux
+   verrouiller pour le dossier et les recherches).
+
+Si "questions" est vide : paragraphe 2 peut être « Je peux enchaîner sur le dossier. »
 
 Réponds UNIQUEMENT avec un JSON strict :
 {
-  "intro": "...",
+  "intro": "Paragraphe lecture du pitch...\\n\\nPhrase de transition vers le QCM.",
   "questions": [
     {
       "id": "cible",
-      "question": "À qui s'adresse ton offre principalement ?",
+      "question": "Libellé métier contextualisé",
       "options": [
-        {"id": "b2c", "label": "Particuliers (B2C)", "free_text": false},
+        {"id": "exemple", "label": "Option ancrée dans le pitch", "free_text": false},
         {"id": "autre", "label": "Autre", "free_text": true}
       ],
       "multiple": false
@@ -264,14 +281,16 @@ async def generate_atelier_qcm(pitch: str) -> tuple[str, list[QcmQuestion]]:
                 }
             ],
             max_tokens=1408,
-            temperature=0.35,
+            temperature=0.22,
         )
         intro, questions = _parse_qcm_raw(raw)
         return _finalize_atelier_qcm(intro, questions)
     except Exception as exc:
         plog("atelier_qcm_fallback", error=str(exc)[:300])
     return (
-        "Super projet ! J'ai quelques questions pour mieux cerner ton idée.",
+        "Je résume : tu montes un projet entrepreneurial et il me manque encore "
+        "quelques points pour caler le dossier et les recherches d'entreprises.\n\n"
+        "Réponds aux questions ci-dessous (une réponse par bloc).",
         list(_FALLBACK_ATELIER_QUESTIONS),
     )
 
@@ -325,7 +344,9 @@ Réponds UNIQUEMENT avec un JSON strict :
       "key": "identifiant_ascii",
       "intention": "ce qu'on cherche dans la base entreprises",
       "mode_suggere": "prospection|sous_traitant|rachat",
-      "pourquoi": "1 phrase utile au porteur"
+      "pourquoi": "1 phrase utile au porteur",
+      "out_of_scope": false,
+      "out_of_scope_note": null
     }
   ],
   "alertes_structurelles": ["..."],
@@ -336,6 +357,20 @@ Règles :
 - 4 à 12 entrées dans `acteurs_cles` selon la complexité réelle (pas toujours 3).
 - 3 à 5 objets dans `segments_recherche` (jamais « atelier » ni « client » comme mode).
 - Les noms dans `de`/`vers` doivent correspondre EXACTEMENT à des `nom` de `acteurs_cles`.
+
+PÉRIMÈTRE PIPELINE MONV (obligatoire) :
+- Chaque segment qui doit lancer une recherche d'entreprises françaises doit cibler des
+  **personnes morales ou établissements identifiables en France** (SIRENE, Pappers,
+  Google Places). Interdit comme cible d'appel pipeline : producteurs ou cibles
+  exclusivement à l'étranger sans implant française ; **particuliers / consommateurs
+  finaux** comme « segment à lister » (non couvert par les annuaires) ; listes de
+  « clientèle » générique sans angle B2B entreprise.
+- Si une cible est pertinente stratégiquement mais **non cherchable** par ce pipeline,
+  mets `"out_of_scope": true`, une `out_of_scope_note` courte (recherche web,
+  panels, enquête terrain…) et ne prévois pas de requête MONV pour ce point.
+- Pour import / distribution alimentaire ou boissons : favoriser grossistes,
+  importateurs **français** (NAF 46.x), distributeurs B2B, prescripteurs entreprises —
+  pas les concurrents directs « restaurants » comme proxy d'une clientèle.
 """
 
 
@@ -354,12 +389,20 @@ Contraintes rédactionnelles :
 - Canvas : puces 5-12 mots, orientées action / test / décision.
 - `brief.nom` : 1-3 mots ; `brief.tagline` ≤ 80 caractères.
 - `brief.cible` : "B2C", "B2B", "B2B2C", "Administrations" ou "Les deux".
-- `brief.budget` : fourchette en euros lisible (ex. "20 k€ – 80 k€").
+- `brief.budget` : phrase complète en français (ex. « 80 k€ – 200 k€ dont fonds de roulement 6 mois »).
+- `brief.budget_min_eur` / `brief.budget_max_eur` : entiers optionnels cohérents avec la phrase.
+- `brief.budget_hypotheses` : 1 à 4 puces courtes (loyer, stock, équipement, FR…).
 
 SEGMENTS (pipeline MONV — clé du produit) :
 - 3 à 5 segments ; `mode` ∈ "prospection", "sous_traitant", "rachat" uniquement.
 - "rachat" seulement si le plan ou le pitch parle de reprise / acquisition.
-- Chaque `query` : phrase naturelle en français pour le Guard MONV, avec ZONE géo.
+- Chaque `query` : phrase naturelle en français pour le Guard MONV, avec ZONE géo,
+  **sans termes génériques type « importateur » seul** : précise le produit, le canal
+  B2B et la zone (ex. « Grossistes en boissons alcoolisées spécialisés commerce de gros
+  Rhône-Alpes »). Pour commerce de gros boissons / import : privilégier codes APE 46.34Z,
+  46.39A, 46.39B lorsque c'est pertinent (mentionner dans la requête ou les mots-clés).
+- Hors périmètre annuaires FR : `"out_of_scope": true`, `out_of_scope_note` explicite,
+  `query` peut être vide ; pas d'icône inventée hors liste.
 - `key` : ascii court ; `icon` ∈ truck, target, users, briefcase, landmark, building,
   factory, megaphone, scale, calculator.
 
@@ -384,7 +427,7 @@ Synthèse :
 
 Structure JSON exacte attendue :
 {
-  "brief": { "nom", "tagline", "secteur", "localisation", "cible", "budget", "modele_revenus", "ambition" },
+  "brief": { "nom", "tagline", "secteur", "localisation", "cible", "budget", "budget_min_eur", "budget_max_eur", "budget_hypotheses", "modele_revenus", "ambition" },
   "canvas": { "proposition_valeur", "segments_clients", "canaux", "relation_client", "sources_revenus", "ressources_cles", "activites_cles", "partenaires_cles", "structure_couts" },
   "flows": {
     "diagram_title", "layout", "flow_insight",
@@ -393,7 +436,7 @@ Structure JSON exacte attendue :
     "flux_financiers": [...],
     "flux_information": [...]
   },
-  "segments": [ { "key", "label", "description", "mode", "query", "icon" } ],
+  "segments": [ { "key", "label", "description", "mode", "query", "icon", "out_of_scope", "out_of_scope_note" } ],
   "synthesis": { "forces", "risques", "prochaines_etapes", "kpis", "budget_estimatif" }
 }
 """
@@ -450,13 +493,91 @@ async def generate_dossier_skeleton(
 
 # ─── Couche 3 : exécution des segments via le pipeline MONV ──────────────────
 
+
+def preview_row_dedup_key(row: dict[str, Any]) -> str:
+    """Clé alignée sur `api_engine._dedup_key` pour lignes déjà sérialisées."""
+    s = str(row.get("siren") or "").strip()
+    if s:
+        return f"siren:{s}"
+    nom = (str(row.get("nom") or "")).lower().strip()
+    ville = (str(row.get("ville") or "")).lower().strip()
+    return f"name:{nom}|{ville}"
+
+
+def merge_atelier_cross_segment_tags(segments: list[SegmentResult]) -> None:
+    """Sur chaque ligne de `preview`, remplit `segments` avec toutes les clés de segment
+    qui partagent la même entreprise (dédup SIREN prioritaire)."""
+    key_to_keys: dict[str, set[str]] = defaultdict(set)
+    for seg in segments:
+        if seg.out_of_scope:
+            continue
+        for row in seg.preview:
+            dk = str(row.get("_dedup_key") or preview_row_dedup_key(row)).strip()
+            if dk in ("name:|", "siren:"):
+                continue
+            key_to_keys[dk].add(seg.key)
+    for seg in segments:
+        for row in seg.preview:
+            dk = str(row.get("_dedup_key") or preview_row_dedup_key(row)).strip()
+            tags = key_to_keys.get(dk) or {seg.key}
+            row["segments"] = sorted(tags)
+
+
+def atelier_dossier_rollup_fields(segments: list[SegmentResult]) -> dict[str, int]:
+    """Totaux dossier : somme des `total` segment, uniques SIREN/nom, pertinents (ok+warning)."""
+    total_raw = sum(s.total for s in segments)
+    total_credits = sum(s.credits_required for s in segments)
+    keys_all: set[str] = set()
+    keys_relevant: set[str] = set()
+    for s in segments:
+        if s.out_of_scope:
+            continue
+        for row in s.preview:
+            dk = str(row.get("_dedup_key") or preview_row_dedup_key(row)).strip()
+            if dk in ("name:|", "siren:"):
+                continue
+            keys_all.add(dk)
+            flg = row.get("relevance_flag")
+            if flg in ("ok", "warning"):
+                keys_relevant.add(dk)
+    return {
+        "total_raw": total_raw,
+        "total_unique": len(keys_all),
+        "total_relevant": len(keys_relevant),
+        "total_credits": total_credits,
+    }
+
+
 async def run_segment_search(segment: SegmentBrief) -> SegmentResult:
     """Exécute un segment en REUTILISANT le pipeline MONV standard.
 
-    Guard → Orchestrator → API Engine, mais SANS le filtre de relevance ni le
-    filtre de scope (couche 0) : l'Atelier n'a pas besoin de ces garde-fous
-    car la requête est générée par l'Atelier lui-même et déjà cadrée."""
+    Guard → Orchestrator → API Engine. La pertinence LLM est **calculée et exposée**
+    sur chaque ligne (`relevance_score`, `relevance_flag`, `reason_excluded`) sans
+    retirer silencieusement les résultats : l'UI masque les `excluded` par défaut."""
     mode: Mode = normalize_mode(segment.mode)
+    if segment.out_of_scope:
+        note = segment.out_of_scope_note or (
+            "Segment hors périmètre des annuaires d'entreprises françaises MONV ; "
+            "compléter par recherche web ou enquête terrain."
+        )
+        return SegmentResult(
+            key=segment.key,
+            label=segment.label,
+            description=segment.description,
+            mode=mode,
+            icon=segment.icon,
+            query=segment.query or "",
+            total=0,
+            credits_required=0,
+            columns=[],
+            preview=[],
+            map_points=[],
+            error=None,
+            out_of_scope=True,
+            out_of_scope_note=note,
+            total_relevant=0,
+            relevance_threshold=None,
+        )
     try:
         guard_result: GuardResult = await run_guard(segment.query)
         plog(
@@ -468,11 +589,52 @@ async def run_segment_search(segment: SegmentBrief) -> SegmentResult:
         plan = await run_orchestrator(guard_result, mode=mode)
         patch_sirene_calls_from_guard_entities(plan, guard_result.entities)
         results = await execute_plan(plan)
+        n = len(results.results)
+        scores: list[int] = []
+        threshold = 5
+        if n > 0:
+            scores, threshold, rel_stats = await compute_relevance_scores(
+                results.results,
+                user_query=segment.query,
+                guard_result=guard_result,
+                mode=mode,
+            )
+            plog(
+                "atelier_segment_relevance",
+                key=segment.key,
+                skipped=rel_stats.get("relevance_skipped"),
+                threshold=threshold,
+                avg=rel_stats.get("relevance_avg_score"),
+            )
+        preview: list[dict[str, Any]] = []
+        preview_cap = min(_ATELIER_PREVIEW_MAX_ROWS, n)
+        for i in range(preview_cap):
+            r = results.results[i]
+            sc = scores[i] if i < len(scores) else threshold
+            flg = relevance_flag_for_score(sc, threshold)
+            d = r.model_dump()
+            d["_dedup_key"] = _dedup_key(r)
+            d["relevance_score"] = round(sc / 10.0, 3)
+            d["relevance_flag"] = flg
+            d["reason_excluded"] = relevance_reason_excluded_fr(sc, threshold)
+            d["segments"] = [segment.key]
+            preview.append(d)
+
+        total_rel = 0
+        if n > 0 and scores:
+            total_rel = sum(
+                1
+                for i in range(n)
+                if relevance_flag_for_score(scores[i], threshold) in ("ok", "warning")
+            )
+
         plog(
             "atelier_segment_done",
             key=segment.key,
             total=results.total,
             credits=results.credits_required,
+            preview_rows=len(preview),
+            total_relevant=total_rel,
         )
 
         map_points = [
@@ -503,8 +665,10 @@ async def run_segment_search(segment: SegmentBrief) -> SegmentResult:
             total=results.total,
             credits_required=results.credits_required,
             columns=results.columns,
-            preview=[r.model_dump() for r in results.results[:10]],
+            preview=preview,
             map_points=map_points,
+            total_relevant=total_rel,
+            relevance_threshold=threshold if n > 0 else None,
         )
     except Exception as exc:
         plog("atelier_segment_error", key=segment.key, error=str(exc)[:300])
@@ -561,11 +725,13 @@ def build_brief_metadata(pitch: str) -> str:
 
 __all__ = [
     "ATELIER_MODE_LABEL",
+    "atelier_dossier_rollup_fields",
     "build_brief_metadata",
     "coerce_dossier",
     "dossier_metadata_json",
     "generate_atelier_qcm",
     "generate_dossier_skeleton",
+    "merge_atelier_cross_segment_tags",
     "run_segment_search",
     "run_segment_searches",
 ]

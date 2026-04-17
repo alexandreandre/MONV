@@ -53,11 +53,13 @@ from models.schemas import (
 from routers.auth import get_current_user
 from services.agent import (
     ATELIER_MODE_LABEL,
+    atelier_dossier_rollup_fields,
     build_brief_metadata,
     coerce_dossier,
     dossier_metadata_json,
     generate_atelier_qcm,
     generate_dossier_skeleton,
+    merge_atelier_cross_segment_tags,
     run_segment_searches,
     suggest_atelier_conversation_title,
     suggest_atelier_project_folder_name,
@@ -77,9 +79,10 @@ def _atelier_project_name_from_pitch(pitch: str) -> str:
 
 
 AGENT_WELCOME_COPY = (
-    "Parfait, on structure ton projet. Réponds à quelques questions courtes "
-    "pour que je produise un dossier complet : business model, schéma de flux "
-    "interactif et tableaux d'entreprises réelles à contacter."
+    "Décris ton projet en quelques phrases (métier, cible, zone, ce qui te "
+    "différencie). L'Atelier te répondra avec une lecture structurée puis un "
+    "questionnaire court adapté à ton secteur — ensuite : dossier, schéma de "
+    "flux et listes d'entreprises à contacter."
 )
 
 
@@ -216,6 +219,8 @@ async def agent_send(
         )
 
         segment_results = await run_segment_searches(segments_brief)
+        merge_atelier_cross_segment_tags(segment_results)
+        roll = atelier_dossier_rollup_fields(segment_results)
 
         # Persister chaque segment dans search_history → l'utilisateur peut
         # cliquer « Exporter » sur n'importe quel tableau (comme une
@@ -257,6 +262,11 @@ async def agent_send(
             flows=flows,
             segments=segment_results,
             synthesis=synthesis,
+            generated_at=datetime.now(timezone.utc),
+            total_raw=roll["total_raw"],
+            total_unique=roll["total_unique"],
+            total_relevant=roll["total_relevant"],
+            total_credits=roll["total_credits"],
         )
 
         nb_usable = sum(1 for s in segment_results if s.total > 0)

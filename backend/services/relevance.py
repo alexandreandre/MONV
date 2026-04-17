@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
+from typing import Any, Literal
 
 from config import settings
 from models.schemas import CompanyResult, GuardEntity, GuardResult
@@ -172,41 +172,67 @@ async def _score_batch(
     return out
 
 
-async def filter_results_by_relevance(
+RelevanceFlag = Literal["ok", "warning", "excluded"]
+
+
+def relevance_flag_for_score(score_0_10: int, threshold: int) -> RelevanceFlag:
+    """Classe une note 0–10 par rapport au seuil (affichage Atelier / chat)."""
+    if score_0_10 >= threshold:
+        return "ok"
+    if score_0_10 == threshold - 1 and threshold >= 1:
+        return "warning"
+    return "excluded"
+
+
+def relevance_reason_excluded_fr(score_0_10: int, threshold: int) -> str | None:
+    if score_0_10 >= threshold:
+        return None
+    return (
+        f"Pertinence {score_0_10}/10 sous le seuil MONV ({threshold}/10) ; "
+        "ligne masquée par défaut dans l’Atelier."
+    )
+
+
+async def compute_relevance_scores(
     results: list[CompanyResult],
     *,
     user_query: str,
     guard_result: GuardResult,
     mode: Mode,
-) -> tuple[list[CompanyResult], dict[str, Any]]:
-    """
-    Retourne (résultats filtrés, stats pour logs / métadonnées).
+) -> tuple[list[int], int, dict[str, Any]]:
+    """Calcule une note 0–10 par ligne et le seuil, sans filtrer la liste.
+
+    Retourne (scores par index, seuil, stats partielles). En cas de skip,
+    chaque score vaut le seuil (toutes les lignes traitées comme « ok »).
     """
     stats: dict[str, Any] = {
         "relevance_skipped": False,
         "relevance_before": len(results),
-        "relevance_after": len(results),
-        "relevance_removed": 0,
+        "relevance_threshold": _BASE_THRESHOLD,
     }
+    n = len(results)
 
     if not settings.OPENROUTER_API_KEY:
         stats["relevance_skipped"] = True
         stats["relevance_skip_reason"] = "no_openrouter_key"
-        return results, stats
+        t = _BASE_THRESHOLD
+        stats["relevance_avg_score"] = float(t)
+        return [t] * n, t, stats
 
-    n = len(results)
     if n <= 0:
         stats["relevance_skipped"] = True
         stats["relevance_skip_reason"] = "empty"
-        return results, stats
+        return [], _BASE_THRESHOLD, stats
 
     if n == 1:
         stats["relevance_skipped"] = True
         stats["relevance_skip_reason"] = "single_row"
-        return results, stats
+        t = _BASE_THRESHOLD
+        stats["relevance_avg_score"] = float(t)
+        return [t] * n, t, stats
 
     threshold = _compute_threshold(guard_result, n)
-
+    stats["relevance_threshold"] = threshold
     scores = [threshold] * n
 
     batches: list[tuple[int, int, list[int]]] = []
@@ -248,6 +274,51 @@ async def filter_results_by_relevance(
             if i in batch_scores:
                 scores[i] = batch_scores[i]
 
+    assigned_scores = [s for i, s in enumerate(scores) if i < n]
+    distribution: dict[str, int] = {}
+    for s in assigned_scores:
+        bucket = f"{s}"
+        distribution[bucket] = distribution.get(bucket, 0) + 1
+
+    stats["relevance_score_distribution"] = distribution
+    stats["relevance_avg_score"] = round(sum(assigned_scores) / max(len(assigned_scores), 1), 1)
+    return scores, threshold, stats
+
+
+async def filter_results_by_relevance(
+    results: list[CompanyResult],
+    *,
+    user_query: str,
+    guard_result: GuardResult,
+    mode: Mode,
+) -> tuple[list[CompanyResult], dict[str, Any]]:
+    """
+    Retourne (résultats filtrés, stats pour logs / métadonnées).
+    """
+    stats: dict[str, Any] = {
+        "relevance_skipped": False,
+        "relevance_before": len(results),
+        "relevance_after": len(results),
+        "relevance_removed": 0,
+    }
+
+    n = len(results)
+    if n <= 0:
+        stats["relevance_skipped"] = True
+        stats["relevance_skip_reason"] = "empty"
+        return results, stats
+
+    scores, threshold, partial = await compute_relevance_scores(
+        results,
+        user_query=user_query,
+        guard_result=guard_result,
+        mode=mode,
+    )
+    stats.update(partial)
+
+    if stats.get("relevance_skipped"):
+        return results, stats
+
     scored_pairs = [
         (scores[i], i, r) for i, r in enumerate(results) if scores[i] >= threshold
     ]
@@ -261,17 +332,9 @@ async def filter_results_by_relevance(
         removed = 0
         stats["relevance_fallback_unfiltered"] = True
 
-    assigned_scores = [s for i, s in enumerate(scores) if i < n]
-    distribution = {}
-    for s in assigned_scores:
-        bucket = f"{s}"
-        distribution[bucket] = distribution.get(bucket, 0) + 1
-
     stats["relevance_after"] = len(filtered)
     stats["relevance_removed"] = removed
     stats["relevance_threshold"] = threshold
-    stats["relevance_score_distribution"] = distribution
-    stats["relevance_avg_score"] = round(sum(assigned_scores) / max(len(assigned_scores), 1), 1)
 
     plog(
         "relevance_filter_done",

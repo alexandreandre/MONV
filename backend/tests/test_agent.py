@@ -11,16 +11,21 @@ os.environ.setdefault("SUPABASE_URL", "https://placeholder.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_KEY", "placeholder-service-key")
 
 
+import asyncio
+
 from services.agent import (  # noqa: E402
     ATELIER_MODE_LABEL,
     _FALLBACK_ATELIER_QUESTIONS,
     _finalize_atelier_qcm,
     _parse_qcm_raw,
+    atelier_dossier_rollup_fields,
     build_brief_metadata,
     coerce_dossier,
     dossier_metadata_json,
     heuristic_atelier_conversation_title,
     heuristic_atelier_project_folder_name,
+    merge_atelier_cross_segment_tags,
+    run_segment_search,
 )
 from models.schemas import (  # noqa: E402
     AgentSynthesis,
@@ -31,6 +36,7 @@ from models.schemas import (  # noqa: E402
     ProjectBrief,
     QcmOption,
     QcmQuestion,
+    SegmentBrief,
     SegmentResult,
 )
 
@@ -70,9 +76,9 @@ def test_heuristic_project_folder_name_strips_intent_and_formats():
 
 
 def test_fallback_questions_cover_core_topics():
-    """Le fallback doit toujours couvrir les 4 topics stratégiques."""
+    """Le fallback doit couvrir cible, revenus, zone, canaux et budget."""
     ids = {q.id for q in _FALLBACK_ATELIER_QUESTIONS}
-    assert {"cible", "modele_revenus", "budget", "ambition"} <= ids
+    assert {"cible", "modele_revenus", "localisation", "canaux", "budget"} <= ids
     for q in _FALLBACK_ATELIER_QUESTIONS:
         assert any(opt.free_text for opt in q.options), (
             f"Question {q.id} devrait proposer 'Autre' (free_text)"
@@ -410,3 +416,151 @@ def test_build_brief_metadata_carries_pitch():
     payload = _json.loads(raw)
     assert payload["pitch"] == "Mon pitch secret"
     assert payload["mode"] == ATELIER_MODE_LABEL
+
+
+def test_coerce_dossier_budget_structured_and_long_text():
+    raw = {
+        **_VALID_RAW_DOSSIER,
+        "brief": {
+            **_VALID_RAW_DOSSIER["brief"],
+            "budget": "80 k€ – 200 k€ dont fonds de roulement 6 mois et loyer 12 mois",
+            "budget_min_eur": 80000,
+            "budget_max_eur": 200000,
+            "budget_hypotheses": ["Fonds de roulement 6 mois", "Loyer équipement"],
+        },
+    }
+    brief, _, _, _, _ = coerce_dossier(raw)
+    assert "fonds de roulement 6 mois" in brief.budget
+    assert brief.budget_min_eur == 80000
+    assert brief.budget_max_eur == 200000
+    assert brief.budget_hypotheses[0] == "Fonds de roulement 6 mois"
+
+
+def test_coerce_dossier_out_of_scope_segment_without_query():
+    raw = {
+        **_VALID_RAW_DOSSIER,
+        "segments": [
+            {
+                "key": "producteurs_japon",
+                "label": "Producteurs au Japon",
+                "description": "Hors annuaires FR",
+                "mode": "prospection",
+                "query": "",
+                "icon": "building",
+                "out_of_scope": True,
+                "out_of_scope_note": "Cible à l'étranger : compléter par recherche web.",
+            },
+            _VALID_RAW_DOSSIER["segments"][0],
+        ],
+    }
+    _, _, _, segments, _ = coerce_dossier(raw)
+    assert len(segments) == 2
+    oos = next(s for s in segments if s.key == "producteurs_japon")
+    assert oos.out_of_scope is True
+    assert oos.query == ""
+
+
+def test_merge_atelier_cross_segment_tags_and_rollup():
+    """Même SIREN dans deux segments → tags multi-segments visibles."""
+    a = SegmentResult(
+        key="importateurs",
+        label="Importateurs",
+        description="",
+        mode="prospection",
+        icon="truck",
+        query="q1",
+        total=2,
+        credits_required=1,
+        columns=[],
+        preview=[
+            {
+                "siren": "123456789",
+                "nom": "Alpha Grossiste",
+                "_dedup_key": "siren:123456789",
+                "relevance_flag": "ok",
+            }
+        ],
+        map_points=[],
+    )
+    b = SegmentResult(
+        key="distributeurs",
+        label="Distributeurs",
+        description="",
+        mode="prospection",
+        icon="truck",
+        query="q2",
+        total=1,
+        credits_required=1,
+        columns=[],
+        preview=[
+            {
+                "siren": "123456789",
+                "nom": "Alpha Grossiste",
+                "_dedup_key": "siren:123456789",
+                "relevance_flag": "warning",
+            }
+        ],
+        map_points=[],
+    )
+    merge_atelier_cross_segment_tags([a, b])
+    assert a.preview[0]["segments"] == ["distributeurs", "importateurs"]
+    assert b.preview[0]["segments"] == ["distributeurs", "importateurs"]
+    roll = atelier_dossier_rollup_fields([a, b])
+    assert roll["total_raw"] == 3
+    assert roll["total_unique"] == 1
+    assert roll["total_relevant"] == 1
+
+
+def test_kappo_import_segment_preview_excludes_bank_when_scored_low():
+    """Contrat Atelier : une banque avec score exclu ne compte pas dans total_relevant."""
+    seg = SegmentResult(
+        key="importateurs",
+        label="Importateurs B2B boissons",
+        description="",
+        mode="prospection",
+        icon="truck",
+        query="Grossistes commerce de gros boissons Rhône",
+        total=2,
+        credits_required=1,
+        columns=[],
+        preview=[
+            {
+                "siren": "3000210276",
+                "nom": "Crédit Lyonnais",
+                "_dedup_key": "siren:3000210276",
+                "relevance_flag": "excluded",
+            },
+            {
+                "siren": "999999999",
+                "nom": "Saké Import Lyon",
+                "_dedup_key": "siren:999999999",
+                "relevance_flag": "ok",
+            },
+        ],
+        map_points=[],
+    )
+    roll = atelier_dossier_rollup_fields([seg])
+    assert roll["total_unique"] == 2
+    assert roll["total_relevant"] == 1
+
+
+def test_run_segment_search_out_of_scope_no_pipeline():
+    async def run():
+        return await run_segment_search(
+            SegmentBrief(
+                key="particuliers",
+                label="CSP+",
+                description="",
+                mode="prospection",
+                query="",
+                icon="users",
+                out_of_scope=True,
+                out_of_scope_note="Particuliers non listés dans SIRENE.",
+            )
+        )
+
+    seg = asyncio.run(run())
+    assert seg.out_of_scope is True
+    assert seg.total == 0
+    assert seg.preview == []
+    assert "SIRENE" in (seg.out_of_scope_note or "")
