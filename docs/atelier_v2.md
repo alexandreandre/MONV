@@ -30,6 +30,13 @@ Ce document suit la refonte de l’Agent Atelier. **Phase 1 (backend)** : correc
 
 À la lecture, les champs absents sont hydratés par les **défauts Pydantic** (`version=1`, totaux à 0, pas de champs pertinence sur les lignes d’historique). Le front peut traiter l’absence de `relevance_flag` comme affichage neutre.
 
-## Phases suivantes (non livrées ici)
+## Phase 2 — Quick wins UI (`BusinessDossier.tsx` legacy)
 
-TL;DR UI, endpoints de régénération, `AtelierDossier.tsx`, feature flag `atelier_v2_enabled` — voir cahier des charges projet.
+- Bandeau **Synthèse express** : 3 cartes Force / Risque / Action (ancrage vers synthèse et segments).
+- **Pertinence** et **Segments** dans `ResultsTable` : badges, tags multi-segments, masquage des lignes `excluded` avec lien pour les réafficher.
+- **Exporter tout le dossier** : bouton sous le header, enchaîne les exports Excel segment par segment (`handleExportAllAtelier` dans `page.tsx`).
+- Totaux dossier et budget structuré affichés dans le header quand l’API les fournit.
+
+## Phases suivantes
+
+Endpoints de régénération, `AtelierDossier.tsx`, feature flag `atelier_v2_enabled` — voir cahier des charges projet.

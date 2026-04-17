@@ -14,6 +14,11 @@ interface Props {
   userCredits: number;
   creditsUnlimited?: boolean;
   onExport: (searchId: string, format: "xlsx" | "csv") => void;
+  /** Export séquentiel de tous les segments Atelier disposant d'un search_id. */
+  onExportAllAtelier?: (
+    items: { search_id: string; credits_required: number }[],
+    format: "xlsx" | "csv"
+  ) => void;
   exporting: boolean;
   onQcmSubmit?: (answers: string) => void;
   /** Mode de la conversation — affiché en badge sur les messages utilisateur. */
@@ -27,6 +32,7 @@ export default function ChatMessage({
   userCredits,
   creditsUnlimited = false,
   onExport,
+  onExportAllAtelier,
   exporting,
   onQcmSubmit,
   conversationMode = null,
@@ -88,6 +94,7 @@ export default function ChatMessage({
             userCredits={userCredits}
             creditsUnlimited={creditsUnlimited}
             onExport={onExport}
+            onExportAllAtelier={onExportAllAtelier}
             exporting={exporting}
           />
         </div>
@@ -163,6 +170,14 @@ export default function ChatMessage({
             <QcmCard
               payload={meta as QcmPayload}
               onSubmit={onQcmSubmit}
+              submitLabel={
+                isAtelierBrief ? "Générer le dossier" : "Valider mes choix"
+              }
+              helperText={
+                isAtelierBrief
+                  ? "Une ou plusieurs réponses par question selon les cases ; tu pourras affiner ensuite dans la conversation."
+                  : undefined
+              }
             />
           )}
         </div>

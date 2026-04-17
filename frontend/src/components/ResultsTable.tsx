@@ -18,7 +18,6 @@ import {
   UserPlus,
   CircleDollarSign,
   AlertTriangle,
-  Filter,
   List,
 } from "lucide-react";
 
@@ -42,6 +41,8 @@ interface Props {
   onExport: (searchId: string, format: "xlsx" | "csv") => void;
   exporting: boolean;
   mapPoints?: Record<string, any>[];
+  /** Libellés des segments pour les tags `segments[]` (Atelier). */
+  segmentLabelByKey?: Record<string, string>;
 }
 
 const COL_LABELS: Record<string, string> = {
@@ -140,6 +141,68 @@ function SignalBadges({ signals }: { signals: Signal[] }) {
 
 const PRIMARY_COLS = new Set(["nom", "ville", "libelle_activite", "effectif_label", "chiffre_affaires"]);
 
+const META_COLS_HIDE = new Set([
+  "relevance_score",
+  "relevance_flag",
+  "reason_excluded",
+  "segments",
+  "_dedup_key",
+]);
+
+type RelevanceFlag = "ok" | "warning" | "excluded" | string;
+
+function RelevanceBadge({
+  flag,
+  title,
+}: {
+  flag: RelevanceFlag | null | undefined;
+  title?: string | null;
+}) {
+  if (!flag) return <span className="text-gray-600">—</span>;
+  const styles: Record<string, string> = {
+    ok: "bg-emerald-500/15 text-emerald-300 border-emerald-500/25",
+    warning: "bg-amber-500/15 text-amber-300 border-amber-500/25",
+    excluded: "bg-red-500/15 text-red-300 border-red-500/25",
+  };
+  const labels: Record<string, string> = {
+    ok: "Pertinent",
+    warning: "Limite",
+    excluded: "Écarté",
+  };
+  const cls = styles[flag] || "bg-white/[0.06] text-gray-400 border-white/[0.08]";
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${cls}`}
+      title={title || undefined}
+    >
+      {labels[flag] || flag}
+    </span>
+  );
+}
+
+function SegmentTags({
+  keys,
+  labelByKey,
+}: {
+  keys: string[] | null | undefined;
+  labelByKey?: Record<string, string>;
+}) {
+  if (!keys || keys.length === 0) return <span className="text-gray-600">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1 max-w-[200px]">
+      {keys.map((k) => (
+        <span
+          key={k}
+          className="inline-flex rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-gray-300"
+          title={k}
+        >
+          {labelByKey?.[k] || k}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /** Aligné sur l’aperçu API (10 lignes) : une seule page dans le fil de discussion. */
 const ROWS_PER_PAGE = 10;
 
@@ -191,9 +254,13 @@ function formatValue(col: string, val: any) {
 function MobileCard({
   row,
   visibleCols,
+  segmentLabelByKey,
+  showRelevance,
 }: {
   row: Record<string, any>;
   visibleCols: string[];
+  segmentLabelByKey?: Record<string, string>;
+  showRelevance: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -243,6 +310,20 @@ function MobileCard({
           )}
         </div>
       </div>
+
+      {(showRelevance || (Array.isArray(row.segments) && row.segments.length > 0)) && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {showRelevance && (
+            <RelevanceBadge
+              flag={row.relevance_flag as string}
+              title={row.reason_excluded ? String(row.reason_excluded) : undefined}
+            />
+          )}
+          {Array.isArray(row.segments) && row.segments.length > 0 && (
+            <SegmentTags keys={row.segments as string[]} labelByKey={segmentLabelByKey} />
+          )}
+        </div>
+      )}
 
       {row.signaux && row.signaux.length > 0 && (
         <div className="mt-2">
@@ -337,6 +418,7 @@ export default function ResultsTable({
   onExport,
   exporting,
   mapPoints = [],
+  segmentLabelByKey,
 }: Props) {
   const canExport = creditsUnlimited || userCredits >= creditsRequired;
   const [sortCol, setSortCol] = useState<string | null>(null);
@@ -345,6 +427,25 @@ export default function ResultsTable({
   const [currentPage, setCurrentPage] = useState(0);
   const [signalFilter, setSignalFilter] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"table" | "map">("table");
+  const [showExcluded, setShowExcluded] = useState(false);
+
+  const hasRelevanceData = useMemo(
+    () => data.some((r) => r.relevance_flag != null && String(r.relevance_flag).length > 0),
+    [data]
+  );
+  const hasSegmentTags = useMemo(
+    () => data.some((r) => Array.isArray(r.segments) && r.segments.length > 0),
+    [data]
+  );
+  const excludedCount = useMemo(
+    () => data.filter((r) => r.relevance_flag === "excluded").length,
+    [data]
+  );
+
+  const dataEffective = useMemo(() => {
+    if (showExcluded || !hasRelevanceData) return data;
+    return data.filter((r) => r.relevance_flag !== "excluded");
+  }, [data, hasRelevanceData, showExcluded]);
 
   const hasGeoData = mapPoints.length > 0;
 
@@ -373,23 +474,26 @@ export default function ResultsTable({
   }, [mapPoints, signalFilter, filterText]);
 
   const visibleCols = columns.filter(
-    (c) => c !== "lien_annuaire" && c !== "google_maps_url"
+    (c) =>
+      c !== "lien_annuaire" &&
+      c !== "google_maps_url" &&
+      !META_COLS_HIDE.has(c)
   );
 
   const allSignalTypes = useMemo(() => {
     const types = new Map<string, string>();
-    data.forEach((row) => {
+    dataEffective.forEach((row) => {
       (row.signaux || []).forEach((s: Signal) => {
         if (!types.has(s.type)) types.set(s.type, s.label);
       });
     });
     return types;
-  }, [data]);
+  }, [dataEffective]);
 
   const hasSignals = allSignalTypes.size > 0;
 
   const filtered = useMemo(() => {
-    let result = data;
+    let result = dataEffective;
     if (filterText.trim()) {
       const q = filterText.toLowerCase();
       result = result.filter((row) =>
@@ -406,7 +510,7 @@ export default function ResultsTable({
       );
     }
     return result;
-  }, [data, filterText, visibleCols, signalFilter]);
+  }, [dataEffective, filterText, visibleCols, signalFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -470,7 +574,30 @@ export default function ResultsTable({
     </div>
   );
 
-  const filterBar = data.length > 3 && (
+  const relevanceBar =
+    hasRelevanceData && excludedCount > 0 ? (
+      <div className="px-3 pt-2 pb-1 flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.04]">
+        <p className="text-[11px] text-gray-500">
+          {showExcluded
+            ? `Toutes les lignes affichées (${data.length}), dont ${excludedCount} écartée(s) par pertinence.`
+            : `${excludedCount} ligne(s) écartée(s) masquée(s).`}
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setShowExcluded(!showExcluded);
+            setCurrentPage(0);
+          }}
+          className="text-[11px] font-medium text-sky-400 hover:text-sky-300"
+        >
+          {showExcluded
+            ? "Masquer les écartées"
+            : `Voir les ${excludedCount} résultat(s) écarté(s)`}
+        </button>
+      </div>
+    ) : null;
+
+  const filterBar = dataEffective.length > 3 && (
     <div className="px-3 py-2 border-b border-white/[0.04]">
       <div className="relative">
         <Search
@@ -494,9 +621,9 @@ export default function ResultsTable({
   const pagination = totalPages > 1 && (
     <div className="border-t border-white/[0.04] px-4 py-2 flex items-center justify-between">
       <p className="text-xs text-gray-600">
-        {filtered.length === data.length
-          ? `${data.length} résultats (aperçu)`
-          : `${filtered.length} sur ${data.length} (filtré)`}
+        {filtered.length === dataEffective.length
+          ? `${dataEffective.length} résultats (aperçu)`
+          : `${filtered.length} sur ${dataEffective.length} (filtré)`}
       </p>
       <div className="flex items-center gap-1">
         <button
@@ -522,11 +649,11 @@ export default function ResultsTable({
     </div>
   );
 
-  const exportBar = total > data.length && (
+  const exportBar = total > dataEffective.length && (
     <div className="border-t border-white/[0.04] px-4 py-3">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <p className="text-sm text-gray-500">
-          <span className="text-white font-medium tabular-nums">{data.length}</span> sur{" "}
+          <span className="text-white font-medium tabular-nums">{dataEffective.length}</span> sur{" "}
           <span className="text-white font-medium tabular-nums">{total}</span> résultats
         </p>
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -572,6 +699,7 @@ export default function ResultsTable({
   return (
     <div className="mt-3 rounded-xl border border-white/[0.06] bg-surface-1 overflow-hidden animate-fade-in">
       {signalChips}
+      {relevanceBar}
       {filterBar}
 
       <div className="px-3 pt-3 pb-3">
@@ -588,6 +716,16 @@ export default function ResultsTable({
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 z-[1] bg-surface-1 shadow-[0_1px_0_0_rgba(255,255,255,0.04)]">
                       <tr className="bg-white/[0.03]">
+                  {hasRelevanceData && (
+                    <th className="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Pertinence
+                    </th>
+                  )}
+                  {hasSegmentTags && (
+                    <th className="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Segments
+                    </th>
+                  )}
                   {visibleCols.map((col) => (
                     <th
                       key={col}
@@ -614,7 +752,12 @@ export default function ResultsTable({
                 {pageData.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={visibleCols.length + 1}
+                      colSpan={
+                        visibleCols.length +
+                        1 +
+                        (hasRelevanceData ? 1 : 0) +
+                        (hasSegmentTags ? 1 : 0)
+                      }
                       className="px-3 py-6 text-center text-gray-600 text-sm"
                     >
                       Aucun résultat ne correspond au filtre.
@@ -626,6 +769,24 @@ export default function ResultsTable({
                       key={i}
                       className="hover:bg-white/[0.02] transition-colors"
                     >
+                      {hasRelevanceData && (
+                        <td className="px-3 py-2 whitespace-nowrap align-middle">
+                          <RelevanceBadge
+                            flag={row.relevance_flag as string}
+                            title={
+                              row.reason_excluded ? String(row.reason_excluded) : undefined
+                            }
+                          />
+                        </td>
+                      )}
+                      {hasSegmentTags && (
+                        <td className="px-3 py-2 align-middle">
+                          <SegmentTags
+                            keys={row.segments as string[]}
+                            labelByKey={segmentLabelByKey}
+                          />
+                        </td>
+                      )}
                       {visibleCols.map((col) => (
                         <td
                           key={col}
@@ -710,7 +871,13 @@ export default function ResultsTable({
                 ) : (
                   <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-2 pt-3">
                     {pageData.map((row, i) => (
-                      <MobileCard key={i} row={row} visibleCols={visibleCols} />
+                      <MobileCard
+                        key={i}
+                        row={row}
+                        visibleCols={visibleCols}
+                        segmentLabelByKey={segmentLabelByKey}
+                        showRelevance={hasRelevanceData}
+                      />
                     ))}
                   </div>
                 )}

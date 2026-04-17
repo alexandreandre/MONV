@@ -850,6 +850,38 @@ function HomeInner() {
     setExporting(false);
   };
 
+  const handleExportAllAtelier = async (
+    items: { search_id: string; credits_required: number }[],
+    format: "xlsx" | "csv"
+  ) => {
+    if (items.length === 0) return;
+    setExporting(true);
+    try {
+      let totalCredits = 0;
+      for (const item of items) {
+        const res = await apiPost<ExportResponse>("/search/export", {
+          search_id: item.search_id,
+          format,
+        });
+        totalCredits += res.credits_used;
+        window.open(res.download_url, "_blank");
+      }
+      const updatedUser = await apiGet<User>(
+        "/auth/me?token=" + localStorage.getItem("monv_token")
+      );
+      setUser(updatedUser);
+      addToast(
+        "success",
+        totalCredits > 0
+          ? `${items.length} export(s) ${format.toUpperCase()} lancé(s). ${totalCredits} crédit(s) utilisé(s) au total.`
+          : `${items.length} export(s) ${format.toUpperCase()} lancé(s).`
+      );
+    } catch (err: any) {
+      addToast("error", err.message || "Erreur lors d'un export du dossier.");
+    }
+    setExporting(false);
+  };
+
   const handleTemplateSelect = (query: string) => {
     if (!user) {
       if (sessionHint) return;
@@ -1146,6 +1178,7 @@ function HomeInner() {
                     userCredits={user?.credits ?? 0}
                     creditsUnlimited={user?.credits_unlimited ?? false}
                     onExport={handleExport}
+                    onExportAllAtelier={handleExportAllAtelier}
                     exporting={exporting}
                     onQcmSubmit={handleQcmSubmit}
                     conversationMode={activeConversationMode}

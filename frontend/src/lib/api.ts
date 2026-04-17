@@ -217,6 +217,9 @@ export interface ProjectBrief {
   budget: string;
   modele_revenus: string;
   ambition: string;
+  budget_min_eur?: number | null;
+  budget_max_eur?: number | null;
+  budget_hypotheses?: string[];
 }
 
 export interface BusinessCanvas {
@@ -276,6 +279,10 @@ export interface SegmentResult {
   preview: Record<string, unknown>[];
   map_points: Record<string, unknown>[];
   error?: string | null;
+  out_of_scope?: boolean;
+  out_of_scope_note?: string | null;
+  total_relevant?: number | null;
+  relevance_threshold?: number | null;
 }
 
 export interface AgentSynthesis {
@@ -293,4 +300,10 @@ export interface BusinessDossierPayload {
   flows: FlowMap;
   segments: SegmentResult[];
   synthesis: AgentSynthesis;
+  version?: number;
+  generated_at?: string | null;
+  total_raw?: number;
+  total_unique?: number;
+  total_relevant?: number;
+  total_credits?: number;
 }
