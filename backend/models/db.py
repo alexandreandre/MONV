@@ -345,6 +345,14 @@ async def message_insert(client: Client, msg: Message) -> None:
     await conversation_touch(client, msg.conversation_id)
 
 
+async def message_update(
+    client: Client, message_id: str, patch: dict, conversation_id: str | None = None
+) -> None:
+    await sb_run(lambda: client.table("messages").update(patch).eq("id", message_id).execute())
+    if conversation_id:
+        await conversation_touch(client, conversation_id)
+
+
 async def search_history_insert(client: Client, record: SearchHistory) -> SearchHistory:
     row = record.to_insert_row()
 

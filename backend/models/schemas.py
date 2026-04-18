@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 
 # --- Auth ---
@@ -272,7 +272,8 @@ class AgentRequest(BaseModel):
 
     - Premier tour : `pitch` seul → déclenche un QCM de clarification.
     - Second tour : `conversation_id` + `answers` → déclenche la génération
-      du dossier complet.
+      du dossier complet. Si le QCM du premier tour était vide (`questions: []`),
+      `answers` peut être vide ou absent : le dossier est généré à partir du pitch seul.
 
     Premier tour — `folder_id` :
     - absent / null : crée un **nouveau** projet PROJETS et rattache la conversation ;
@@ -391,6 +392,28 @@ class ProjectBrief(BaseModel):
     budget_hypotheses: list[str] = []
 
 
+class ChecklistItem(BaseModel):
+    """Une action de la checklist Atelier avec texte d’accompagnement."""
+    label: str = ""
+    guide: str = ""
+
+
+class ChecklistSection(BaseModel):
+    """Bloc thématique (phase, étape, pièges…)."""
+    title: str = ""
+    subtitle: str | None = None
+    items: list[ChecklistItem] = []
+
+
+class AtelierChecklist(BaseModel):
+    """Feuille de route actionnable (optionnelle selon génération LLM)."""
+    headline: str = ""
+    lede: str | None = None
+    sections: list[ChecklistSection] = []
+    pitfalls_title: str | None = None
+    pitfalls: list[ChecklistItem] = []
+
+
 class AgentSynthesis(BaseModel):
     """Synthèse produite à la fin du parcours Atelier."""
     forces: list[str] = []
@@ -398,6 +421,10 @@ class AgentSynthesis(BaseModel):
     prochaines_etapes: list[str] = []
     kpis: list[str] = []
     budget_estimatif: str | None = None
+    # Ouverture « fiche conseil » (puces courtes, pas de blabla marketing)
+    ordres_grandeur: list[str] = []
+    conseil_semaine: str | None = None
+    checklist: AtelierChecklist | None = None
 
 
 class BusinessDossier(BaseModel):
@@ -420,3 +447,38 @@ class AgentResponse(BaseModel):
     messages: list[MessageOut]
     # Projet PROJETS lié (créé ou existant) — renvoyé au premier tour pour la sidebar.
     folder_id: str | None = None
+
+
+class AtelierSegmentRegenerateRequest(BaseModel):
+    conversation_id: str
+    query_override: str | None = None
+    mode_override: str | None = None
+
+
+class AtelierCanvasRegenerateRequest(BaseModel):
+    conversation_id: str
+
+
+class AtelierBriefUpdateRequest(BaseModel):
+    conversation_id: str
+    brief: ProjectBrief
+    impacts: list[Literal["canvas", "flows", "segments"]]
+
+
+class AtelierGenerationStats(BaseModel):
+    llm_calls: int = 0
+    api_calls: int = 0
+    credits_charged: int = 0
+    relevance_removed_per_segment: dict[str, int] = {}
+
+
+class AtelierDossierMutationResponse(BaseModel):
+    """Réponse des endpoints qui mettent à jour le dernier dossier Atelier."""
+    dossier: BusinessDossier
+    generation_stats: AtelierGenerationStats
+    credits_remaining: int | None = None
+
+
+class AtelierDossierGetResponse(BaseModel):
+    message_id: str
+    dossier: dict[str, Any]

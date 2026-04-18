@@ -6,12 +6,12 @@ Expérience en deux tours :
   Tour 1 — POST /api/agent/send avec `{ pitch }` et optionnellement `folder_id`
     → crée un projet PROJETS (sauf si `folder_id` pointe vers un projet existant),
       crée une conversation (mode="atelier") rattachée à ce projet, persiste le
-      pitch utilisateur, génère un QCM de clarification et renvoie un
-      message_type="agent_brief".
+      pitch utilisateur, génère un QCM de clarification (0 à N questions selon le pitch)
+      et renvoie un message_type="agent_brief".
 
   Tour 2 — POST /api/agent/send avec `{ conversation_id, answers }`
     → récupère le pitch initial depuis la conversation, combine avec les
-      réponses QCM, génère le squelette de dossier via le LLM
+      réponses QCM (ou le pitch seul si le QCM était vide), génère le squelette de dossier via le LLM
       orchestrateur, lance en parallèle UN appel au pipeline MONV par
       segment, puis persiste le message_type="business_dossier".
 
@@ -37,33 +37,53 @@ from models.db import (
     conversation_insert,
     get_supabase,
     message_insert,
+    message_update,
     messages_list_asc,
     project_folder_get,
     project_folder_insert,
     project_folders_list_for_user,
     search_history_insert,
+    user_update_credits,
 )
 from models.entities import Conversation, Message, ProjectFolder, SearchHistory, gen_uuid
 from models.schemas import (
     AgentRequest,
     AgentResponse,
+    AtelierBriefUpdateRequest,
+    AtelierCanvasRegenerateRequest,
+    AtelierDossierGetResponse,
+    AtelierDossierMutationResponse,
+    AtelierGenerationStats,
+    AtelierSegmentRegenerateRequest,
     BusinessDossier,
     MessageOut,
+    SegmentResult,
 )
 from routers.auth import get_current_user
 from services.agent import (
     ATELIER_MODE_LABEL,
-    atelier_dossier_rollup_fields,
     build_brief_metadata,
     coerce_dossier,
     dossier_metadata_json,
     generate_atelier_qcm,
     generate_dossier_skeleton,
-    merge_atelier_cross_segment_tags,
+    regenerate_atelier_canvas_llm,
+    regenerate_atelier_flows_llm,
+    run_segment_search,
     run_segment_searches,
     suggest_atelier_conversation_title,
     suggest_atelier_project_folder_name,
 )
+from services.atelier_mutations import (
+    atelier_dossier_rollup_fields,
+    business_dossier_from_metadata_json,
+    dossier_after_segment_list_refresh,
+    dossier_with_replaced_segment,
+    merge_atelier_cross_segment_tags,
+    segment_result_to_brief,
+)
+from services.modes import normalize_mode
+from utils.credits_policy import user_has_unlimited_credits
 from utils.pipeline_log import plog
 
 
@@ -80,10 +100,291 @@ def _atelier_project_name_from_pitch(pitch: str) -> str:
 
 AGENT_WELCOME_COPY = (
     "Décris ton projet en quelques phrases (métier, cible, zone, ce qui te "
-    "différencie). L'Atelier te répondra avec une lecture structurée puis un "
-    "questionnaire court adapté à ton secteur — ensuite : dossier, schéma de "
-    "flux et listes d'entreprises à contacter."
+    "différencie). L'Atelier te répond avec une lecture structurée puis, seulement "
+    "si c'est utile, quelques questions ciblées (ou aucune si ton pitch suffit déjà) "
+    "— ensuite : dossier, schéma de flux et listes d'entreprises à contacter."
 )
+
+ATELIER_REGEN_SEGMENT_CREDITS = 1
+
+
+def _atelier_pitch_and_qcm_answers(messages: list[Message]) -> tuple[str, str]:
+    user_texts = [m for m in messages if m.role == "user" and m.message_type == "text"]
+    pitch = (user_texts[0].content if user_texts else "") or ""
+    answers = (user_texts[1].content if len(user_texts) >= 2 else "") or ""
+    return pitch.strip(), answers.strip()
+
+
+def _find_latest_dossier_pair(messages: list[Message]) -> tuple[Message, BusinessDossier] | None:
+    for m in reversed(messages):
+        if m.message_type != "business_dossier" or not m.metadata_json:
+            continue
+        d = business_dossier_from_metadata_json(m.metadata_json)
+        if d:
+            return m, d
+    return None
+
+
+async def _persist_atelier_segment_search(
+    supabase: Client,
+    user_id: str,
+    conv_id: str,
+    seg: SegmentResult,
+) -> None:
+    if seg.total <= 0 or not seg.preview:
+        return
+    sid = gen_uuid()
+    seg.search_id = sid
+    try:
+        await search_history_insert(
+            supabase,
+            SearchHistory(
+                id=sid,
+                user_id=user_id,
+                conversation_id=conv_id,
+                query_text=seg.query,
+                intent="atelier_segment",
+                entities_json=None,
+                results_count=seg.total,
+                credits_used=seg.credits_required,
+                results_json=json.dumps(seg.preview, ensure_ascii=False, default=str),
+                exported=False,
+                export_path=None,
+                created_at=datetime.now(timezone.utc),
+                mode=seg.mode,
+            ),
+        )
+    except Exception:
+        plog(
+            "atelier_segment_history_error",
+            key=seg.key,
+            error=traceback.format_exc()[-1200:],
+        )
+        seg.search_id = None
+
+
+@router.get("/dossier/{conversation_id}", response_model=AtelierDossierGetResponse)
+async def atelier_get_dossier(
+    conversation_id: str,
+    user=Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+):
+    conv = await conversation_get(supabase, conversation_id, user.id)
+    if not conv or (conv.mode or "") != ATELIER_MODE_LABEL:
+        raise HTTPException(404, "Conversation Atelier introuvable.")
+    msgs = await messages_list_asc(supabase, conversation_id)
+    pair = _find_latest_dossier_pair(msgs)
+    if not pair:
+        raise HTTPException(404, "Aucun dossier Atelier dans cette conversation.")
+    msg, dossier = pair
+    raw = json.loads(dossier_metadata_json(dossier))
+    return AtelierDossierGetResponse(message_id=msg.id, dossier=raw)
+
+
+@router.post("/segments/{segment_key}/regenerate", response_model=AtelierDossierMutationResponse)
+async def atelier_regenerate_segment(
+    segment_key: str,
+    body: AtelierSegmentRegenerateRequest,
+    user=Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+):
+    conv = await conversation_get(supabase, body.conversation_id, user.id)
+    if not conv or (conv.mode or "") != ATELIER_MODE_LABEL:
+        raise HTTPException(404, "Conversation Atelier introuvable.")
+    msgs = await messages_list_asc(supabase, body.conversation_id)
+    pair = _find_latest_dossier_pair(msgs)
+    if not pair:
+        raise HTTPException(404, "Aucun dossier Atelier à mettre à jour.")
+    msg, dossier = pair
+    sk = segment_key.strip().lower()
+    target = next((s for s in dossier.segments if s.key.lower().strip() == sk), None)
+    if not target:
+        raise HTTPException(404, "Segment inconnu dans ce dossier.")
+    if target.out_of_scope:
+        raise HTTPException(400, "Ce segment est hors périmètre MONV et ne peut pas être relancé.")
+
+    debited = 0
+    if not user_has_unlimited_credits(user):
+        if user.credits < ATELIER_REGEN_SEGMENT_CREDITS:
+            raise HTTPException(
+                400,
+                f"Crédits insuffisants pour regénérer ce segment ({ATELIER_REGEN_SEGMENT_CREDITS} crédit requis).",
+            )
+        new_bal = user.credits - ATELIER_REGEN_SEGMENT_CREDITS
+        await user_update_credits(supabase, user.id, new_bal)
+        user.credits = new_bal
+        debited = ATELIER_REGEN_SEGMENT_CREDITS
+
+    stats = AtelierGenerationStats(llm_calls=0, api_calls=1, credits_charged=debited)
+    try:
+        brief = segment_result_to_brief(target)
+        if body.query_override and body.query_override.strip():
+            brief = brief.model_copy(update={"query": body.query_override.strip()[:400]})
+        if body.mode_override and body.mode_override.strip():
+            brief = brief.model_copy(
+                update={"mode": str(normalize_mode(body.mode_override))}
+            )
+        new_seg = await run_segment_search(brief)
+        await _persist_atelier_segment_search(supabase, user.id, body.conversation_id, new_seg)
+        d2 = dossier_with_replaced_segment(dossier, sk, new_seg)
+        d3 = dossier_after_segment_list_refresh(d2)
+        rel_rm: dict[str, int] = {}
+        if target.total and new_seg.total_relevant is not None:
+            rel_rm[sk] = max(0, int(target.total) - int(new_seg.total_relevant))
+        stats.relevance_removed_per_segment = rel_rm
+        await message_update(
+            supabase,
+            msg.id,
+            {"metadata_json": dossier_metadata_json(d3)},
+            body.conversation_id,
+        )
+        plog(
+            "atelier_segment_regenerate",
+            conversation_id=body.conversation_id,
+            segment_key=sk,
+            credits_charged=debited,
+        )
+        return AtelierDossierMutationResponse(
+            dossier=d3,
+            generation_stats=stats,
+            credits_remaining=user.credits if not user_has_unlimited_credits(user) else None,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if debited and not user_has_unlimited_credits(user):
+            await user_update_credits(supabase, user.id, user.credits + debited)
+            user.credits += debited
+        plog("atelier_segment_regenerate_error", error=str(exc)[:500])
+        raise HTTPException(502, "Regénération du segment indisponible.") from exc
+
+
+@router.post("/canvas/regenerate", response_model=AtelierDossierMutationResponse)
+async def atelier_regenerate_canvas(
+    body: AtelierCanvasRegenerateRequest,
+    user=Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+):
+    conv = await conversation_get(supabase, body.conversation_id, user.id)
+    if not conv or (conv.mode or "") != ATELIER_MODE_LABEL:
+        raise HTTPException(404, "Conversation Atelier introuvable.")
+    msgs = await messages_list_asc(supabase, body.conversation_id)
+    pair = _find_latest_dossier_pair(msgs)
+    if not pair:
+        raise HTTPException(404, "Aucun dossier Atelier à mettre à jour.")
+    msg, dossier = pair
+    pitch, answers = _atelier_pitch_and_qcm_answers(msgs)
+    try:
+        new_canvas = await regenerate_atelier_canvas_llm(
+            pitch, answers, dossier.brief, dossier.canvas
+        )
+        d2 = dossier.model_copy(
+            update={
+                "canvas": new_canvas,
+                "version": (dossier.version or 1) + 1,
+                "generated_at": datetime.now(timezone.utc),
+            }
+        )
+        await message_update(
+            supabase,
+            msg.id,
+            {"metadata_json": dossier_metadata_json(d2)},
+            body.conversation_id,
+        )
+        plog("atelier_canvas_regenerate", conversation_id=body.conversation_id)
+        return AtelierDossierMutationResponse(
+            dossier=d2,
+            generation_stats=AtelierGenerationStats(llm_calls=1, api_calls=0, credits_charged=0),
+            credits_remaining=user.credits if not user_has_unlimited_credits(user) else None,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        plog("atelier_canvas_regenerate_error", error=str(exc)[:500])
+        raise HTTPException(502, "Regénération du canvas indisponible.") from exc
+
+
+@router.post("/brief/update", response_model=AtelierDossierMutationResponse)
+async def atelier_brief_update(
+    body: AtelierBriefUpdateRequest,
+    user=Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+):
+    if not body.impacts:
+        raise HTTPException(400, "Indique au moins une zone à recalculer (impacts).")
+    conv = await conversation_get(supabase, body.conversation_id, user.id)
+    if not conv or (conv.mode or "") != ATELIER_MODE_LABEL:
+        raise HTTPException(404, "Conversation Atelier introuvable.")
+    msgs = await messages_list_asc(supabase, body.conversation_id)
+    pair = _find_latest_dossier_pair(msgs)
+    if not pair:
+        raise HTTPException(404, "Aucun dossier Atelier à mettre à jour.")
+    msg, dossier = pair
+    pitch, answers = _atelier_pitch_and_qcm_answers(msgs)
+
+    stats = AtelierGenerationStats()
+    d = dossier.model_copy(update={"brief": body.brief})
+    try:
+        if "canvas" in body.impacts:
+            d = d.model_copy(
+                update={
+                    "canvas": await regenerate_atelier_canvas_llm(
+                        pitch, answers, d.brief, d.canvas
+                    )
+                }
+            )
+            stats.llm_calls += 1
+        if "flows" in body.impacts:
+            keys = [s.key for s in d.segments]
+            d = d.model_copy(
+                update={
+                    "flows": await regenerate_atelier_flows_llm(
+                        pitch, answers, d.brief, keys, d.flows
+                    )
+                }
+            )
+            stats.llm_calls += 1
+        if "segments" in body.impacts:
+            brs = [segment_result_to_brief(s) for s in d.segments]
+            new_segs = await run_segment_searches(brs)
+            stats.api_calls += len(brs)
+            for seg in new_segs:
+                await _persist_atelier_segment_search(supabase, user.id, body.conversation_id, seg)
+            d = d.model_copy(update={"segments": new_segs})
+            d = dossier_after_segment_list_refresh(d)
+        else:
+            segs = list(d.segments)
+            merge_atelier_cross_segment_tags(segs)
+            roll = atelier_dossier_rollup_fields(segs)
+            d = d.model_copy(
+                update={
+                    "segments": segs,
+                    "total_raw": roll["total_raw"],
+                    "total_unique": roll["total_unique"],
+                    "total_relevant": roll["total_relevant"],
+                    "total_credits": roll["total_credits"],
+                    "version": (dossier.version or 1) + 1,
+                    "generated_at": datetime.now(timezone.utc),
+                }
+            )
+
+        await message_update(
+            supabase,
+            msg.id,
+            {"metadata_json": dossier_metadata_json(d)},
+            body.conversation_id,
+        )
+        plog("atelier_brief_update", conversation_id=body.conversation_id, impacts=body.impacts)
+        return AtelierDossierMutationResponse(
+            dossier=d,
+            generation_stats=stats,
+            credits_remaining=user.credits if not user_has_unlimited_credits(user) else None,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        plog("atelier_brief_update_error", error=str(exc)[:500])
+        raise HTTPException(502, "Mise à jour du brief indisponible.") from exc
 
 
 @router.post("/send", response_model=AgentResponse)
@@ -175,10 +476,6 @@ async def agent_send(
         if not conv:
             raise HTTPException(404, "Atelier introuvable.")
 
-        answers = (req.answers or "").strip()
-        if not answers:
-            raise HTTPException(400, "Réponds d'abord aux questions.")
-
         prior_msgs = await messages_list_asc(supabase, conv.id)
         pitch_msg = next(
             (m for m in prior_msgs if m.role == "user" and m.message_type == "text"),
@@ -186,6 +483,24 @@ async def agent_send(
         )
         if not pitch_msg:
             raise HTTPException(400, "Pitch introuvable pour cet Atelier.")
+
+        atelier_brief_n_questions = 0
+        for m in prior_msgs:
+            if m.role != "assistant" or (m.message_type or "") != "agent_brief":
+                continue
+            if m.metadata_json:
+                try:
+                    meta = json.loads(m.metadata_json)
+                    qs = meta.get("questions")
+                    if isinstance(qs, list):
+                        atelier_brief_n_questions = len(qs)
+                except json.JSONDecodeError:
+                    pass
+            break
+
+        answers = (req.answers or "").strip()
+        if not answers and atelier_brief_n_questions > 0:
+            raise HTTPException(400, "Réponds d'abord aux questions.")
 
         # Persiste la réponse utilisateur AVANT la génération pour que le
         # frontend puisse rejouer la conversation s'il refresh pendant les

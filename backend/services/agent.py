@@ -22,19 +22,22 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections import defaultdict
 from typing import Any
 
 from config import settings
 from models.schemas import (
+    BusinessCanvas,
     BusinessDossier,
+    FlowMap,
     GuardResult,
+    ProjectBrief,
     QcmQuestion,
     SegmentBrief,
     SegmentResult,
 )
 from services.atelier_constants import ATELIER_MODE_LABEL
 from services.atelier_coerce import coerce_dossier
+from services.atelier_mutations import atelier_dossier_rollup_fields, merge_atelier_cross_segment_tags
 from services.atelier_heuristics import (
     heuristic_atelier_conversation_title,
     heuristic_atelier_project_folder_name,
@@ -79,10 +82,23 @@ Tu es l'Atelier MONV : tu aides un porteur de projet à structurer son idée AVA
 de générer un dossier (business model, schéma de flux, listes d'entreprises réelles).
 Tu reçois un pitch libre (parfois déjà très détaillé).
 
+RÈGLE D'OR — NOMBRE DE QUESTIONS = FONCTION DU MANQUE RÉEL :
+- Avant chaque question, vérifie si l'axe est DÉJÀ couvert par le pitch (même implicitement).
+  Si oui : ne pose PAS cette question (ex. ne redemande pas la ville si elle est nommée ;
+  ne redemande pas service sur place + livraison + e-commerce si les trois sont déjà annoncés).
+- Zéro question est un résultat VALIDE et SOUHAITABLE lorsque le pitch est déjà assez riche
+  pour produire un dossier et des recherches d'entreprises pertinentes. Dans ce cas :
+  "questions": [] et l'intro confirme que tu enchaînes sur le dossier.
+- Le volume de questions n'est PAS fixe : 0 si rien d'utile à débloquer, jusqu'à 8 si le pitch
+  est très vague ou lacunaire sur plusieurs axes indépendants.
+
 ANTI-PATTERN (à éviter) :
 - Ne pose PAS un questionnaire « start-up générique » (B2B/B2C + abonnement/SaaS +
   budget minuscule) si le pitch décrit déjà un métier concret (restauration, retail,
   artisanat, santé, logistique, import, etc.).
+- Ne recycle pas des questions « coaching » (budget global, expérience du fondateur, délai
+  d'ouverture, positionnement haut de gamme ou non) si le pitch y a déjà répondu ou si la
+  réponse est déductible sans ambiguïté pour la suite du dossier.
 - Les options doivent être ANCRÉES dans le pitch (noms de canaux, formats, zones,
   types de clientèle que l'utilisateur a évoqués ou qui sont évidents pour ce métier).
 - Ne demande pas « Administration » si le projet ne concerne manifestement pas le public.
@@ -101,11 +117,13 @@ AXES D'ANALYSE (interne — ne pas les lister à l'utilisateur) :
   ou un local commercial ≠ un SaaS solo)
 - ambition : taille d'équipe / surface / volume à 2-3 ans
 
-NOMBRE DE QUESTIONS :
-- Pitch très flou ou < ~40 mots : jusqu'à 5 questions, les plus discriminantes d'abord.
-- Pitch moyen : 2 à 4 questions sur ce qui manque encore pour cadrer recherche + dossier.
-- Pitch déjà dense : 1 question très ciblée, ou 2 si deux incertitudes claires.
-- Pitch complet sur tous les axes utiles : "questions": [] (aucune question artificielle).
+NOMBRE DE QUESTIONS (guide, pas un quota obligatoire) :
+- Pitch très flou ou < ~40 mots : jusqu'à 8 questions au total, les plus discriminantes d'abord.
+- Pitch moyen : seulement les axes encore ambigus pour le dossier (souvent 1 à 4 questions).
+- Pitch déjà dense (ex. offre + zone + canaux + modèle économique déjà posés) : 0 à 2 questions
+  ultra ciblées sur le seul angle qui bloque encore (ex. périmètre exact d'une livraison locale
+  si « local » est flou ; licence / import si l'alcool est central et non cadré).
+- Pitch complet sur tous les axes utiles au dossier et aux recherches : "questions": [].
 
 ORDRE DES QUESTIONS (respecte cet ordre quand il y en a plusieurs) :
 1) cible / priorité marché
@@ -265,7 +283,7 @@ async def suggest_atelier_project_folder_name(pitch: str) -> str:
 
 
 async def generate_atelier_qcm(pitch: str) -> tuple[str, list[QcmQuestion]]:
-    """Génère un QCM adapté au pitch (1 à 5 questions, ou validation si complet).
+    """Génère un QCM adapté au pitch (0 à 8 questions selon le manque réel).
 
     Fallback silencieux sur un QCM standard si le LLM est indisponible."""
     try:
@@ -350,13 +368,25 @@ Réponds UNIQUEMENT avec un JSON strict :
     }
   ],
   "alertes_structurelles": ["..."],
-  "hypotheses_a_valider": ["..."]
+  "hypotheses_a_valider": ["..."],
+  "jalons_creation": [
+    "Semaine 1 — cadrage & arbitrages",
+    "Étude de marché & offre",
+    "Business plan & financement",
+    "Juridique & conformité",
+    "Local / production / outils",
+    "Recrutement & organisation",
+    "Lancement & acquisition clients",
+    "Pilotage & optimisation"
+  ]
 }
 
 Règles :
 - 4 à 12 entrées dans `acteurs_cles` selon la complexité réelle (pas toujours 3).
 - 3 à 5 objets dans `segments_recherche` (jamais « atelier » ni « client » comme mode).
 - Les noms dans `de`/`vers` doivent correspondre EXACTEMENT à des `nom` de `acteurs_cles`.
+- `jalons_creation` : obligatoire, 10 à 20 entrées, chacune ≤ 72 caractères, sans doublons,
+  couvrant de « démarrage immédiat » jusqu'à « pilotage / croisière » selon le projet.
 
 PÉRIMÈTRE PIPELINE MONV (obligatoire) :
 - Chaque segment qui doit lancer une recherche d'entreprises françaises doit cibler des
@@ -381,8 +411,11 @@ en DOSSIER LIVRABLE pour l'interface utilisateur.
 Sortie : UN SEUL objet JSON (pas de markdown, pas de commentaires hors JSON).
 
 FORMAT JSON (critique) :
-- Guillemets doubles ; pas de newline dans les chaînes ; `detail` des arcs ≤ 200 car.
+- Guillemets doubles ; pas de saut de ligne littéral dans les chaînes (remplace par virgules ou points) ;
+  `detail` des arcs ≤ 200 car.
 - Objet complet et **terminé** (toutes accolades fermées).
+- **Priorité tokens** : canvas et flux restent compacts ; la **checklist** doit être très fournie
+  (c'est le guide opérationnel principal du porteur).
 
 Contraintes rédactionnelles :
 - Tout en FRANÇAIS, factuel, sans emoji ni ton marketing creux.
@@ -419,11 +452,41 @@ type « client final / ta structure / fournisseur » si le plan dit autre chose)
   Chaque arc : {"origine": "...", "destination": "...", "label": "court", "detail": "précision au clic (1-2 phrases)", "pattern": "solid|dashed"}
   Utilise `pattern":"dashed"` pour flux indirects, réglementaires, feedbacks légers.
 
-Canvas : chaque liste 3 à 6 éléments.
+Canvas : chaque liste **3 à 5** éléments (puces courtes uniquement).
 
 Synthèse :
-- forces / risques : 3 à 5 points concrets ; prochaines_etapes : 4 à 7 étapes ordonnées ;
+- forces / risques : 3 à 5 points concrets ; prochaines_etapes : **6 à 10** micro-étapes alignées sur le début de la checklist ;
   kpis : 3 à 5 indicateurs mesurables ; budget_estimatif si pertinent.
+- ordres_grandeur : 4 à 10 puces ultra courtes (chiffres, fourchettes, %, pas de phrases longues) :
+  investissement global, mix financement indicatif, CA / marge / seuil de rentabilité si pertinent,
+  BFR ou trésorerie si pertinent — style note de cadrage pro.
+- conseil_semaine : UNE action concrète immédiate (rendez-vous, livrable, contact) sur 1 à 3 phrases max.
+
+CHECKLIST — **guide A à Z « comme une recette »** (le cœur du livrable ; **très dense**, adapté au pitch + plan) :
+- Lis le plan stratégique : champ `jalons_creation` (s'il manque, déduis-le du pitch). **Chaque jalon majeur**
+  doit devenir au moins une `section` OU être regroupé en phases avec plusieurs sections.
+- `headline` : objectif utilisateur en une ligne (ex. « Ouvrir … à … »).
+- `lede` : une ligne chrono (ex. « À faire cette semaine » ou « Mois 1 à 4 — préparation ») si pertinent.
+- `sections` : **minimum 14 sections**, viser **18 à 26** pour un projet multi-canaux (ex. restau + livraison + e-commerce réglementé).
+  Ordre **chronologique** du premier geste jusqu'au pilotage en « régime de croisière ».
+- Chaque section :
+  - `title` : libellé explicite, style atelier (ex. « Semaine 1 — Démarrer proprement — 7 jours »,
+    « Étape 3 — Business plan — Mois 2-3 », « Phase exécution — Travaux & MEP »). Inclure durée ou mois quand c'est clair.
+  - `subtitle` : optionnel (ex. « Mois 1 », « 2-4 semaines »).
+  - `items` : **minimum 4 items par section**, viser **5 à 12** selon l'étape ; chaque item = action **vérifiable**
+    (comme une case à cocher), formulation impérative ou résultat attendu, **sans numérotation dans le texte**.
+- Chaque item : `{ "label": "...", "guide": "..." }` avec
+  - `label` : une ligne, ≤ 140 caractères, concret (livrable, rendez-vous, document, seuil chiffré…).
+  - `guide` : **2 à 4 phrases** utiles (comment faire, où trouver, piège fréquent, critère de « fait »). Pas de jargon creux.
+- Couvre **tout le cycle** : cadrage & arbitrages, étude marché / offre, BP & financement, juridique & conformité
+  (inclure sujets spécifiques au secteur : alcool, hygiene, métrologie, données perso, etc. si pertinents),
+  local / équipements / supply chain si pertinent, recrutement, opérations multi-canaux (ex. sur place + livraison + e-commerce),
+  marketing & lancement, ouverture, puis **pilotage récurrent** (tableaux de bord, rituels, revues).
+- `pitfalls_title` : ex. « Les 10 pièges à éviter (à relire tous les 3 mois) ».
+- `pitfalls` : **10 à 14** objets `{label, guide}` — erreurs classiques du secteur / modèle, guides courts mais percutants.
+- **Total global** : vise **≥ 110 items** checklist (hors pièges) pour un projet riche comme restauration + livraison + vente en ligne ;
+  si le projet est plus simple, reste au-dessus de **75 items** quand même.
+- Noms propres géographiques ou dispositifs : seulement si plausibles pour la zone du brief (ex. métropole citée).
 
 Structure JSON exacte attendue :
 {
@@ -437,7 +500,14 @@ Structure JSON exacte attendue :
     "flux_information": [...]
   },
   "segments": [ { "key", "label", "description", "mode", "query", "icon", "out_of_scope", "out_of_scope_note" } ],
-  "synthesis": { "forces", "risques", "prochaines_etapes", "kpis", "budget_estimatif" }
+  "synthesis": {
+    "forces", "risques", "prochaines_etapes", "kpis", "budget_estimatif",
+    "ordres_grandeur", "conseil_semaine",
+    "checklist": {
+      "headline", "lede", "sections": [ { "title", "subtitle", "items": [ { "label", "guide" } ] } ],
+      "pitfalls_title", "pitfalls": [ { "label", "guide" } ]
+    }
+  }
 }
 """
 
@@ -477,12 +547,17 @@ async def generate_dossier_skeleton(
         user_base
         + "\n\n--- PLAN STRATÉGIQUE (respecte-le fidèlement ; complète seulement les détails manquants) ---\n"
         + plan_block
+        + "\n\n--- CONSIGNE FINALE ---\n"
+        "Le champ `synthesis.checklist` est la priorité absolue du JSON : feuille de route A à Z, "
+        "très détaillée, en suivant `jalons_creation` du plan (chaque jalon = une ou plusieurs sections). "
+        "Respecte les minimums indiqués dans le prompt système (nombre de sections, d'items, pièges). "
+        "Canvas et flux : rester concis pour laisser de la place à la checklist."
     )
     raw = await llm_json_call(
         model=model,
         system=_ATELIER_DOSSIER_FILL_SYSTEM,
         messages=[{"role": "user", "content": user_fill}],
-        max_tokens=8192,
+        max_tokens=16384,
         temperature=0.2,
         json_mode=True,
         allow_json_repair=True,
@@ -492,60 +567,6 @@ async def generate_dossier_skeleton(
 
 
 # ─── Couche 3 : exécution des segments via le pipeline MONV ──────────────────
-
-
-def preview_row_dedup_key(row: dict[str, Any]) -> str:
-    """Clé alignée sur `api_engine._dedup_key` pour lignes déjà sérialisées."""
-    s = str(row.get("siren") or "").strip()
-    if s:
-        return f"siren:{s}"
-    nom = (str(row.get("nom") or "")).lower().strip()
-    ville = (str(row.get("ville") or "")).lower().strip()
-    return f"name:{nom}|{ville}"
-
-
-def merge_atelier_cross_segment_tags(segments: list[SegmentResult]) -> None:
-    """Sur chaque ligne de `preview`, remplit `segments` avec toutes les clés de segment
-    qui partagent la même entreprise (dédup SIREN prioritaire)."""
-    key_to_keys: dict[str, set[str]] = defaultdict(set)
-    for seg in segments:
-        if seg.out_of_scope:
-            continue
-        for row in seg.preview:
-            dk = str(row.get("_dedup_key") or preview_row_dedup_key(row)).strip()
-            if dk in ("name:|", "siren:"):
-                continue
-            key_to_keys[dk].add(seg.key)
-    for seg in segments:
-        for row in seg.preview:
-            dk = str(row.get("_dedup_key") or preview_row_dedup_key(row)).strip()
-            tags = key_to_keys.get(dk) or {seg.key}
-            row["segments"] = sorted(tags)
-
-
-def atelier_dossier_rollup_fields(segments: list[SegmentResult]) -> dict[str, int]:
-    """Totaux dossier : somme des `total` segment, uniques SIREN/nom, pertinents (ok+warning)."""
-    total_raw = sum(s.total for s in segments)
-    total_credits = sum(s.credits_required for s in segments)
-    keys_all: set[str] = set()
-    keys_relevant: set[str] = set()
-    for s in segments:
-        if s.out_of_scope:
-            continue
-        for row in s.preview:
-            dk = str(row.get("_dedup_key") or preview_row_dedup_key(row)).strip()
-            if dk in ("name:|", "siren:"):
-                continue
-            keys_all.add(dk)
-            flg = row.get("relevance_flag")
-            if flg in ("ok", "warning"):
-                keys_relevant.add(dk)
-    return {
-        "total_raw": total_raw,
-        "total_unique": len(keys_all),
-        "total_relevant": len(keys_relevant),
-        "total_credits": total_credits,
-    }
 
 
 async def run_segment_search(segment: SegmentBrief) -> SegmentResult:
@@ -723,15 +744,98 @@ def build_brief_metadata(pitch: str) -> str:
     )
 
 
+_ATELIER_CANVAS_REFRESH_SYSTEM = """\
+Tu es l'Atelier MONV. Tu reçois le pitch, les réponses QCM, le brief structuré à jour et le Business Model Canvas actuel (JSON).
+Réécris le canvas pour qu'il soit aligné avec le brief : 9 cases, 3 à 6 puces par case (puces courtes en français, factuel, sans emoji).
+
+Réponds par UN SEUL objet JSON strict :
+{"canvas": { "proposition_valeur": [], "segments_clients": [], "canaux": [], "relation_client": [], "sources_revenus": [], "ressources_cles": [], "activites_cles": [], "partenaires_cles": [], "structure_couts": [] }}
+Guillemets doubles ; pas de markdown hors JSON ; pas de saut de ligne dans les chaînes.
+"""
+
+
+_ATELIER_FLOWS_REFRESH_SYSTEM = """\
+Tu es l'Atelier MONV. Tu reçois le pitch, les réponses QCM, le brief, la liste des clés de segments autorisées, et la cartographie des flux actuelle (JSON).
+Produis UN SEUL objet JSON strict :
+{"flows": { "diagram_title": null, "layout": "radial|horizontal|vertical", "flow_insight": "", "acteurs": [], "flux_valeur": [], "flux_financiers": [], "flux_information": [] }}
+
+Règles : mêmes contraintes que le dossier Atelier (acteurs avec segment_key seulement si la clé est dans la liste autorisée ; arcs entre libellés d'acteurs existants).
+Français, factuel, pas de markdown hors JSON.
+"""
+
+
+async def regenerate_atelier_canvas_llm(
+    pitch: str,
+    answers: str,
+    brief: ProjectBrief,
+    current_canvas: BusinessCanvas,
+) -> BusinessCanvas:
+    from services.atelier_coerce import coerce_canvas_from_llm_dict
+
+    model = _atelier_business_model()
+    payload = {
+        "pitch": pitch.strip(),
+        "reponses_qcm": (answers or "").strip(),
+        "brief": brief.model_dump(),
+        "canvas_actuel": current_canvas.model_dump(),
+    }
+    raw = await llm_json_call(
+        model=model,
+        system=_ATELIER_CANVAS_REFRESH_SYSTEM,
+        messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+        max_tokens=4096,
+        temperature=0.2,
+        json_mode=True,
+        allow_json_repair=True,
+        repair_model=settings.FILTER_MODEL,
+    )
+    if not isinstance(raw, dict):
+        return current_canvas
+    return coerce_canvas_from_llm_dict(raw)
+
+
+async def regenerate_atelier_flows_llm(
+    pitch: str,
+    answers: str,
+    brief: ProjectBrief,
+    segment_keys: list[str],
+    current_flows: FlowMap,
+) -> FlowMap:
+    from services.atelier_coerce import coerce_flows_from_llm_dict
+
+    model = _atelier_business_model()
+    keys = [str(k).strip().lower()[:40] for k in segment_keys if str(k).strip()]
+    payload = {
+        "pitch": pitch.strip(),
+        "reponses_qcm": (answers or "").strip(),
+        "brief": brief.model_dump(),
+        "cles_segments_autorisees": keys,
+        "flows_actuels": current_flows.model_dump(),
+    }
+    raw = await llm_json_call(
+        model=model,
+        system=_ATELIER_FLOWS_REFRESH_SYSTEM,
+        messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+        max_tokens=4096,
+        temperature=0.2,
+        json_mode=True,
+        allow_json_repair=True,
+        repair_model=settings.FILTER_MODEL,
+    )
+    if not isinstance(raw, dict):
+        return current_flows
+    return coerce_flows_from_llm_dict(raw, set(keys))
+
+
 __all__ = [
     "ATELIER_MODE_LABEL",
-    "atelier_dossier_rollup_fields",
     "build_brief_metadata",
     "coerce_dossier",
     "dossier_metadata_json",
     "generate_atelier_qcm",
     "generate_dossier_skeleton",
-    "merge_atelier_cross_segment_tags",
+    "regenerate_atelier_canvas_llm",
+    "regenerate_atelier_flows_llm",
     "run_segment_search",
     "run_segment_searches",
 ]

@@ -270,7 +270,7 @@ def run_panel() -> list[dict[str, Any]]:
 
     def var06():
         intro, qs = finalize_atelier_qcm("", [])
-        return _expect_true(len(qs) == 1 and qs[0].id == "validation_dossier", qs[0].id)
+        return _expect_true(len(qs) == 0, len(qs))
 
     # ── edge_case ───────────────────────────────────────────────────────────
     def edge01():
@@ -313,7 +313,7 @@ def run_panel() -> list[dict[str, Any]]:
 
     def edge06():
         intro, qs = finalize_atelier_qcm("   ", [])
-        return _expect_true(len(qs) == 1, len(qs))
+        return _expect_true(len(qs) == 0, len(qs))
 
     # ── erreur_input ────────────────────────────────────────────────────────
     def err01():
@@ -458,7 +458,7 @@ def run_panel() -> list[dict[str, Any]]:
     add("VAR-03", "variantes", "_finalize ordre cible avant budget", var03)
     add("VAR-04", "variantes", "acteurs -> FlowActor", var04)
     add("VAR-05", "variantes", "edges from/to alias", var05)
-    add("VAR-06", "variantes", "QCM vide -> validation_dossier", var06)
+    add("VAR-06", "variantes", "QCM vide -> 0 question", var06)
     add("EDGE-01", "edge_case", "payload vide", edge01)
     add("EDGE-02", "edge_case", "12 segments -> cap 5", edge02)
     add("EDGE-03", "edge_case", "nom très long tronqué", edge03)

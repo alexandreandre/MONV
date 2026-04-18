@@ -18,14 +18,16 @@ from services.agent import (  # noqa: E402
     _FALLBACK_ATELIER_QUESTIONS,
     _finalize_atelier_qcm,
     _parse_qcm_raw,
-    atelier_dossier_rollup_fields,
     build_brief_metadata,
     coerce_dossier,
     dossier_metadata_json,
     heuristic_atelier_conversation_title,
     heuristic_atelier_project_folder_name,
-    merge_atelier_cross_segment_tags,
     run_segment_search,
+)
+from services.atelier_mutations import (  # noqa: E402
+    atelier_dossier_rollup_fields,
+    merge_atelier_cross_segment_tags,
 )
 from models.schemas import (  # noqa: E402
     AgentSynthesis,
@@ -131,14 +133,13 @@ def test_parse_qcm_tolerates_empty_payload():
     assert qs == []
 
 
-def test_finalize_injects_validation_when_no_questions():
+def test_finalize_allows_zero_questions_when_list_empty():
     intro, qs = _finalize_atelier_qcm("", [])
-    assert len(qs) == 1
-    assert qs[0].id == "validation_dossier"
-    assert "clair" in intro.lower()
+    assert qs == []
+    assert "dossier" in intro.lower() or "complet" in intro.lower()
 
     intro2, qs2 = _finalize_atelier_qcm("  Pitch nickel.  ", [])
-    assert qs2[0].id == "validation_dossier"
+    assert qs2 == []
     assert "Pitch nickel" in intro2
 
 
@@ -169,7 +170,7 @@ def test_finalize_dedupes_question_ids():
     assert len(qs) == 1
 
 
-def test_finalize_drops_sixth_question():
+def test_finalize_caps_at_eight_questions():
     qs_in = [
         QcmQuestion(
             id=f"q{i}",
@@ -179,10 +180,10 @@ def test_finalize_drops_sixth_question():
                 QcmOption(id="autre", label="Autre", free_text=True),
             ],
         )
-        for i in range(6)
+        for i in range(9)
     ]
     _, qs = _finalize_atelier_qcm("intro", qs_in)
-    assert len(qs) == 5
+    assert len(qs) == 8
 
 
 # ── Coercion du dossier LLM ─────────────────────────────────────────────────
@@ -246,6 +247,34 @@ _VALID_RAW_DOSSIER = {
         "prochaines_etapes": ["Étude marché", "Business plan", "Local"],
         "kpis": ["CA mensuel", "Panier moyen"],
         "budget_estimatif": "400 k€ sur 12 mois",
+        "ordres_grandeur": [
+            "Investissement total indicatif 400 k€ (scénario central).",
+            "CA année 3 visé 1,2 M€, marge cible 14-18 %.",
+        ],
+        "conseil_semaine": "Cette semaine, planifiez deux rendez-vous avec un expert-comptable CHR.",
+        "checklist": {
+            "headline": "Ouvrir le restaurant japonais à Lyon",
+            "lede": "À traiter en priorité",
+            "sections": [
+                {
+                    "title": "Semaine 1 — Démarrage",
+                    "subtitle": "7 jours",
+                    "items": [
+                        {
+                            "label": "Bloquer 3 demi-journées pour le guide",
+                            "guide": "Sans créneaux figés, le dossier dérape. Bloquez-les dans l’agenda maintenant.",
+                        }
+                    ],
+                }
+            ],
+            "pitfalls_title": "Pièges fréquents",
+            "pitfalls": [
+                {
+                    "label": "Signer un bail sans avocat",
+                    "guide": "Les clauses de révision et de solidarité peuvent vous engager sur 9 ans.",
+                }
+            ],
+        },
     },
 }
 
@@ -265,6 +294,14 @@ def test_coerce_dossier_parses_full_payload():
     assert {s.mode for s in segments} <= {"prospection", "sous_traitant", "rachat"}
     assert isinstance(synthesis, AgentSynthesis)
     assert synthesis.budget_estimatif == "400 k€ sur 12 mois"
+    assert len(synthesis.ordres_grandeur) == 2
+    assert synthesis.conseil_semaine and "expert-comptable" in synthesis.conseil_semaine
+    assert synthesis.checklist is not None
+    assert synthesis.checklist.headline
+    assert len(synthesis.checklist.sections) == 1
+    assert synthesis.checklist.sections[0].items[0].guide
+    assert synthesis.checklist.pitfalls_title
+    assert len(synthesis.checklist.pitfalls) == 1
 
 
 def test_coerce_dossier_rejects_invalid_segment_mode():

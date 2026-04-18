@@ -30,13 +30,64 @@ Ce document suit la refonte de l’Agent Atelier. **Phase 1 (backend)** : correc
 
 À la lecture, les champs absents sont hydratés par les **défauts Pydantic** (`version=1`, totaux à 0, pas de champs pertinence sur les lignes d’historique). Le front peut traiter l’absence de `relevance_flag` comme affichage neutre.
 
-## Phase 2 — Quick wins UI (`BusinessDossier.tsx` legacy)
+## Phase 2 — Quick wins UI (historique)
 
-- Bandeau **Synthèse express** : 3 cartes Force / Risque / Action (ancrage vers synthèse et segments).
+- Bandeau **Synthèse express** : 3 cartes Force / Risque / Action.
 - **Pertinence** et **Segments** dans `ResultsTable` : badges, tags multi-segments, masquage des lignes `excluded` avec lien pour les réafficher.
-- **Exporter tout le dossier** : bouton sous le header, enchaîne les exports Excel segment par segment (`handleExportAllAtelier` dans `page.tsx`).
-- Totaux dossier et budget structuré affichés dans le header quand l’API les fournit.
+- **Exporter tout le dossier** : enchaîne les exports Excel segment par segment (`handleExportAllAtelier` dans `page.tsx`).
+- Totaux dossier et budget structuré dans le header quand l’API les fournit.
+
+## Phase 3 — itération dossier (API)
+
+Toutes les routes sont sous **`/api/agent`**, authentification Bearer comme le reste de l’API.
+
+### `GET /api/agent/dossier/{conversation_id}`
+
+Retourne le **dernier** message dossier de la conversation Atelier.
+
+- **Réponse** : `{ "message_id": "<uuid>", "dossier": { ... } }` où `dossier` est le JSON métier (même forme que `metadata_json` parsé d’un `business_dossier`).
+- **404** si la conversation n’existe pas, n’est pas en mode atelier, ou aucun dossier n’a encore été généré.
+
+### `POST /api/agent/segments/{segment_key}/regenerate`
+
+Relance le pipeline MONV pour **un** segment (clé d’URL = `key` du segment, insensible à la casse).
+
+- **Corps** : `{ "conversation_id": "...", "query_override"?: string, "mode_override"?: string }`
+- **Crédits** : 1 crédit par appel si l’utilisateur n’est pas illimité ; segment `out_of_scope` → **400**.
+- **Réponse** : `AtelierDossierMutationResponse` (`dossier` complet mis à jour, `generation_stats`, `credits_remaining`).
+
+### `POST /api/agent/canvas/regenerate`
+
+Régénère uniquement le **canvas** BMC (LLM), incrémente `version` / `generated_at`.
+
+- **Corps** : `{ "conversation_id": "..." }`
+- **Réponse** : `AtelierDossierMutationResponse`.
+
+### `POST /api/agent/brief/update`
+
+Applique un nouveau **`brief`**, puis recalcule les zones listées dans **`impacts`** (au moins une).
+
+- **Corps** : `{ "conversation_id": "...", "brief": ProjectBrief, "impacts": ["canvas"|"flows"|"segments", ...] }`
+- **`segments`** : relance toutes les recherches segment, fusion des tags, rollups, une montée de version.
+- **Sans `segments`** : fusion / rollups sur les segments existants + une montée de version (canvas et/ou flows régénérés si demandés).
+
+Client TypeScript : `getAtelierDossier`, `regenerateAtelierSegment`, `regenerateAtelierCanvas`, `updateAtelierBrief` dans `frontend/src/lib/api.ts`.
+
+## Phase 4 — UI dossier v2
+
+- Composant principal : `frontend/src/components/AtelierDossier.tsx` (onglets **Carte** / **Tableaux** / **Rapport**, tiroir brief, relance segment).
+- Modules : `DossierHeader.tsx`, `DossierTldr.tsx`, `DossierTabs.tsx`, `DossierSegments.tsx`, `DossierSynthesis.tsx`, `DossierExportAllBar.tsx`, `DossierSection.tsx`, `BriefDrawer.tsx`.
+- `ChatMessage` rend **toujours** `AtelierDossier` pour un `business_dossier`. Sans `conversation_id` / callbacks côté page, l’UI reste **lecture seule** (pas d’« Affiner le brief » ni relance segment).
+
+## Phase 5 — Validation & consolidation
+
+- **Tests API** : `backend/tests/test_atelier_api.py` (401 sans Bearer, `GET /api/agent/dossier` 200 / 404 avec mocks `conversation_get` + `messages_list_asc`).
+- **Tests manuels** (checklist produit, à faire sur environnement branché) :
+  - pitch **restaurant / niche** : segments cohérents, exports, relance segment ;
+  - pitch **SaaS B2B** : flux + tableaux ;
+  - pitch **PME industrielle** : budget structuré, TL;DR, brief drawer + impacts.
+- **Legacy** : le composant monolithique `BusinessDossier.tsx` et le feature flag `atelier_v2_enabled` ont été retirés ; l’UI unique est `AtelierDossier`.
 
 ## Phases suivantes
 
-Endpoints de régénération, `AtelierDossier.tsx`, feature flag `atelier_v2_enabled` — voir cahier des charges projet.
+Affinements `TabCarte` (drawer acteur), `ActorDrawer`, carte consolidée, export PDF — voir `CURSOR_PROMPT_refonte_atelier.md`.
