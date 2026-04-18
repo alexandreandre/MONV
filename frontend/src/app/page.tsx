@@ -652,15 +652,20 @@ function HomeInner() {
           );
           if (controller.signal.aborted) return;
 
-          setMessages((prev) => [...prev, ...res.messages]);
+          const incoming = Array.isArray(res.messages) ? res.messages : [];
+          setMessages((prev) => [...prev, ...incoming]);
           if (res.folder_id) {
             setActiveProjectFolderId(res.folder_id);
           }
 
-          const updatedUser = await apiGet<User>(
-            "/auth/me?token=" + localStorage.getItem("monv_token")
-          );
-          setUser(updatedUser);
+          try {
+            const updatedUser = await apiGet<User>(
+              "/auth/me?token=" + localStorage.getItem("monv_token")
+            );
+            setUser(updatedUser);
+          } catch {
+            /* dossier déjà reçu — évite d’écraser l’UI si /auth/me échoue seul */
+          }
           await loadConversations();
         } catch (err: any) {
           if (isAbortError(err)) {
@@ -813,12 +818,13 @@ function HomeInner() {
         }
         lastSyncedConvParamRef.current = res.conversation_id;
         replaceConversationInUrl(res.conversation_id);
+        const tour1Msgs = Array.isArray(res.messages) ? res.messages : [];
         setMessages((prev) => {
           const filtered = prev.filter((m) => m.id !== optimisticMsg.id);
           return [
             ...filtered,
             { ...optimisticMsg, id: "user-" + Date.now() },
-            ...res.messages,
+            ...tour1Msgs,
           ];
         });
         await loadConversations();

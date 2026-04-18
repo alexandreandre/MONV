@@ -417,9 +417,13 @@ export default function ResultsTable({
   creditsUnlimited = false,
   onExport,
   exporting,
-  mapPoints = [],
+  mapPoints,
   segmentLabelByKey,
 }: Props) {
+  const rowData = Array.isArray(data) ? data : [];
+  const colData = Array.isArray(columns) ? columns : [];
+  const geoPoints = Array.isArray(mapPoints) ? mapPoints : [];
+
   const canExport = creditsUnlimited || userCredits >= creditsRequired;
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
@@ -430,27 +434,30 @@ export default function ResultsTable({
   const [showExcluded, setShowExcluded] = useState(false);
 
   const hasRelevanceData = useMemo(
-    () => data.some((r) => r.relevance_flag != null && String(r.relevance_flag).length > 0),
-    [data]
+    () =>
+      rowData.some(
+        (r) => r.relevance_flag != null && String(r.relevance_flag).length > 0
+      ),
+    [rowData]
   );
   const hasSegmentTags = useMemo(
-    () => data.some((r) => Array.isArray(r.segments) && r.segments.length > 0),
-    [data]
+    () => rowData.some((r) => Array.isArray(r.segments) && r.segments.length > 0),
+    [rowData]
   );
   const excludedCount = useMemo(
-    () => data.filter((r) => r.relevance_flag === "excluded").length,
-    [data]
+    () => rowData.filter((r) => r.relevance_flag === "excluded").length,
+    [rowData]
   );
 
   const dataEffective = useMemo(() => {
-    if (showExcluded || !hasRelevanceData) return data;
-    return data.filter((r) => r.relevance_flag !== "excluded");
-  }, [data, hasRelevanceData, showExcluded]);
+    if (showExcluded || !hasRelevanceData) return rowData;
+    return rowData.filter((r) => r.relevance_flag !== "excluded");
+  }, [rowData, hasRelevanceData, showExcluded]);
 
-  const hasGeoData = mapPoints.length > 0;
+  const hasGeoData = geoPoints.length > 0;
 
   const filteredMapPoints = useMemo(() => {
-    let pts = mapPoints;
+    let pts = geoPoints;
     if (filterText.trim()) {
       const q = filterText.toLowerCase();
       pts = pts.filter((r) => {
@@ -471,9 +478,9 @@ export default function ResultsTable({
       );
     }
     return pts;
-  }, [mapPoints, signalFilter, filterText]);
+  }, [geoPoints, signalFilter, filterText]);
 
-  const visibleCols = columns.filter(
+  const visibleCols = colData.filter(
     (c) =>
       c !== "lien_annuaire" &&
       c !== "google_maps_url" &&
@@ -579,7 +586,7 @@ export default function ResultsTable({
       <div className="px-3 pt-2 pb-1 flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.04]">
         <p className="text-[11px] text-gray-500">
           {showExcluded
-            ? `Toutes les lignes affichées (${data.length}), dont ${excludedCount} écartée(s) par pertinence.`
+            ? `Toutes les lignes affichées (${rowData.length}), dont ${excludedCount} écartée(s) par pertinence.`
             : `${excludedCount} ligne(s) écartée(s) masquée(s).`}
         </p>
         <button

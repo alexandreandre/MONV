@@ -16,6 +16,46 @@ export type ApiFetchOptions = {
   signal?: AbortSignal;
 };
 
+/** Détail FastAPI : chaîne, liste de {msg}, ou autre — exploitable dans `new Error(...)`. */
+function formatApiDetail(detail: unknown): string {
+  if (detail == null) return "";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail.map((item) => {
+      if (item && typeof item === "object" && "msg" in item) {
+        return String((item as { msg?: unknown }).msg ?? "");
+      }
+      return typeof item === "string" ? item : JSON.stringify(item);
+    });
+    return parts.filter(Boolean).join(" — ");
+  }
+  if (typeof detail === "object") return JSON.stringify(detail).slice(0, 400);
+  return String(detail);
+}
+
+function messageFromErrorBody(status: number, text: string): string {
+  const trimmed = text.trim();
+  try {
+    const parsed = JSON.parse(text) as { detail?: unknown };
+    const msg = formatApiDetail(parsed?.detail);
+    if (msg) return msg;
+  } catch {
+    /* corps non JSON */
+  }
+  if (trimmed.startsWith("<")) {
+    return `Erreur ${status} (réponse HTML — vérifie le proxy /api et que le backend répond).`;
+  }
+  return trimmed ? trimmed.slice(0, 280) : `Erreur ${status}`;
+}
+
+function parseJsonBody<T>(text: string, okLabel: string): T {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(okLabel);
+  }
+}
+
 export async function apiPost<T>(
   path: string,
   body: unknown,
@@ -27,20 +67,26 @@ export async function apiPost<T>(
     body: JSON.stringify(body),
     signal: options?.signal,
   });
+  const text = await res.text();
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Erreur serveur" }));
-    throw new Error(err.detail || `Erreur ${res.status}`);
+    throw new Error(messageFromErrorBody(res.status, text));
   }
-  return res.json();
+  return parseJsonBody<T>(
+    text,
+    "Réponse JSON illisible du serveur (HTTP OK mais corps invalide)."
+  );
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { headers: getHeaders() });
+  const text = await res.text();
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Erreur serveur" }));
-    throw new Error(err.detail || `Erreur ${res.status}`);
+    throw new Error(messageFromErrorBody(res.status, text));
   }
-  return res.json();
+  return parseJsonBody<T>(
+    text,
+    "Réponse JSON illisible du serveur (HTTP OK mais corps invalide)."
+  );
 }
 
 export async function apiPatch<T>(
@@ -54,11 +100,14 @@ export async function apiPatch<T>(
     body: JSON.stringify(body),
     signal: options?.signal,
   });
+  const text = await res.text();
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Erreur serveur" }));
-    throw new Error(err.detail || `Erreur ${res.status}`);
+    throw new Error(messageFromErrorBody(res.status, text));
   }
-  return res.json();
+  return parseJsonBody<T>(
+    text,
+    "Réponse JSON illisible du serveur (HTTP OK mais corps invalide)."
+  );
 }
 
 export async function apiDelete(path: string): Promise<void> {
@@ -66,9 +115,9 @@ export async function apiDelete(path: string): Promise<void> {
     method: "DELETE",
     headers: getHeaders(),
   });
+  const text = await res.text();
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Erreur serveur" }));
-    throw new Error(err.detail || `Erreur ${res.status}`);
+    throw new Error(messageFromErrorBody(res.status, text));
   }
 }
 

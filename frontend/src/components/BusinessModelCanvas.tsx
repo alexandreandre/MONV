@@ -18,6 +18,11 @@ interface Props {
   canvas: BusinessCanvas;
 }
 
+function bulletList(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => String(x).trim()).filter(Boolean);
+}
+
 /**
  * Mise en page inspirée du Business Model Canvas de Strategyzer, mais
  * restyled pour correspondre au design system dark de MONV.
@@ -28,13 +33,14 @@ interface Props {
  *     en full-width sur une 3e rangée (comme le BMC d'origine).
  */
 export default function BusinessModelCanvas({ canvas }: Props) {
+  const c = canvas ?? ({} as BusinessCanvas);
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-surface-1 p-3 sm:p-4">
       <div className="grid grid-cols-1 md:grid-cols-5 gap-2 sm:gap-3">
         <Cell
           title="Partenaires clés"
           icon={Handshake}
-          items={canvas.partenaires_cles}
+          items={bulletList(c.partenaires_cles)}
           accent="bg-sky-500/5 border-sky-500/15"
           className="md:row-span-2"
         />
@@ -42,20 +48,20 @@ export default function BusinessModelCanvas({ canvas }: Props) {
           <Cell
             title="Activités clés"
             icon={Workflow}
-            items={canvas.activites_cles}
+            items={bulletList(c.activites_cles)}
             accent="bg-emerald-500/5 border-emerald-500/15"
           />
           <Cell
             title="Ressources clés"
             icon={Boxes}
-            items={canvas.ressources_cles}
+            items={bulletList(c.ressources_cles)}
             accent="bg-emerald-500/5 border-emerald-500/15"
           />
         </div>
         <Cell
           title="Proposition de valeur"
           icon={Award}
-          items={canvas.proposition_valeur}
+          items={bulletList(c.proposition_valeur)}
           accent="bg-teal-500/8 border-teal-500/20"
           emphasize
           className="md:row-span-2"
@@ -64,20 +70,20 @@ export default function BusinessModelCanvas({ canvas }: Props) {
           <Cell
             title="Relation client"
             icon={Heart}
-            items={canvas.relation_client}
+            items={bulletList(c.relation_client)}
             accent="bg-teal-500/5 border-teal-500/12"
           />
           <Cell
             title="Canaux"
             icon={Flag}
-            items={canvas.canaux}
+            items={bulletList(c.canaux)}
             accent="bg-teal-500/5 border-teal-500/12"
           />
         </div>
         <Cell
           title="Segments clients"
           icon={Users}
-          items={canvas.segments_clients}
+          items={bulletList(c.segments_clients)}
           accent="bg-amber-500/5 border-amber-500/15"
           className="md:row-span-2"
         />
@@ -87,13 +93,13 @@ export default function BusinessModelCanvas({ canvas }: Props) {
         <Cell
           title="Structure de coûts"
           icon={Receipt}
-          items={canvas.structure_couts}
+          items={bulletList(c.structure_couts)}
           accent="bg-slate-500/5 border-slate-500/15"
         />
         <Cell
           title="Sources de revenus"
           icon={Coins}
-          items={canvas.sources_revenus}
+          items={bulletList(c.sources_revenus)}
           accent="bg-emerald-500/6 border-emerald-500/15"
         />
       </div>
@@ -118,6 +124,7 @@ function Cell({
   emphasize = false,
   className = "",
 }: CellProps) {
+  const list = Array.isArray(items) ? items : [];
   return (
     <div
       className={`rounded-xl border ${accent} px-3 py-3 min-h-[110px] flex flex-col ${className}`}
@@ -135,11 +142,11 @@ function Cell({
           {title}
         </h4>
       </div>
-      {items.length === 0 ? (
+      {list.length === 0 ? (
         <p className="text-[11px] text-gray-600 italic">Non précisé</p>
       ) : (
         <ul className="space-y-1 text-xs text-gray-300 leading-snug">
-          {items.map((item, i) => (
+          {list.map((item, i) => (
             <li key={i} className="flex items-start gap-1.5">
               <span className="mt-1 w-1 h-1 rounded-full bg-gray-500 flex-shrink-0" />
               <span>{item}</span>
