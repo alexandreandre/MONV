@@ -84,7 +84,7 @@ SPORT & LOISIRS :
 - "pêche" → magasin articles pêche VS location bateau VS guide de pêche
 
 BIEN-ÊTRE & SANTÉ :
-- "spa" → institut bien-être VS fabricant jacuzzis/spas VS hôtel avec spa
+- "spa" / "spas" / "institut spa" / "centre spa" → institut bien-être/soins VS fabricant jacuzzis/spas VS hôtel avec espace spa VS spa nordique
 - "massage" → institut massage VS formation massage VS équipements massage
 - "laser" → centre médical/esthétique VS découpe industrielle VS gravure laser
 - "bio" → agriculture biologique VS cosmétiques bio VS restauration bio VS magasin bio
@@ -205,6 +205,9 @@ Quand sector_ambiguous: true :
 - missing_criteria DOIT contenir "secteur_confirmation"
 - Ne mets PAS d'autres critères dans missing_criteria si zone et secteur
   sont par ailleurs présents
+
+Si tu hésites entre ambigu et non-ambigu, TOUJOURS choisir ambigu.
+Il vaut mieux une question de trop qu'un résultat hors cible.
 
 Quand sector_ambiguous: false (cas normal) :
 - Le terme désigne sans ambiguïté un seul type d'entreprise
