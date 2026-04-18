@@ -55,6 +55,9 @@ Réponds UNIQUEMENT avec un JSON valide :
     ]
 }
 
+CRITÈRE SPÉCIAL :
+- "secteur_confirmation" : ne génère PAS cette question ici — elle est insérée séparément en tête de QCM quand le Guard l'exige.
+
 EXEMPLES D'OPTIONS PAR CRITÈRE :
 
 Secteur (adapter selon contexte) :
@@ -78,8 +81,34 @@ Chiffre d'affaires :
   10M€ - 50M€, Plus de 50M€, Peu importe
 """
 
+SECTOR_CONFIRMATION_SYSTEM = """\
+Tu génères UNE seule question à choix unique pour lever une ambiguïté sectorielle B2B en France.
+L'utilisateur a utilisé un terme qui peut désigner plusieurs activités d'entreprises différentes.
 
-def _build_context(guard_result: GuardResult) -> str:
+Réponds UNIQUEMENT avec un JSON valide :
+{
+    "question": "Phrase courte en français (ex. préciser le type d'activité recherchée)",
+    "options": [
+        {"id": "identifiant_snake_unique", "label": "Libellé concret, émoji optionnel", "free_text": false},
+        ... 3 ou 4 interprétations métier distinctes ...
+        {"id": "autre", "label": "✏️ Autre (précisez)", "free_text": true}
+    ]
+}
+
+Contraintes :
+- 3 à 4 options métier concrètes + exactement une option "Autre" en dernier avec free_text=true
+- Toutes les autres options : free_text=false
+- Choix unique implicite (pas de champ multiple)
+- Textes en français
+"""
+
+
+def _build_context(
+    guard_result: GuardResult,
+    missing_override: list[str] | None = None,
+    *,
+    skip_infer_missing: bool = False,
+) -> str:
     parts = [f"Requête utilisateur : « {guard_result.original_query} »"]
     parts.append(f"Intent : {guard_result.intent}")
 
@@ -105,8 +134,11 @@ def _build_context(guard_result: GuardResult) -> str:
     if found:
         parts.append(f"Déjà détecté : {', '.join(found)}")
 
-    missing = guard_result.missing_criteria
-    if not missing:
+    if missing_override is not None:
+        missing = list(missing_override)
+    else:
+        missing = list(guard_result.missing_criteria or [])
+    if not missing and not skip_infer_missing:
         missing = _infer_missing(guard_result)
     parts.append(f"Critères manquants : {json.dumps(missing)}")
 
@@ -154,6 +186,80 @@ def _parse_questions(raw: dict) -> tuple[str, list[QcmQuestion]]:
         ))
 
     return intro, questions
+
+
+def _fallback_sector_confirmation_question(guard_result: GuardResult) -> QcmQuestion:
+    term = (
+        (guard_result.entities.secteur or "").strip()
+        or (guard_result.entities.mots_cles[0] if guard_result.entities.mots_cles else "")
+        or "ce secteur"
+    )
+    return QcmQuestion(
+        id="secteur_confirmation",
+        question=f"« {term} » peut correspondre à plusieurs activités. Laquelle vises-tu ?",
+        options=[
+            QcmOption(id="services_conseil", label="Services aux entreprises / conseil", free_text=False),
+            QcmOption(id="commerce_distribution", label="Commerce / distribution / retail", free_text=False),
+            QcmOption(id="artisanat_industrie_btp", label="Artisanat / industrie / BTP", free_text=False),
+            QcmOption(id="sante_sport_loisirs", label="Santé / sport / loisirs / bien-être", free_text=False),
+            QcmOption(id="autre", label="✏️ Autre (précisez)", free_text=True),
+        ],
+        multiple=False,
+    )
+
+
+async def _generate_sector_confirmation_question(
+    guard_result: GuardResult,
+) -> QcmQuestion:
+    base_m = list(guard_result.missing_criteria or [])
+    skip_one = len(base_m) == 1 and base_m[0] == "secteur_confirmation"
+    ctx = _build_context(
+        guard_result,
+        missing_override=base_m,
+        skip_infer_missing=skip_one,
+    )
+    ambiguous_term = (
+        (guard_result.entities.secteur or "").strip()
+        or (guard_result.entities.mots_cles[0] if guard_result.entities.mots_cles else "")
+        or "le secteur mentionné"
+    )
+    user_block = f"Terme ambigu à clarifier : « {ambiguous_term} »\n\n{ctx}"
+    try:
+        raw = await llm_json_call(
+            model=settings.GUARD_MODEL,
+            system=SECTOR_CONFIRMATION_SYSTEM,
+            messages=[{"role": "user", "content": user_block}],
+            max_tokens=512,
+            temperature=0.2,
+        )
+        qtext = str(raw.get("question", "")).strip()
+        opts_raw = raw.get("options", [])
+        if not qtext or not isinstance(opts_raw, list) or len(opts_raw) < 2:
+            return _fallback_sector_confirmation_question(guard_result)
+        wrapped = {
+            "intro": "",
+            "questions": [
+                {
+                    "id": "secteur_confirmation",
+                    "question": qtext,
+                    "options": opts_raw,
+                    "multiple": False,
+                }
+            ],
+        }
+        _, questions = _parse_questions(wrapped)
+        if not questions:
+            return _fallback_sector_confirmation_question(guard_result)
+        q0 = questions[0]
+        q0 = QcmQuestion(
+            id="secteur_confirmation",
+            question=q0.question,
+            options=q0.options,
+            multiple=False,
+        )
+        return q0
+    except Exception:
+        return _fallback_sector_confirmation_question(guard_result)
 
 
 _FALLBACK_QUESTIONS: dict[str, QcmQuestion] = {
@@ -204,7 +310,23 @@ async def generate_qcm(
 ) -> tuple[str, list[QcmQuestion]]:
     """Génère un QCM structuré pour les critères manquants."""
 
-    context = _build_context(guard_result)
+    raw_missing = list(guard_result.missing_criteria or [])
+    sector_q: QcmQuestion | None = None
+    if "secteur_confirmation" in raw_missing:
+        sector_q = await _generate_sector_confirmation_question(guard_result)
+
+    missing_main = [m for m in raw_missing if m != "secteur_confirmation"]
+    has_sector_confirm = "secteur_confirmation" in raw_missing
+    skip_infer = has_sector_confirm and len(missing_main) == 0
+
+    if has_sector_confirm:
+        context = _build_context(
+            guard_result,
+            missing_override=missing_main,
+            skip_infer_missing=skip_infer,
+        )
+    else:
+        context = _build_context(guard_result)
 
     messages: list[dict] = []
     if conversation_history:
@@ -220,11 +342,17 @@ async def generate_qcm(
             temperature=0.3,
         )
         intro, questions = _parse_questions(raw)
+        if sector_q:
+            questions = [sector_q] + questions
         if questions:
             return intro, questions
     except Exception:
         pass
 
     missing = guard_result.missing_criteria or _infer_missing(guard_result)
-    fallback_qs = [_FALLBACK_QUESTIONS[m] for m in missing if m in _FALLBACK_QUESTIONS]
-    return "Pour affiner ta recherche :", fallback_qs or list(_FALLBACK_QUESTIONS.values())[:2]
+    missing_fb = [m for m in missing if m != "secteur_confirmation"]
+    fallback_qs = [_FALLBACK_QUESTIONS[m] for m in missing_fb if m in _FALLBACK_QUESTIONS]
+    merged = ([sector_q] if sector_q else []) + fallback_qs
+    if merged:
+        return "Pour affiner ta recherche :", merged
+    return "Pour affiner ta recherche :", list(_FALLBACK_QUESTIONS.values())[:2]

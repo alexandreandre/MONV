@@ -178,6 +178,8 @@ async def send_message(
         "guard",
         intent=guard_result.intent,
         clarification_needed=guard_result.clarification_needed,
+        sector_ambiguous=guard_result.sector_ambiguous,
+        sector_confirmed=guard_result.sector_confirmed,
         entities=guard_result.entities.model_dump(),
         missing=guard_result.missing_criteria,
     )
@@ -212,12 +214,18 @@ async def send_message(
     e = guard_result.entities
     has_secteur = bool(e.secteur or e.code_naf or e.mots_cles)
     has_zone = bool(e.localisation or e.departement or e.region)
+    # On ne court-circuite le QCM que si le secteur est non-ambigu ET la zone connue.
     if guard_result.clarification_needed and has_secteur and has_zone:
-        plog("guard_override_skip_clarification",
-             reason="secteur+zone present",
-             original_missing=guard_result.missing_criteria)
-        guard_result.clarification_needed = False
-        guard_result.missing_criteria = []
+        if not getattr(guard_result, "sector_ambiguous", False):
+            plog("guard_override_skip_clarification",
+                 reason="secteur+zone present, non ambigu",
+                 original_missing=guard_result.missing_criteria)
+            guard_result.clarification_needed = False
+            guard_result.missing_criteria = []
+        else:
+            plog("guard_keep_clarification",
+                 reason="secteur ambigu detecte",
+                 original_missing=guard_result.missing_criteria)
 
     # ── Couche 1b — QCM de clarification (modèle moyen) ────────────
     if guard_result.clarification_needed:
