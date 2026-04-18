@@ -19,6 +19,7 @@ import {
   CircleDollarSign,
   AlertTriangle,
   List,
+  X,
 } from "lucide-react";
 
 const ResultsMap = dynamic(() => import("./ResultsMap"), { ssr: false });
@@ -149,6 +150,33 @@ const META_COLS_HIDE = new Set([
   "_dedup_key",
 ]);
 
+// Colonnes masquées dans le tableau de prospection (trop techniques,
+// inutiles pour qualifier un prospect).
+const PROSPECTION_COLS_HIDE = new Set([
+  "siret",              // doublon du SIREN
+  "activite_principale", // code brut NAF, peu lisible
+  "region",             // doublon département
+  "tranche_effectif",   // code INSEE illisible (ex: "03"), doublon de effectif_label
+  "forme_juridique",    // rarement utile en prospection
+  "numero_tva",         // technique
+  "date_cloture_exercice", // technique comptable
+  "annee_dernier_ca",   // visible dans le CA directement
+  "annee_n_minus_1",    // idem
+  "effectif_financier", // doublon de effectif_label
+  "dirigeant_2_nom",    // secondaire
+  "dirigeant_2_fonction", // secondaire
+]);
+
+/** Colonnes fixes du tableau desktop (6) + colonne Liens = 7 colonnes max. */
+const TABLE_COLS = [
+  "signaux",
+  "nom",
+  "telephone",
+  "site_web",
+  "ville",
+  "effectif_label",
+] as const;
+
 type RelevanceFlag = "ok" | "warning" | "excluded" | string;
 
 function RelevanceBadge({
@@ -249,6 +277,247 @@ function formatValue(col: string, val: any) {
     }
   }
   return String(val);
+}
+
+function hasDetailValue(v: unknown): boolean {
+  return v != null && v !== "";
+}
+
+function DesktopDetailPanel({
+  row,
+  onClose,
+}: {
+  row: Record<string, any>;
+  onClose: () => void;
+}) {
+  const addrParts = [row.adresse, row.code_postal, row.ville].filter(
+    (p) => p != null && String(p).trim() !== ""
+  );
+  const fullAddress =
+    addrParts.length > 0 ? addrParts.map((p) => String(p).trim()).join(", ") : null;
+
+  const finRows: [string, string][] = [
+    ["chiffre_affaires", "Chiffre d'affaires"],
+    ["resultat_net", "Résultat net"],
+    ["ca_n_minus_1", "CA N-1"],
+    ["variation_ca_pct", "Variation CA %"],
+    ["ebe", "EBE"],
+    ["capitaux_propres", "Capitaux propres"],
+  ];
+  const hasFinSection = finRows.some(([k]) => hasDetailValue(row[k]));
+
+  const effectifDisplay =
+    hasDetailValue(row.effectif_label)
+      ? formatValue("effectif_label", row.effectif_label)
+      : hasDetailValue(row.effectif_financier)
+        ? formatValue("effectif_financier", row.effectif_financier)
+        : null;
+
+  const dirigeantLine = [row.dirigeant_prenom, row.dirigeant_nom]
+    .filter((p) => p != null && String(p).trim() !== "")
+    .map((p) => String(p).trim())
+    .join(" ");
+
+  const hasDir2 =
+    hasDetailValue(row.dirigeant_2_nom) || hasDetailValue(row.dirigeant_2_fonction);
+
+  const signauxList: Signal[] = Array.isArray(row.signaux) ? row.signaux : [];
+
+  return (
+    <div className="flex h-full w-full max-w-[320px] flex-col bg-surface-1 border-l border-white/[0.08] shadow-xl">
+      <header className="flex shrink-0 items-start justify-between gap-2 border-b border-white/[0.08] px-3 py-3">
+        <h2 className="pr-2 text-sm font-semibold leading-tight text-white">
+          {row.nom || "—"}
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-white/[0.08] hover:text-white"
+          aria-label="Fermer le panneau"
+        >
+          <X size={18} />
+        </button>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        <p className="border-b border-white/[0.04] px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-gray-500">
+          Coordonnées
+        </p>
+        <div className="border-b border-white/[0.04] px-3 py-2.5">
+          <span className="text-[10px] uppercase text-gray-500">Téléphone</span>
+          <div className="mt-0.5 text-sm text-gray-200">
+            {row.telephone ? (
+              <a
+                href={`tel:${row.telephone}`}
+                className="text-sky-400 hover:text-sky-300"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {row.telephone}
+              </a>
+            ) : (
+              "—"
+            )}
+          </div>
+        </div>
+        <div className="border-b border-white/[0.04] px-3 py-2.5">
+          <span className="text-[10px] uppercase text-gray-500">Site web</span>
+          <div className="mt-0.5 truncate text-sm text-gray-200">
+            {row.site_web ? (
+              <a
+                href={
+                  String(row.site_web).startsWith("http")
+                    ? row.site_web
+                    : `https://${row.site_web}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {String(row.site_web)
+                  .replace(/^https?:\/\//, "")
+                  .replace(/\/$/, "")}
+              </a>
+            ) : (
+              "—"
+            )}
+          </div>
+        </div>
+        <div className="border-b border-white/[0.04] px-3 py-2.5">
+          <span className="text-[10px] uppercase text-gray-500">Adresse</span>
+          <div className="mt-0.5 text-sm text-gray-200">{fullAddress || "—"}</div>
+        </div>
+        <div className="flex flex-col gap-2 border-b border-white/[0.04] px-3 py-2.5">
+          {row.lien_annuaire ? (
+            <a
+              href={row.lien_annuaire}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex w-fit items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-xs font-medium text-gray-200 transition-colors hover:bg-white/[0.1]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Voir la fiche
+            </a>
+          ) : null}
+          {row.google_maps_url ? (
+            <a
+              href={row.google_maps_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex w-fit items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-xs font-medium text-gray-200 transition-colors hover:bg-white/[0.1]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Voir sur Maps
+            </a>
+          ) : null}
+        </div>
+
+        <p className="border-b border-white/[0.04] px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-gray-500">
+          Entreprise
+        </p>
+        <div className="border-b border-white/[0.04] px-3 py-2.5">
+          <span className="text-[10px] uppercase text-gray-500">SIREN</span>
+          <div className="mt-0.5 text-sm text-gray-200">{formatValue("siren", row.siren)}</div>
+        </div>
+        <div className="border-b border-white/[0.04] px-3 py-2.5">
+          <span className="text-[10px] uppercase text-gray-500">Activité</span>
+          <div className="mt-0.5 text-sm text-gray-200">
+            {formatValue("libelle_activite", row.libelle_activite)}
+          </div>
+        </div>
+        <div className="border-b border-white/[0.04] px-3 py-2.5">
+          <span className="text-[10px] uppercase text-gray-500">Forme juridique</span>
+          <div className="mt-0.5 text-sm text-gray-200">
+            {formatValue("forme_juridique", row.forme_juridique)}
+          </div>
+        </div>
+        <div className="border-b border-white/[0.04] px-3 py-2.5">
+          <span className="text-[10px] uppercase text-gray-500">Date de création</span>
+          <div className="mt-0.5 text-sm text-gray-200">
+            {formatValue("date_creation", row.date_creation)}
+          </div>
+        </div>
+        <div className="border-b border-white/[0.04] px-3 py-2.5">
+          <span className="text-[10px] uppercase text-gray-500">Effectif</span>
+          <div className="mt-0.5 text-sm text-gray-200">{effectifDisplay || "—"}</div>
+        </div>
+        <div className="border-b border-white/[0.04] px-3 py-2.5">
+          <span className="text-[10px] uppercase text-gray-500">Catégorie</span>
+          <div className="mt-0.5 text-sm text-gray-200">
+            {formatValue("categorie_entreprise", row.categorie_entreprise)}
+          </div>
+        </div>
+
+        {hasFinSection && (
+          <>
+            <p className="border-b border-white/[0.04] px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-gray-500">
+              Financier
+            </p>
+            {finRows.map(([key, label]) =>
+              hasDetailValue(row[key]) ? (
+                <div key={key} className="border-b border-white/[0.04] px-3 py-2.5">
+                  <span className="text-[10px] uppercase text-gray-500">{label}</span>
+                  <div
+                    className={`mt-0.5 text-sm ${
+                      key === "variation_ca_pct" && row[key] != null
+                        ? Number(row[key]) >= 0
+                          ? "text-emerald-400"
+                          : "text-amber-400"
+                        : "text-gray-200"
+                    }`}
+                  >
+                    {formatValue(key, row[key])}
+                  </div>
+                </div>
+              ) : null
+            )}
+          </>
+        )}
+
+        {hasDetailValue(row.dirigeant_nom) && (
+          <>
+            <p className="border-b border-white/[0.04] px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-gray-500">
+              Dirigeant
+            </p>
+            <div className="border-b border-white/[0.04] px-3 py-2.5">
+              <span className="text-[10px] uppercase text-gray-500">Nom</span>
+              <div className="mt-0.5 text-sm text-gray-200">{dirigeantLine || "—"}</div>
+            </div>
+            <div className="border-b border-white/[0.04] px-3 py-2.5">
+              <span className="text-[10px] uppercase text-gray-500">Fonction</span>
+              <div className="mt-0.5 text-sm text-gray-200">
+                {formatValue("dirigeant_fonction", row.dirigeant_fonction)}
+              </div>
+            </div>
+            {hasDir2 && (
+              <div className="border-b border-white/[0.04] px-3 py-2.5">
+                <span className="text-[10px] uppercase text-gray-500">Dirigeant 2</span>
+                <div className="mt-0.5 text-sm text-gray-200">
+                  {hasDetailValue(row.dirigeant_2_nom)
+                    ? String(row.dirigeant_2_nom)
+                    : "—"}
+                  {hasDetailValue(row.dirigeant_2_fonction)
+                    ? ` — ${String(row.dirigeant_2_fonction)}`
+                    : ""}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {signauxList.length > 0 && (
+          <>
+            <p className="border-b border-white/[0.04] px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-gray-500">
+              Signaux
+            </p>
+            <div className="border-b border-white/[0.04] px-3 py-2.5">
+              <SignalBadges signals={signauxList} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function MobileCard({
@@ -432,6 +701,7 @@ export default function ResultsTable({
   const [signalFilter, setSignalFilter] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"table" | "map">("table");
   const [showExcluded, setShowExcluded] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<Record<string, any> | null>(null);
 
   const hasRelevanceData = useMemo(
     () =>
@@ -484,7 +754,8 @@ export default function ResultsTable({
     (c) =>
       c !== "lien_annuaire" &&
       c !== "google_maps_url" &&
-      !META_COLS_HIDE.has(c)
+      !META_COLS_HIDE.has(c) &&
+      !PROSPECTION_COLS_HIDE.has(c)
   );
 
   const allSignalTypes = useMemo(() => {
@@ -717,155 +988,166 @@ export default function ResultsTable({
             <ResultsMap data={filteredMapPoints} className="min-h-0 w-full flex-1" />
           ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              {/* Desktop: table */}
-              <div className="hidden min-h-0 flex-1 flex-col overflow-hidden sm:flex">
-                <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto scrollbar-thin">
-                  <table className="w-full text-sm">
-                    <thead className="sticky top-0 z-[1] bg-surface-1 shadow-[0_1px_0_0_rgba(255,255,255,0.04)]">
-                      <tr className="bg-white/[0.03]">
-                  {hasRelevanceData && (
-                    <th className="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Pertinence
-                    </th>
-                  )}
-                  {hasSegmentTags && (
-                    <th className="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Segments
-                    </th>
-                  )}
-                  {visibleCols.map((col) => (
-                    <th
-                      key={col}
-                      onClick={() => toggleSort(col)}
-                      className="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-300 whitespace-nowrap select-none"
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        {COL_LABELS[col] || col}
-                        {sortCol === col &&
-                          (sortAsc ? (
-                            <ChevronUp size={11} />
-                          ) : (
-                            <ChevronDown size={11} />
-                          ))}
-                      </span>
-                    </th>
-                  ))}
-                  <th className="px-3 py-2 text-[11px] font-medium text-gray-500 uppercase tracking-wider">
-                    Liens
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04]">
-                {pageData.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={
-                        visibleCols.length +
-                        1 +
-                        (hasRelevanceData ? 1 : 0) +
-                        (hasSegmentTags ? 1 : 0)
-                      }
-                      className="px-3 py-6 text-center text-gray-600 text-sm"
-                    >
-                      Aucun résultat ne correspond au filtre.
-                    </td>
-                  </tr>
-                ) : (
-                  pageData.map((row, i) => (
-                    <tr
-                      key={i}
-                      className="hover:bg-white/[0.02] transition-colors"
-                    >
-                      {hasRelevanceData && (
-                        <td className="px-3 py-2 whitespace-nowrap align-middle">
-                          <RelevanceBadge
-                            flag={row.relevance_flag as string}
-                            title={
-                              row.reason_excluded ? String(row.reason_excluded) : undefined
-                            }
-                          />
-                        </td>
-                      )}
-                      {hasSegmentTags && (
-                        <td className="px-3 py-2 align-middle">
-                          <SegmentTags
-                            keys={row.segments as string[]}
-                            labelByKey={segmentLabelByKey}
-                          />
-                        </td>
-                      )}
-                      {visibleCols.map((col) => (
-                        <td
-                          key={col}
-                          className={`px-3 py-2 text-gray-400 ${
-                            col === "signaux" ? "whitespace-normal" : "whitespace-nowrap max-w-[220px] truncate"
-                          } ${col === "nom" ? "font-medium text-white" : ""}`}
-                          title={col !== "signaux" ? formatValue(col, row[col]) : undefined}
-                        >
-                          {col === "signaux" ? (
-                            <SignalBadges signals={row.signaux || []} />
-                          ) : col === "variation_ca_pct" && row[col] != null ? (
-                            <span className={Number(row[col]) >= 0 ? "text-emerald-400" : "text-amber-400"}>
-                              {formatValue(col, row[col])}
-                            </span>
-                          ) : col === "site_web" && row[col] ? (
-                            <a
-                              href={
-                                String(row[col]).startsWith("http")
-                                  ? row[col]
-                                  : `https://${row[col]}`
+              {/* Desktop: table + panneau détail */}
+              <div className="relative hidden min-h-0 flex-1 flex-col overflow-hidden sm:flex">
+                <div className="relative min-h-0 flex-1 overflow-hidden">
+                  <div className="min-h-0 h-full overflow-x-auto overflow-y-auto scrollbar-thin">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 z-[1] bg-surface-1 shadow-[0_1px_0_0_rgba(255,255,255,0.04)]">
+                        <tr className="bg-white/[0.03]">
+                          {TABLE_COLS.map((col) => (
+                            <th
+                              key={col}
+                              onClick={
+                                col === "signaux" ? undefined : () => toggleSort(col)
                               }
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-400 hover:text-blue-300 truncate"
+                              className={`px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wider whitespace-nowrap select-none text-gray-500 ${
+                                col === "signaux"
+                                  ? "cursor-default"
+                                  : "cursor-pointer hover:text-gray-300"
+                              }`}
                             >
-                              {String(row[col])
-                                .replace(/^https?:\/\//, "")
-                                .replace(/\/$/, "")}
-                            </a>
-                          ) : col === "telephone" && row[col] ? (
-                            <a
-                              href={`tel:${row[col]}`}
-                              className="text-gray-400 hover:text-white"
+                              <span className="inline-flex items-center gap-1">
+                                {COL_LABELS[col] || col}
+                                {col !== "signaux" &&
+                                  sortCol === col &&
+                                  (sortAsc ? (
+                                    <ChevronUp size={11} />
+                                  ) : (
+                                    <ChevronDown size={11} />
+                                  ))}
+                              </span>
+                            </th>
+                          ))}
+                          <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-wider text-gray-500">
+                            Liens
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.04]">
+                        {pageData.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={TABLE_COLS.length + 1}
+                              className="px-3 py-6 text-center text-sm text-gray-600"
                             >
-                              {row[col]}
-                            </a>
-                          ) : (
-                            formatValue(col, row[col])
-                          )}
-                        </td>
-                      ))}
-                      <td className="px-3 py-2">
-                        <span className="inline-flex items-center gap-1.5">
-                          {row.lien_annuaire && (
-                            <a
-                              href={row.lien_annuaire}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-gray-500 hover:text-white transition-colors"
-                              title="Fiche annuaire"
+                              Aucun résultat ne correspond au filtre.
+                            </td>
+                          </tr>
+                        ) : (
+                          pageData.map((row, i) => (
+                            <tr
+                              key={i}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setSelectedRow(row)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  setSelectedRow(row);
+                                }
+                              }}
+                              className={`cursor-pointer transition-colors hover:bg-white/[0.02] ${
+                                selectedRow === row
+                                  ? "border-l-2 border-l-white/30 bg-white/[0.06]"
+                                  : ""
+                              }`}
                             >
-                              <ExternalLink size={13} />
-                            </a>
-                          )}
-                          {row.google_maps_url && (
-                            <a
-                              href={row.google_maps_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-gray-500 hover:text-blue-400 transition-colors"
-                              title="Voir sur Google Maps"
-                            >
-                              <MapPin size={13} />
-                            </a>
-                          )}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                              {TABLE_COLS.map((col) => (
+                                <td
+                                  key={col}
+                                  className={`px-3 py-2 text-gray-400 ${
+                                    col === "signaux"
+                                      ? "whitespace-normal"
+                                      : "max-w-[220px] truncate whitespace-nowrap"
+                                  } ${col === "nom" ? "font-medium text-white" : ""}`}
+                                  title={
+                                    col !== "signaux"
+                                      ? formatValue(col, row[col])
+                                      : undefined
+                                  }
+                                >
+                                  {col === "signaux" ? (
+                                    <SignalBadges signals={row.signaux || []} />
+                                  ) : col === "site_web" && row[col] ? (
+                                    <a
+                                      href={
+                                        String(row[col]).startsWith("http")
+                                          ? row[col]
+                                          : `https://${row[col]}`
+                                      }
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="truncate text-blue-400 hover:text-blue-300"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {String(row[col])
+                                        .replace(/^https?:\/\//, "")
+                                        .replace(/\/$/, "")}
+                                    </a>
+                                  ) : col === "telephone" && row[col] ? (
+                                    <a
+                                      href={`tel:${row[col]}`}
+                                      className="text-gray-400 hover:text-white"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {row[col]}
+                                    </a>
+                                  ) : (
+                                    formatValue(col, row[col])
+                                  )}
+                                </td>
+                              ))}
+                              <td
+                                className="px-3 py-2"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span className="inline-flex items-center gap-1.5">
+                                  {row.lien_annuaire && (
+                                    <a
+                                      href={row.lien_annuaire}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-gray-500 transition-colors hover:text-white"
+                                      title="Fiche annuaire"
+                                    >
+                                      <ExternalLink size={13} />
+                                    </a>
+                                  )}
+                                  {row.google_maps_url && (
+                                    <a
+                                      href={row.google_maps_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-gray-500 transition-colors hover:text-blue-400"
+                                      title="Voir sur Google Maps"
+                                    >
+                                      <MapPin size={13} />
+                                    </a>
+                                  )}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div
+                    className={`absolute inset-y-0 right-0 z-20 w-[320px] max-w-full transition-transform duration-300 ease-out ${
+                      selectedRow
+                        ? "translate-x-0"
+                        : "pointer-events-none translate-x-full"
+                    }`}
+                  >
+                    {selectedRow ? (
+                      <DesktopDetailPanel
+                        row={selectedRow}
+                        onClose={() => setSelectedRow(null)}
+                      />
+                    ) : null}
+                  </div>
                 </div>
               </div>
 
