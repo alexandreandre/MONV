@@ -214,8 +214,30 @@ async def send_message(
     e = guard_result.entities
     has_secteur = bool(e.secteur or e.code_naf or e.mots_cles)
     has_zone = bool(e.localisation or e.departement or e.region)
+    # Modes sous-traitant / rachat : QCM de qualification à la 1re interaction
+    # seulement (pas de boucle si un message qcm existe déjà).
+    if active_mode in ("sous_traitant", "rachat") and not guard_result.clarification_needed:
+        recent_messages = await messages_recent_for_llm(supabase, conv.id, 20)
+        has_qcm_in_history = any(
+            m.message_type == "qcm"
+            for m in recent_messages
+        )
+        if not has_qcm_in_history:
+            if active_mode == "sous_traitant":
+                guard_result.missing_criteria = ["capacite", "type_mission"]
+                plog("sous_traitant_force_clarification",
+                     reason="mode sous_traitant force QCM qualification")
+            else:  # rachat
+                guard_result.missing_criteria = ["budget_acquisition", "profil_cible", "type_reprise"]
+                plog("rachat_force_clarification",
+                     reason="mode rachat force QCM qualification")
+            guard_result.clarification_needed = True
+        else:
+            plog(f"{active_mode}_skip_clarification",
+                 reason="QCM deja present dans l historique")
+
     # On ne court-circuite le QCM que si le secteur est non-ambigu ET la zone connue.
-    if guard_result.clarification_needed and has_secteur and has_zone:
+    elif guard_result.clarification_needed and has_secteur and has_zone:
         if not getattr(guard_result, "sector_ambiguous", False):
             plog("guard_override_skip_clarification",
                  reason="secteur+zone present, non ambigu",
@@ -229,7 +251,7 @@ async def send_message(
 
     # ── Couche 1b — QCM de clarification (modèle moyen) ────────────
     if guard_result.clarification_needed:
-        intro, questions = await generate_qcm(guard_result, history)
+        intro, questions = await generate_qcm(guard_result, history, mode=active_mode)
         qcm_payload = {
             "intro": intro,
             "questions": [q.model_dump() for q in questions],
@@ -262,7 +284,7 @@ async def send_message(
     )
 
     if plan.clarification_needed:
-        intro, questions = await generate_qcm(guard_result, history)
+        intro, questions = await generate_qcm(guard_result, history, mode=active_mode)
         qcm_payload = {
             "intro": intro,
             "questions": [q.model_dump() for q in questions],
@@ -374,7 +396,41 @@ async def send_message(
 
     # ── Construire le message de résultats ─────────────────────────
     credits_needed = search_results.credits_required
-    preview_text = f"J'ai trouvé **{total} entreprises** correspondant à ta recherche."
+    # Message d'intro contextualisé selon le mode
+    if active_mode == "prospection":
+        secteur_label = guard_result.entities.secteur or ""
+        ville_label = guard_result.entities.localisation or guard_result.entities.departement or guard_result.entities.region or ""
+        if secteur_label and ville_label:
+            preview_text = f"J'ai trouvé **{total} prospects** dans le secteur **{secteur_label}** à **{ville_label}**."
+        elif secteur_label:
+            preview_text = f"J'ai trouvé **{total} prospects** dans le secteur **{secteur_label}**."
+        elif ville_label:
+            preview_text = f"J'ai trouvé **{total} prospects** à **{ville_label}**."
+        else:
+            preview_text = f"J'ai trouvé **{total} prospects** correspondant à ta recherche."
+    elif active_mode == "sous_traitant":
+        secteur_label = guard_result.entities.secteur or ""
+        ville_label = guard_result.entities.localisation or guard_result.entities.departement or guard_result.entities.region or ""
+        if secteur_label and ville_label:
+            preview_text = f"J'ai trouvé **{total} prestataires potentiels** en **{secteur_label}** à **{ville_label}**."
+        elif secteur_label:
+            preview_text = f"J'ai trouvé **{total} prestataires potentiels** en **{secteur_label}**."
+        else:
+            preview_text = f"J'ai trouvé **{total} prestataires potentiels** correspondant à tes critères."
+    elif active_mode == "benchmark":
+        secteur_label = guard_result.entities.secteur or ""
+        preview_text = f"J'ai trouvé **{total} entreprises** pour ton benchmark{' dans le secteur **' + secteur_label + '**' if secteur_label else ''}."
+    elif active_mode == "rachat":
+        secteur_label = guard_result.entities.secteur or ""
+        ville_label = guard_result.entities.localisation or guard_result.entities.departement or guard_result.entities.region or ""
+        if secteur_label and ville_label:
+            preview_text = f"J'ai identifié **{total} cibles potentielles** en **{secteur_label}** à **{ville_label}**."
+        elif secteur_label:
+            preview_text = f"J'ai identifié **{total} cibles potentielles** en **{secteur_label}**."
+        else:
+            preview_text = f"J'ai identifié **{total} cibles potentielles** correspondant à tes critères."
+    else:
+        preview_text = f"J'ai trouvé **{total} entreprises** correspondant à ta recherche."
     removed = relevance_meta.get("relevance_removed") if relevance_meta else 0
     if isinstance(removed, int) and removed > 0:
         preview_text += (
@@ -391,6 +447,41 @@ async def send_message(
             f" Voici les 10 premières. "
             f"**Exporter tout = {credits_needed} crédits** (tu en as {solde})."
         )
+
+    # ── Suggestions de suivi contextualisées par mode ──────────────
+    suggestions: list[str] = []
+    if active_mode == "prospection":
+        suggestions = [
+            "🔍 Affiner par taille (TPE / PME / ETI)",
+            "👤 Chercher les dirigeants de ces entreprises",
+            "📍 Élargir la zone géographique",
+            "📊 Passer en mode Benchmark pour analyser ce secteur",
+        ]
+    elif active_mode == "sous_traitant":
+        suggestions = [
+            "📏 Filtrer par capacité (effectif minimum)",
+            "📅 Affiner par ancienneté (entreprises établies +5 ans)",
+            "📍 Élargir ou restreindre la zone d'intervention",
+            "👤 Chercher les contacts dirigeants de ces prestataires",
+        ]
+    elif active_mode == "benchmark":
+        suggestions = [
+            "💰 Affiner sur une tranche de CA spécifique",
+            "📏 Comparer uniquement les PME ou les ETI",
+            "📍 Restreindre à une région précise",
+            "📤 Exporter pour analyse Excel (CA, résultats, effectifs)",
+        ]
+    elif active_mode == "rachat":
+        suggestions = [
+            "📅 Filtrer les entreprises créées il y a +15 ans (transmission)",
+            "💰 Affiner sur une tranche de CA",
+            "👤 Identifier les dirigeants (âge, durée de mandat)",
+            "📍 Élargir la zone géographique de recherche",
+        ]
+
+    # Les suggestions restent dans metadata_json, pas dans le texte,
+    # pour être rendues comme boutons cliquables côté frontend.
+    # On ne les ajoute plus à preview_text.
 
     # Cadres d'analyse — sans recommandation personnalisée ni valorisation.
     if active_mode == "rachat":
@@ -432,6 +523,7 @@ async def send_message(
             "mode": active_mode,
             "mode_label": MODE_LABELS.get(active_mode, active_mode),
             "relevance": relevance_meta or None,
+            "suggestions": suggestions,
         }, ensure_ascii=False, default=str),
         created_at=datetime.now(timezone.utc),
     )

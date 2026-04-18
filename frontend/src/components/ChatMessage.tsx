@@ -216,6 +216,8 @@ export default function ChatMessage({
             onExport={onExport}
             exporting={exporting}
             mapPoints={meta.map_points || []}
+            suggestions={meta.suggestions || []}
+            onSuggestionClick={onQcmSubmit}
           />
         )}
       </div>

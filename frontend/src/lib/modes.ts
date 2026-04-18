@@ -50,8 +50,9 @@ export const MODE_META: Record<Mode, ModeMeta> = {
     id: "sous_traitant",
     label: "Sous-traitant",
     short: "Trouver un sous-traitant",
-    description: "Identifier un fournisseur ou prestataire",
-    placeholder: "Quel type de prestation, où, quelle capacité requise ?",
+    description: "Identifier un prestataire qualifié à qui confier une exécution",
+    placeholder:
+      "Ex : « je cherche un électricien pour chantiers résidentiels en Bretagne, min. 5 salariés »",
     accent: "border-sky-500/40 text-sky-300 bg-sky-500/10",
     badgeBg: "bg-sky-500/15",
     badgeText: "text-sky-300",

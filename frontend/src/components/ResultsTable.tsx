@@ -44,6 +44,8 @@ interface Props {
   mapPoints?: Record<string, any>[];
   /** Libellés des segments pour les tags `segments[]` (Atelier). */
   segmentLabelByKey?: Record<string, string>;
+  suggestions?: string[];
+  onSuggestionClick?: (message: string) => void;
 }
 
 const COL_LABELS: Record<string, string> = {
@@ -167,15 +169,15 @@ const PROSPECTION_COLS_HIDE = new Set([
   "dirigeant_2_fonction", // secondaire
 ]);
 
-/** Colonnes fixes du tableau desktop (6) + colonne Liens = 7 colonnes max. */
-const TABLE_COLS = [
+/** Colonnes compactes du tableau desktop (6) + colonne Liens = 7 colonnes max. */
+const COMPACT_COLS = [
   "signaux",
   "nom",
   "telephone",
   "site_web",
   "ville",
   "effectif_label",
-] as const;
+];
 
 type RelevanceFlag = "ok" | "warning" | "excluded" | string;
 
@@ -688,6 +690,8 @@ export default function ResultsTable({
   exporting,
   mapPoints,
   segmentLabelByKey,
+  suggestions,
+  onSuggestionClick,
 }: Props) {
   const rowData = Array.isArray(data) ? data : [];
   const colData = Array.isArray(columns) ? columns : [];
@@ -702,6 +706,7 @@ export default function ResultsTable({
   const [viewMode, setViewMode] = useState<"table" | "map">("table");
   const [showExcluded, setShowExcluded] = useState(false);
   const [selectedRow, setSelectedRow] = useState<Record<string, any> | null>(null);
+  const [showAllCols, setShowAllCols] = useState(false);
 
   const hasRelevanceData = useMemo(
     () =>
@@ -757,6 +762,8 @@ export default function ResultsTable({
       !META_COLS_HIDE.has(c) &&
       !PROSPECTION_COLS_HIDE.has(c)
   );
+
+  const TABLE_COLS = showAllCols ? visibleCols : COMPACT_COLS;
 
   const allSignalTypes = useMemo(() => {
     const types = new Map<string, string>();
@@ -1177,6 +1184,58 @@ export default function ResultsTable({
           )}
         </div>
       </div>
+      {suggestions && suggestions.length > 0 && (
+        <div className="border-t border-white/[0.04] px-4 py-3 space-y-2">
+          <p className="text-xs text-gray-500 uppercase tracking-wider">
+            Tu veux affiner ?
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((s, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() =>
+                  onSuggestionClick?.(
+                    s.replace(/^[\p{Emoji}\s]+/u, "").trim()
+                  )
+                }
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-gray-300 hover:bg-white/[0.08] hover:text-white hover:border-white/[0.16] transition-all min-h-[44px]"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!showAllCols && (
+        <div className="border-t border-white/[0.04] px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-gray-500">
+            {"Tu souhaites voir le tableau avec plus d'informations ?"}
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowAllCols(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/[0.1] active:bg-white/[0.15] transition-colors whitespace-nowrap min-h-[44px]"
+          >
+            Oui, tout afficher
+          </button>
+        </div>
+      )}
+
+      {showAllCols && (
+        <div className="border-t border-white/[0.04] px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-gray-500">Tableau complet affiché.</p>
+          <button
+            type="button"
+            onClick={() => setShowAllCols(false)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-2 text-sm font-medium text-gray-500 hover:bg-white/[0.1] transition-colors whitespace-nowrap min-h-[44px]"
+          >
+            Revenir au tableau compact
+          </button>
+        </div>
+      )}
+
       {exportBar}
     </div>
   );
