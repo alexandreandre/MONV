@@ -23,6 +23,7 @@ import {
   type ChatResponse,
   type ExportResponse,
   type AgentSendResponse,
+  type BusinessDossierPayload,
   type ProjectFolder,
 } from "@/lib/api";
 import { LANDING_TEMPLATES } from "@/lib/landingTemplates";
@@ -140,6 +141,36 @@ function HomeInner() {
     },
     []
   );
+
+  const handleAtelierDossierReplaced = useCallback(
+    (dossier: BusinessDossierPayload) => {
+      setMessages((prev) => {
+        const next = [...prev];
+        for (let i = next.length - 1; i >= 0; i--) {
+          if (next[i].message_type === "business_dossier") {
+            next[i] = {
+              ...next[i],
+              metadata_json: JSON.stringify(dossier),
+            };
+            break;
+          }
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const handleAtelierNotify = useCallback(
+    (kind: "success" | "error", message: string) => {
+      addToast(kind, message);
+    },
+    [addToast]
+  );
+
+  const handleAtelierCreditsRemaining = useCallback((credits: number) => {
+    setUser((u) => (u ? { ...u, credits } : u));
+  }, []);
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -1183,6 +1214,10 @@ function HomeInner() {
                     onQcmSubmit={handleQcmSubmit}
                     conversationMode={activeConversationMode}
                     isAtelierConversation={isAtelierConversation}
+                    conversationId={currentConvId}
+                    onAtelierDossierReplaced={handleAtelierDossierReplaced}
+                    onAtelierNotify={handleAtelierNotify}
+                    onAtelierCreditsRemaining={handleAtelierCreditsRemaining}
                   />
                 ))}
 

@@ -8,11 +8,21 @@ interface Props {
   payload: QcmPayload;
   onSubmit: (answers: string) => void;
   disabled?: boolean;
+  /** Libellé du bouton principal (ex. Atelier vs chat prospection). */
+  submitLabel?: string;
+  /** Texte d'aide sous les questions, avant le bouton. */
+  helperText?: string;
 }
 
 type Answers = Record<string, { selected: string[]; freeText: string }>;
 
-export default function QcmCard({ payload, onSubmit, disabled }: Props) {
+export default function QcmCard({
+  payload,
+  onSubmit,
+  disabled,
+  submitLabel = "Valider mes choix",
+  helperText,
+}: Props) {
   const [answers, setAnswers] = useState<Answers>(() => {
     const init: Answers = {};
     for (const q of payload.questions) {
@@ -136,9 +146,19 @@ export default function QcmCard({ payload, onSubmit, disabled }: Props) {
         );
       })}
 
+      {helperText && (
+        <p className="text-xs text-gray-500 leading-relaxed">{helperText}</p>
+      )}
+
       <button
+        type="button"
         onClick={handleSubmit}
         disabled={!canSubmit || submitted || disabled}
+        title={
+          !canSubmit && !submitted
+            ? "Sélectionne au moins une réponse par question ; si tu choisis « Autre », précise dans le champ texte."
+            : undefined
+        }
         className={`
           inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all min-h-[44px] w-full sm:w-auto justify-center
           ${
@@ -155,7 +175,7 @@ export default function QcmCard({ payload, onSubmit, disabled }: Props) {
           </>
         ) : (
           <>
-            Valider mes choix
+            {submitLabel}
             <ChevronRight size={15} />
           </>
         )}

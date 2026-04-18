@@ -38,9 +38,9 @@ export const AGENT_META: Record<Agent, AgentMeta> = {
     id: "atelier",
     label: "Atelier",
     short: "Parcours projet",
-    tagline: "QCM court, puis dossier structuré et listes d’entreprises.",
+    tagline: "Questions seulement si besoin, puis dossier et listes d’entreprises.",
     description:
-      "Tu décris le projet, tu réponds à 4 questions, tu reçois un business model, une cartographie des flux et des tableaux d’entreprises à contacter (données publiques).",
+      "Tu décris le projet ; l’Atelier pose éventuellement un QCM ciblé (de zéro à plusieurs questions selon ton texte), puis tu reçois un business model, une cartographie des flux et des tableaux d’entreprises à contacter (données publiques).",
     placeholder:
       "Secteur, zone, clientèle, offre — ce que tu veux lancer ou structurer.",
     icon: Compass,

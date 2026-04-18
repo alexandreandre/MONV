@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import {
   Background,
   BackgroundVariant,
@@ -33,6 +39,10 @@ import type { FlowActor, FlowEdge, FlowMap, SegmentResult } from "@/lib/api";
 interface Props {
   flows: FlowMap;
   segments?: SegmentResult[];
+  /** Clic sur une carte liée à un segment : ex. bascule vers l’onglet Tableaux + scroll (fourni par le parent). */
+  onSegmentActivate?: (segmentKey: string) => void;
+  /** Hauteur du canevas (ex. vue colonne + sidebar). */
+  graphHeightClassName?: string;
 }
 
 type FlowLayer = "valeur" | "financier" | "information" | "all";
@@ -98,22 +108,42 @@ function ActorNode({ data }: NodeProps) {
   const primary = actor.emphasis === "primary";
   const clickable = Boolean(segmentKey);
 
+  const go = () => {
+    if (clickable && segmentKey) onNavigate(segmentKey);
+  };
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (!clickable) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      go();
+    }
+  };
+
   return (
     <div
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={
+        clickable && segmentLabel
+          ? `Ouvrir le tableau du segment ${segmentLabel}`
+          : undefined
+      }
       className={`relative flex h-[76px] w-[210px] flex-col justify-center rounded-xl border px-3 py-2 text-left shadow-[0_4px_14px_-4px_rgba(0,0,0,0.7)] transition-all ${
         primary
           ? "border-teal-400/60 bg-teal-500/[0.12]"
           : "border-white/[0.14] bg-[#18181b]"
       } ${
         clickable
-          ? "cursor-pointer hover:border-teal-300/80 hover:bg-teal-500/[0.14]"
+          ? "cursor-pointer hover:border-teal-300/80 hover:bg-teal-500/[0.14] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500/50"
           : "cursor-default"
       }`}
-      onClick={() => clickable && segmentKey && onNavigate(segmentKey)}
+      onClick={go}
+      onKeyDown={onKeyDown}
       title={
         actor.hint?.trim() ||
         (clickable && segmentLabel
-          ? `Aller au segment : ${segmentLabel}`
+          ? `Ouvrir le tableau : ${segmentLabel}`
           : undefined)
       }
     >
@@ -176,12 +206,16 @@ const nodeTypes = { actor: ActorNode };
 
 /* ---------- Layout dagre ---------- */
 
-function layoutWithDagre(nodes: Node[], edges: Edge[]): Node[] {
+function layoutWithDagre(
+  nodes: Node[],
+  edges: Edge[],
+  rankdir: "LR" | "TB",
+): Node[] {
   const g = new dagre.graphlib.Graph();
   g.setGraph({
-    rankdir: "LR",
-    nodesep: 40,
-    ranksep: 90,
+    rankdir,
+    nodesep: rankdir === "LR" ? 40 : 28,
+    ranksep: rankdir === "LR" ? 90 : 56,
     marginx: 24,
     marginy: 24,
   });
@@ -191,13 +225,14 @@ function layoutWithDagre(nodes: Node[], edges: Edge[]): Node[] {
   for (const e of edges) g.setEdge(e.source, e.target);
   dagre.layout(g);
 
+  const flowLR = rankdir === "LR";
   return nodes.map((n) => {
     const { x, y } = g.node(n.id);
     return {
       ...n,
       position: { x: x - NODE_WIDTH / 2, y: y - NODE_HEIGHT / 2 },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
+      sourcePosition: flowLR ? Position.Right : Position.Bottom,
+      targetPosition: flowLR ? Position.Left : Position.Top,
     };
   });
 }
@@ -209,11 +244,13 @@ function FlowGraph({
   layeredEdges,
   segments,
   onNavigate,
+  rankdir,
 }: {
   actors: FlowActor[];
   layeredEdges: (FlowEdge & { layer: Exclude<FlowLayer, "all"> })[];
   segments: SegmentResult[];
   onNavigate: (key: string) => void;
+  rankdir: "LR" | "TB";
 }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -278,9 +315,9 @@ function FlowGraph({
       });
     });
 
-    setNodes(layoutWithDagre(rawNodes, rawEdges));
+    setNodes(layoutWithDagre(rawNodes, rawEdges, rankdir));
     setEdges(rawEdges);
-  }, [actors, layeredEdges, segments, onNavigate, setNodes, setEdges]);
+  }, [actors, layeredEdges, segments, onNavigate, rankdir, setNodes, setEdges]);
 
   return (
     <ReactFlow
@@ -318,10 +355,31 @@ function FlowGraph({
 
 /* ---------- Composant principal ---------- */
 
-export default function FlowDiagram({ flows, segments = [] }: Props) {
+export default function FlowDiagram({
+  flows,
+  segments = [],
+  onSegmentActivate,
+  graphHeightClassName = "h-[520px]",
+}: Props) {
   const [active, setActive] = useState<FlowLayer>("all");
 
   const actors = useMemo(() => normalizeActors(flows.acteurs), [flows.acteurs]);
+
+  const actorsSorted = useMemo(() => {
+    const copy = [...actors];
+    copy.sort((a, b) => {
+      const skA = segmentKeyForActor(a, segments) ?? "\uffff";
+      const skB = segmentKeyForActor(b, segments) ?? "\uffff";
+      if (skA !== skB) return skA.localeCompare(skB);
+      return normLabel(a.label).localeCompare(normLabel(b.label));
+    });
+    return copy;
+  }, [actors, segments]);
+
+  const rankdir: "LR" | "TB" =
+    (flows.layout || "").toString().trim().toLowerCase() === "vertical"
+      ? "TB"
+      : "LR";
 
   const allEdges = useMemo<(FlowEdge & { layer: Exclude<FlowLayer, "all"> })[]>(
     () => [
@@ -355,7 +413,13 @@ export default function FlowDiagram({ flows, segments = [] }: Props) {
 
   const scrollToSegment = useCallback((key: string) => {
     const el = document.getElementById(`atelier-segment-${key}`);
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el?.scrollIntoView({
+      behavior: reducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
     el?.classList.add(
       "ring-2",
       "ring-teal-500/50",
@@ -367,9 +431,17 @@ export default function FlowDiagram({ flows, segments = [] }: Props) {
     }, 1600);
   }, []);
 
+  const handleActorNavigate = useCallback(
+    (key: string) => {
+      if (onSegmentActivate) onSegmentActivate(key);
+      else scrollToSegment(key);
+    },
+    [onSegmentActivate, scrollToSegment],
+  );
+
   const linkedActors = useMemo(
-    () => actors.filter((a) => Boolean(segmentKeyForActor(a, segments))).length,
-    [actors, segments],
+    () => actorsSorted.filter((a) => Boolean(segmentKeyForActor(a, segments))).length,
+    [actorsSorted, segments],
   );
 
   const title = (flows.diagram_title || "").trim();
@@ -415,7 +487,7 @@ export default function FlowDiagram({ flows, segments = [] }: Props) {
         <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 uppercase tracking-wider">
           <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-0.5">
             <Layers size={11} className="text-gray-400" aria-hidden />
-            {actors.length} acteurs
+            {actorsSorted.length} acteurs
           </span>
           <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-0.5">
             {layeredEdges.length} liaisons
@@ -428,8 +500,7 @@ export default function FlowDiagram({ flows, segments = [] }: Props) {
               className="text-teal-400/90"
               aria-hidden
             />
-            {linkedActors} carte{linkedActors > 1 ? "s" : ""} cliquable
-            {linkedActors > 1 ? "s" : ""}
+            {linkedActors} lien{linkedActors > 1 ? "s" : ""} vers le tableau
           </span>
         )}
       </div>
@@ -495,26 +566,31 @@ export default function FlowDiagram({ flows, segments = [] }: Props) {
       </div>
 
       {/* ---- Graphe ---- */}
-      {actors.length === 0 ? (
+      {actorsSorted.length === 0 ? (
         <p className="rounded-lg border border-white/[0.06] bg-surface-2/60 py-8 text-center text-xs italic text-gray-500">
           Aucun acteur identifié.
         </p>
       ) : (
-        <div className="h-[520px] w-full overflow-hidden rounded-xl border border-white/[0.06] bg-[#0a0a0b]">
+        <div
+          className={`${graphHeightClassName} w-full overflow-hidden rounded-xl border border-white/[0.06] bg-[#0a0a0b]`}
+        >
           <ReactFlowProvider>
             <FlowGraph
-              actors={actors}
+              actors={actorsSorted}
               layeredEdges={layeredEdges}
               segments={segments}
-              onNavigate={scrollToSegment}
+              onNavigate={handleActorNavigate}
+              rankdir={rankdir}
             />
           </ReactFlowProvider>
         </div>
       )}
 
       <p className="mt-2 text-[10px] text-gray-600">
-        Glissez pour déplacer un acteur · molette + clic pour naviguer dans le
-        graphe · clic sur une carte pour rejoindre son segment.
+        Glisser-déposer pour réorganiser · pincer ou contrôles pour zoomer ·
+        {onSegmentActivate
+          ? " Acteur relié à un segment : fait défiler vers le tableau correspondant (colonne de droite si visible)."
+          : " Acteur relié à un segment : fait défiler jusqu’au bloc correspondant."}
       </p>
     </div>
   );

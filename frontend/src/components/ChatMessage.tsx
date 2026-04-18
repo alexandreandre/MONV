@@ -3,7 +3,7 @@
 import ReactMarkdown from "react-markdown";
 import ResultsTable from "./ResultsTable";
 import QcmCard from "./QcmCard";
-import BusinessDossier from "./BusinessDossier";
+import AtelierDossier from "./AtelierDossier";
 import { AlertCircle, Compass } from "lucide-react";
 import type { Message, QcmPayload, BusinessDossierPayload } from "@/lib/api";
 import { MODE_META, normalizeMode, type Mode } from "@/lib/modes";
@@ -25,6 +25,10 @@ interface Props {
   conversationMode?: Mode | null;
   /** True si la conversation appartient à l'agent Atelier (mode="atelier"). */
   isAtelierConversation?: boolean;
+  conversationId?: string | null;
+  onAtelierDossierReplaced?: (dossier: BusinessDossierPayload) => void;
+  onAtelierNotify?: (kind: "success" | "error", message: string) => void;
+  onAtelierCreditsRemaining?: (credits: number) => void;
 }
 
 export default function ChatMessage({
@@ -37,6 +41,10 @@ export default function ChatMessage({
   onQcmSubmit,
   conversationMode = null,
   isAtelierConversation = false,
+  conversationId = null,
+  onAtelierDossierReplaced,
+  onAtelierNotify,
+  onAtelierCreditsRemaining,
 }: Props) {
   const isUser = message.role === "user";
   const isError = message.message_type === "error";
@@ -52,10 +60,18 @@ export default function ChatMessage({
 
   const isDossier =
     message.message_type === "business_dossier" && meta?.brief && meta?.canvas;
-  const isAtelierBrief =
-    message.message_type === "agent_brief" && meta?.questions;
-  const isQcm =
-    (message.message_type === "qcm" || isAtelierBrief) && meta?.questions;
+  const isAtelierBrief = message.message_type === "agent_brief";
+  const isClassicQcm = message.message_type === "qcm";
+  const hasAtelierQcmPayload =
+    isAtelierBrief && meta && Array.isArray(meta.questions);
+  const hasClassicQcmPayload =
+    isClassicQcm &&
+    meta &&
+    Array.isArray(meta.questions) &&
+    meta.questions.length > 0;
+  const showQcmCard = Boolean(
+    (hasAtelierQcmPayload || hasClassicQcmPayload) && onQcmSubmit
+  );
 
   // Badge affiché sur les messages utilisateur — priorité à Atelier s'il s'agit
   // d'une conversation Atelier, sinon badge de mode classique.
@@ -89,13 +105,17 @@ export default function ChatMessage({
               </div>
             </div>
           )}
-          <BusinessDossier
+          <AtelierDossier
             dossier={dossier}
+            conversationId={conversationId ?? undefined}
             userCredits={userCredits}
             creditsUnlimited={creditsUnlimited}
             onExport={onExport}
             onExportAllAtelier={onExportAllAtelier}
             exporting={exporting}
+            onDossierReplaced={onAtelierDossierReplaced}
+            onNotify={onAtelierNotify}
+            onCreditsRemaining={onAtelierCreditsRemaining}
           />
         </div>
       </div>
@@ -166,23 +186,25 @@ export default function ChatMessage({
             <ReactMarkdown>{message.content}</ReactMarkdown>
           </div>
 
-          {isQcm && onQcmSubmit && (
+          {showQcmCard && (
             <QcmCard
               payload={meta as QcmPayload}
-              onSubmit={onQcmSubmit}
+              onSubmit={onQcmSubmit!}
               submitLabel={
                 isAtelierBrief ? "Générer le dossier" : "Valider mes choix"
               }
               helperText={
                 isAtelierBrief
-                  ? "Une ou plusieurs réponses par question selon les cases ; tu pourras affiner ensuite dans la conversation."
+                  ? (meta as QcmPayload).questions?.length
+                    ? "Une ou plusieurs réponses par question selon les cases ; tu pourras affiner ensuite dans la conversation."
+                    : "Aucune question complémentaire n’est nécessaire : tu peux enchaîner sur le dossier."
                   : undefined
               }
             />
           )}
         </div>
 
-        {meta && meta.preview && !isQcm && !isDossier && (
+        {meta && meta.preview && !showQcmCard && !isDossier && (
           <ResultsTable
             data={meta.preview}
             columns={meta.columns || []}

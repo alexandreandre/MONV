@@ -285,12 +285,35 @@ export interface SegmentResult {
   relevance_threshold?: number | null;
 }
 
+export interface ChecklistItem {
+  label: string;
+  guide: string;
+}
+
+export interface ChecklistSection {
+  title: string;
+  subtitle?: string | null;
+  items: ChecklistItem[];
+}
+
+export interface AtelierChecklist {
+  headline: string;
+  lede?: string | null;
+  sections: ChecklistSection[];
+  pitfalls_title?: string | null;
+  pitfalls: ChecklistItem[];
+}
+
 export interface AgentSynthesis {
   forces: string[];
   risques: string[];
   prochaines_etapes: string[];
   kpis: string[];
   budget_estimatif: string | null;
+  /** Dossiers générés avant extension : peut être absent. */
+  ordres_grandeur?: string[];
+  conseil_semaine?: string | null;
+  checklist?: AtelierChecklist | null;
 }
 
 export interface BusinessDossierPayload {
@@ -306,4 +329,87 @@ export interface BusinessDossierPayload {
   total_unique?: number;
   total_relevant?: number;
   total_credits?: number;
+}
+
+/** Zones recalculées après édition du brief (Phase 3 — itération dossier). */
+export type AtelierImpact = "canvas" | "flows" | "segments";
+
+export interface AtelierGenerationStats {
+  llm_calls: number;
+  api_calls: number;
+  credits_charged: number;
+  relevance_removed_per_segment?: Record<string, number>;
+}
+
+/** GET /api/agent/dossier/:conversation_id */
+export interface AtelierDossierGetResponse {
+  message_id: string;
+  dossier: BusinessDossierPayload;
+}
+
+/** Réponses POST de régénération / mise à jour du dernier dossier Atelier. */
+export interface AtelierDossierMutationResponse {
+  dossier: BusinessDossierPayload;
+  generation_stats: AtelierGenerationStats;
+  credits_remaining?: number | null;
+}
+
+export interface AtelierSegmentRegenerateBody {
+  conversation_id: string;
+  query_override?: string | null;
+  mode_override?: string | null;
+}
+
+export interface AtelierCanvasRegenerateBody {
+  conversation_id: string;
+}
+
+export interface AtelierBriefUpdateBody {
+  conversation_id: string;
+  brief: ProjectBrief;
+  impacts: AtelierImpact[];
+}
+
+/** Dernier message dossier + payload JSON (Phase 3). */
+export function getAtelierDossier(conversationId: string) {
+  return apiGet<AtelierDossierGetResponse>(
+    `/agent/dossier/${encodeURIComponent(conversationId)}`
+  );
+}
+
+/** Relance le pipeline MONV pour un segment du dossier courant. */
+export function regenerateAtelierSegment(
+  segmentKey: string,
+  body: AtelierSegmentRegenerateBody,
+  options?: ApiFetchOptions
+) {
+  return apiPost<AtelierDossierMutationResponse>(
+    `/agent/segments/${encodeURIComponent(segmentKey)}/regenerate`,
+    body,
+    options
+  );
+}
+
+/** Régénère le canvas BMC à partir du pitch, QCM et brief courants. */
+export function regenerateAtelierCanvas(
+  body: AtelierCanvasRegenerateBody,
+  options?: ApiFetchOptions
+) {
+  return apiPost<AtelierDossierMutationResponse>(
+    "/agent/canvas/regenerate",
+    body,
+    options
+  );
+}
+
+/** Met à jour le brief puis recalcule canvas / flux / segments selon `impacts`. */
+export function updateAtelierBrief(
+  body: AtelierBriefUpdateBody,
+  options?: ApiFetchOptions
+) {
+  return apiPost<AtelierDossierMutationResponse>(
+    "/agent/brief/update",
+    body,
+    options
+  );
 }
