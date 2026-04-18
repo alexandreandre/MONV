@@ -34,7 +34,9 @@ MONV/
 │   ├── config.py            # Paramètres (Pydantic Settings) + .env
 │   ├── requirements.txt
 │   ├── supabase/migrations/
-│   │   └── 001_schema.sql   # Schéma PostgreSQL à exécuter dans Supabase
+│   │   ├── 001_schema.sql   # Tables de base (users, conversations, messages, search_history, cache)
+│   │   ├── 002_modes.sql    # Colonne `mode` sur conversations / search_history
+│   │   └── 003_project_folders.sql  # Table `project_folders` + `folder_id` sur conversations
 │   ├── models/
 │   │   ├── db.py            # Client Supabase (service_role), accès tables
 │   │   ├── entities.py      # Entités domaine
@@ -42,12 +44,14 @@ MONV/
 │   ├── routers/
 │   │   ├── auth.py          # Inscription, connexion, JWT, profil
 │   │   ├── chat.py          # Envoi de messages, pipeline prospection
+│   │   ├── agent.py         # Agent « Atelier » (pitch + QCM, dossier multi-segments)
 │   │   ├── search.py        # Historique, export, téléchargement fichiers
 │   │   └── credits.py       # Packs de crédits (ajout manuel en dev)
 │   ├── services/
 │   │   ├── filter.py        # Couche 0 — filtre « in scope » (rapide)
 │   │   ├── guard.py         # Couche 1 — intent + entités
-│   │   ├── conversationalist.py  # QCM de clarification
+│   │   ├── conversationalist.py  # QCM de clarification (chat)
+│   │   ├── modes.py         # Modes d’usage (prospection, rachat, etc.) — persistance / API
 │   │   ├── orchestrator.py  # Couche 2 — plan d’exécution API + coût crédits
 │   │   ├── api_engine.py    # Couche 3 — SIRENE / Pappers / Google Places, fusion résultats
 │   │   ├── sirene.py        # Recherche Entreprises (data.gouv.fr)
@@ -55,6 +59,12 @@ MONV/
 │   │   ├── google_places.py # Commerces de niche + recoupement SIRENE (clé optionnelle)
 │   │   ├── signals.py       # Signaux métier (dirigeants, finances, etc.) sur les résultats
 │   │   ├── geocoding.py     # Géocodage des adresses pour carte / export
+│   │   ├── relevance.py     # Scoring / pertinence des résultats
+│   │   ├── agent.py         # Orchestration agent Atelier (segments, persistance)
+│   │   ├── atelier_qcm.py   # QCM et prompts spécifiques atelier
+│   │   ├── atelier_coerce.py
+│   │   ├── atelier_heuristics.py
+│   │   ├── atelier_constants.py
 │   │   └── export.py        # Génération Excel / CSV
 │   └── utils/
 │       ├── llm.py           # Client OpenAI-compatible → OpenRouter
@@ -64,11 +74,14 @@ MONV/
 ├── frontend/                # Next.js 15 (App Router)
 │   ├── next.config.js         # Rewrite /api/* → backend :8000
 │   └── src/
-│       ├── app/               # layout, page principale
-│       ├── components/        # Chat, tableau, carte, auth, crédits, etc.
+│       ├── app/               # layout, page principale (App Router)
+│       ├── components/        # Chat, agent atelier, projets, modes, tableau, carte, auth, crédits…
 │       └── lib/
 │           ├── api.ts         # Client HTTP + types
-│           └── landingTemplates.ts  # Modèles d’exemple (landing ; aligner avec GET /api/templates)
+│           ├── landingTemplates.ts  # Modèles d’exemple (alignés avec GET /api/templates)
+│           ├── modes.ts       # Libellés / métadonnées des modes d’usage
+│           ├── agents.ts      # Constantes agent atelier
+│           └── conversationNav.ts  # Navigation conversation / projets (UI)
 ├── prospection_pme.py         # Script CLI hors MONV (dataset Excel via API gouv)
 └── README.md
 ```
@@ -89,9 +102,11 @@ MONV/
 
 1. Crée un projet Supabase.
 2. Dans **Settings → API**, récupère l’URL du projet, la clé **anon** (peu utilisée côté backend actuel) et surtout la clé **service_role** (réservée au serveur, jamais dans le frontend).
-3. Ouvre **SQL Editor** et exécute une fois le fichier  
-   `backend/supabase/migrations/001_schema.sql`  
-   pour créer les tables : `users`, `conversations`, `messages`, `search_history`, `cache`.
+3. Ouvre **SQL Editor** et exécute **dans l’ordre** les fichiers  
+   `backend/supabase/migrations/001_schema.sql`,  
+   puis `002_modes.sql`,  
+   puis `003_project_folders.sql`  
+   pour créer les tables de base, la colonne `mode`, puis les **projets** (`project_folders`) et la liaison `folder_id` sur `conversations`.
 
 Le backend parle à la base **uniquement via le client Supabase (PostgREST)** ; il n’y a pas de `DATABASE_URL` classique.
 
@@ -163,8 +178,8 @@ Si tu changes le port du backend, mets à jour `destination` dans `frontend/next
 1. Ouvre `http://localhost:3000`.
 2. Crée un compte ou connecte-toi (JWT stocké côté navigateur).
 3. Les nouveaux comptes reçoivent **5 crédits** gratuits (`FREE_CREDITS` dans `config.py`).
-4. Décris ta cible en langage naturel ou choisis un **modèle** (cartes sur la landing via `landingTemplates.ts`, même jeu exposé par `GET /api/templates`).
-5. Si les critères manquent, MONV peut afficher un **QCM de clarification**.
+4. Décris ta cible en langage naturel ou choisis un **modèle** (cartes sur la landing via `landingTemplates.ts`, même jeu exposé par `GET /api/templates`). Tu peux aussi basculer de **mode** d’usage (prospection, rachat, etc.) selon l’UI.
+5. Si les critères manquent, MONV peut afficher un **QCM de clarification** (chat classique ou parcours **agent Atelier** via `POST /api/agent/send`).
 6. Après exécution du plan, un **aperçu** (jusqu’à 10 lignes) apparaît dans le chat ; l’export complet consomme les crédits indiqués pour la recherche.
 7. L’**historique** des recherches est disponible côté API (`/api/search/history`) et dans l’UI (tableau de bord selon l’implémentation actuelle).
 8. La page **Crédits** permet d’**ajouter** des crédits via un pack (simulation sans Stripe en développement).
@@ -249,4 +264,4 @@ python prospection_pme.py
 
 *MONV — prospection B2B conversationnelle sur données France.*
 
-**Dernière mise à jour :** avril 2026.
+**Dernière mise à jour :** 17 avril 2026.

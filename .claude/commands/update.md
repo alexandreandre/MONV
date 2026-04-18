@@ -1,137 +1,84 @@
-# /update — Actualiser tous les fichiers sensibles aux changements
+# /update — Actualiser les fichiers sensibles aux changements (MONV)
 
-Tu es un assistant de maintenance documentaire et structurelle pour le projet SIRH EYWAI.
+Tu es un assistant de **maintenance documentaire et structurelle** pour le dépôt **MONV** (API FastAPI + frontend Next.js App Router).
 
 ## Objectif
 
-Parcourir **tous les fichiers du projet qui doivent rester synchronisés** avec l'état réel du code, puis les mettre à jour si nécessaire. Chaque fichier est comparé à l'état actuel du code source (modules, routes, pages, composants, etc.) et corrigé s'il est obsolète.
+Parcourir les fichiers du projet qui doivent rester **alignés** sur le code réel (`backend/`, `frontend/`, migrations Supabase, règles IA, commandes), puis les corriger s’ils sont obsolètes.
 
-## Workflow
+## Étape 1 — Audit (source de vérité)
 
-### Etape 1 — Audit
+Établir l’état réel du dépôt :
 
-Lis l'état actuel du projet pour établir la **source de vérité** :
+1. **Routers FastAPI** : `backend/main.py` — `app.include_router(...)` et fichiers dans `backend/routers/`.
+2. **Services** : fichiers `*.py` dans `backend/services/`.
+3. **Migrations Supabase** : `backend/supabase/migrations/` (ordre d’exécution `001` → `002` → `003`…).
+4. **Frontend App Router** : `frontend/src/app/` (`layout.tsx`, `page.tsx`).
+5. **Composants & libs** : `frontend/src/components/`, `frontend/src/lib/` (notamment `api.ts`, `landingTemplates.ts`, `modes.ts`, `agents.ts`).
+6. **Tests backend** : `backend/tests/` (`test_*.py`, `conftest.py`) et cohérence avec `.github/workflows/ci.yml`.
+7. **Variables d’environnement** : `backend/.env.example` vs champs utilisés dans `backend/config.py`.
+8. **Scripts optionnels** : `backend/benchmark_*.py`, `prospection_pme.py` à la racine si toujours présents.
+9. **Commandes Claude Code** : `.claude/commands/` (liste des fichiers `.md`).
+10. **Skills Cursor** : `.cursor/skills/*/SKILL.md`.
+11. **Règles IA** : `.claude/rules/backend.mdc`, `.claude/rules/frontend.mdc`, `.cursor/rules/backend.mdc`, `.cursor/rules/frontend.mdc` — le contenu **backend** et **frontend** doit être **identique en paire** (`.claude` ↔ `.cursor`).
 
-1. **Modules backend** : `ls backend/app/modules/` — liste exhaustive des domaines.
-2. **Routeur API** : `backend/app/api/router.py` — tous les routers inclus et leurs prefixes.
-3. **Routes frontend** : `frontend/src/App.tsx` — toutes les routes (collaborateur, RH, super-admin).
-4. **Sidebar RH** : `frontend/src/components/ui/app-sidebar.tsx` — items `RH_HOME`, `RH_TEAM_BASE`, `RH_PAIE_ITEMS`, `menuItems`.
-5. **Sidebar collaborateur** : `frontend/src/components/ui/employee-sidebar.tsx` — `baseNavItems` et items conditionnels.
-6. **Navigation super-admin** : `frontend/src/pages/super-admin/SuperAdminLayout.tsx` — tableau `navigation`.
-7. **Pages super-admin** : `ls frontend/src/pages/super-admin/` — fichiers présents.
-8. **Support — modules** : `frontend/src/pages/support/SupportPage.tsx` — tableaux `MODULES`, `COMMON_TYPES`, `EXTRA_TYPES`, `URGENCY_LEVELS`, `MODULES_HAUTE_PRIORITE`.
-9. **Support — filtres tickets** : `frontend/src/pages/support/TicketsHistoryPage.tsx` — `MODULE_OPTIONS`, `URGENCY_OPTIONS`, `STATUS_OPTIONS`.
-10. **Constantes frontend** : `frontend/src/constants/contracts.ts` — `CONTRACT_TYPES`, `EMPLOYEE_STATUSES`.
-11. **Onglets CSE** : `frontend/src/pages/CSE.tsx` — tabs et imports des sous-composants.
-12. **Tests backend** : `ls backend/tests/` (unit, integration, e2e) — vérifier la couverture par module.
-13. **Skills Claude Code** : `ls .claude/commands/` — liste des skills disponibles.
-14. **Skills Cursor** : `ls .cursor/skills/` — liste des skills Cursor disponibles.
-15. **Règles IA** : `.claude/rules/backend.mdc`, `.claude/rules/frontend.mdc`, `.cursor/rules/backend.mdc`, `.cursor/rules/frontend.mdc` — conventions actuelles.
+> **Note** : ce dépôt ne contient pas les chemins d’un autre produit (pas de `backend/app/modules/`, pas de `frontend/src/App.tsx` React Router, pas de pages RH / super-admin / support tickets). Si une consigne slash ou un README y fait référence, c’est une **erreur de modèle** : adapter la vérification à MONV.
 
-### Etape 2 — Vérification et mise à jour des fichiers
+## Étape 2 — Fichiers à vérifier et mettre à jour
 
-Pour **chaque fichier** ci-dessous, compare son contenu actuel à la source de vérité de l'étape 1. Si un écart existe (module manquant, route absente, section obsolète, etc.), **modifie le fichier** pour le remettre en phase. Si le fichier est déjà à jour, passe au suivant sans le modifier.
+Pour chaque fichier ci-dessous, comparer au résultat de l’étape 1. **Modifier** seulement en cas d’écart.
 
----
-
-#### A. Documentation (README)
+### A. Documentation racine
 
 | # | Fichier | Quoi vérifier |
 |---|---------|---------------|
-| 1 | `README.md` (racine) | Sections "Fonctionnalités principales", "Structure du projet", "Statut du projet", "Dernière mise à jour" (mettre la date du jour). Vérifier que chaque module backend et chaque feature front est mentionné. |
-| 2 | `backend/README.md` | Sections "Fonctionnalités principales" (un § par module), "Arborescence du projet" (liste des modules), endpoints principaux. Vérifier que chaque module sous `backend/app/modules/` a sa section. "Dernière mise à jour" → date du jour. |
-| 3 | `backend/app/README.md` | Section "Structure des répertoires > modules/" — la liste doit correspondre à `ls backend/app/modules/`. |
-| 4 | `frontend/README.md` | Sections "Fonctionnalités", "Arborescence", "Routing". Vérifier cohérence avec `App.tsx` et les pages existantes. |
-| 5 | `backend/tests/README.md` | Vérifier que l'arborescence documentée correspond à `ls -R backend/tests/`. |
-| 6 | `GUIDE-DEV.md` | Vérifier que les commandes et skills mentionnés existent toujours. |
+| 1 | `README.md` (racine) | Arborescence : tous les **routers**, **services** et **migrations** réels ; section Supabase (ordre des migrations) ; mention des parcours **modes**, **agent Atelier**, **projets** si présents dans le code ; **Dernière mise à jour** (date du jour). |
 
-#### B. Interface Super-Admin
+### B. Règles IA (Claude Code & Cursor)
 
 | # | Fichier | Quoi vérifier |
 |---|---------|---------------|
-| 7 | `frontend/src/pages/super-admin/SuperAdminLayout.tsx` | Le tableau `navigation` doit refléter toutes les pages existantes dans `frontend/src/pages/super-admin/`. Chaque page doit avoir une entrée, et aucune entrée ne doit pointer vers une page inexistante. |
-| 8 | `frontend/src/App.tsx` (section super-admin) | Les `<Route>` sous `/super-admin` doivent correspondre aux pages existantes et aux imports en haut du fichier. |
+| 2 | `.claude/rules/backend.mdc` | Point d’entrée, liste des dossiers, routers (y compris `agent`), services (y compris `modes`, `relevance`, `atelier_*`), logging, tests/CI — conformes au backend actuel. |
+| 3 | `.claude/rules/frontend.mdc` | Stack Next.js 15 App Router, React 19, Tailwind, absence de Vite/Radix si toujours vrai ; qualité via `npm run build`. |
+| 4 | `.cursor/rules/backend.mdc` | **Identique** à `.claude/rules/backend.mdc`. |
+| 5 | `.cursor/rules/frontend.mdc` | **Identique** à `.claude/rules/frontend.mdc`. |
 
-#### C. Navigation & Sidebar
-
-| # | Fichier | Quoi vérifier |
-|---|---------|---------------|
-| 9 | `frontend/src/components/ui/app-sidebar.tsx` | `RH_TEAM_BASE` et `RH_PAIE_ITEMS` doivent lister toutes les pages RH existantes dans `App.tsx`. Pas d'entrée vers une page inexistante. |
-| 10 | `frontend/src/components/ui/employee-sidebar.tsx` | `baseNavItems` doit lister toutes les pages collaborateur de `App.tsx`. |
-| 11 | `frontend/src/App.tsx` (routes) | Toutes les pages importées doivent être utilisées dans des routes. Toutes les routes doivent avoir un import. |
-
-#### D. Support
+### C. Documentation de configuration IA
 
 | # | Fichier | Quoi vérifier |
 |---|---------|---------------|
-| 12 | `frontend/src/pages/support/SupportPage.tsx` | Le tableau `MODULES` doit refléter tous les modules du produit accessibles aux utilisateurs. Si un nouveau module a été ajouté (ex: badgeuse, CSE, recrutement, suivi médical), il doit avoir une entrée dans `MODULES`. |
-| 13 | `frontend/src/pages/support/TicketsHistoryPage.tsx` | `MODULE_OPTIONS` doit correspondre exactement aux labels de `MODULES` dans `SupportPage.tsx`. |
+| 6 | `.claude/README.md` | Arborescence `.claude/commands/` et `.claude/rules/` ; résumés des `.mdc` cohérents avec les fichiers réels. |
+| 7 | `.cursor/README.md` | Arborescence `.cursor/skills/` (un dossier par skill) et `rules/` ; résumés cohérents. |
 
-#### E. Routeur API Backend
-
-| # | Fichier | Quoi vérifier |
-|---|---------|---------------|
-| 14 | `backend/app/api/router.py` | Chaque module sous `backend/app/modules/` qui expose un `api/router.py` doit être importé et inclus. Aucun import cassé (module supprimé). |
-
-#### F. Tests
+### D. Cette commande elle-même
 
 | # | Fichier | Quoi vérifier |
 |---|---------|---------------|
-| 15 | `backend/tests/e2e/test_smoke_modules.py` | Doit contenir un test smoke pour chaque module exposé via le routeur API. Si un module a été ajouté, ajouter son test smoke. |
+| 8 | `.claude/commands/update.md` | Le workflow décrit bien **MONV** (chemins et stacks réels), pas un autre projet. |
 
-#### G. Constantes & Configuration
+### E. Fichiers absents dans MONV (ne pas créer sans demande explicite)
 
-| # | Fichier | Quoi vérifier |
-|---|---------|---------------|
-| 16 | `frontend/src/constants/contracts.ts` | `CONTRACT_TYPES` et `EMPLOYEE_STATUSES` — vérifier si de nouvelles valeurs apparaissent dans le code ou les schémas backend. |
+Les fichiers suivants **n’existent pas** dans ce dépôt : `backend/README.md`, `backend/app/README.md`, `frontend/README.md`, `backend/tests/README.md`, `GUIDE-DEV.md`. Ne pas les inventer lors d’un `/update` sauf demande produit.
 
-#### H. Onglets CSE
+## Étape 3 — Rapport
 
-| # | Fichier | Quoi vérifier |
-|---|---------|---------------|
-| 17 | `frontend/src/pages/CSE.tsx` | Les tabs et imports doivent correspondre aux fichiers existants dans `frontend/src/pages/cse/`. |
-
-#### I. Règles IA (Claude Code & Cursor)
-
-Les fichiers `.claude/rules/` et `.cursor/rules/` doivent rester **synchronisés entre eux** (mêmes conventions) et **cohérents avec l'état réel du code**.
-
-| # | Fichier | Quoi vérifier |
-|---|---------|---------------|
-| 18 | `.claude/rules/backend.mdc` | Les conventions mentionnées (point d'entrée, couches d'import, logging, style, tests/CI) correspondent toujours à l'état réel du backend. Si de nouvelles conventions ont émergé (nouveaux outils, nouvelles couches, changement de structure), les ajouter. |
-| 19 | `.claude/rules/frontend.mdc` | Les conventions mentionnées (stack, imports, UX/copie, lint) correspondent toujours à l'état réel du frontend. Vérifier que la stack mentionnée (React, Vite, TypeScript, Radix/shadcn) est toujours correcte et complète. |
-| 20 | `.cursor/rules/backend.mdc` | Doit être **identique** à `.claude/rules/backend.mdc`. Si l'un a été modifié, reporter les changements dans l'autre. |
-| 21 | `.cursor/rules/frontend.mdc` | Doit être **identique** à `.claude/rules/frontend.mdc`. Si l'un a été modifié, reporter les changements dans l'autre. |
-
-#### J. Documentation de configuration IA
-
-| # | Fichier | Quoi vérifier |
-|---|---------|---------------|
-| 22 | `.claude/README.md` | La structure documentée doit refléter le contenu réel de `.claude/` (rules, commands). Si des skills ou rules ont été ajoutés/supprimés, mettre à jour les sections correspondantes. |
-| 23 | `.cursor/README.md` | La structure documentée doit refléter le contenu réel de `.cursor/` (rules, skills). Si des skills ou rules ont été ajoutés/supprimés, mettre à jour les sections correspondantes. |
-
----
-
-### Etape 3 — Rapport
-
-Après toutes les vérifications, affiche un **rapport concis** au format :
+Après vérifications, afficher un **rapport concis** :
 
 ```
 ## Rapport /update
 
 ### Fichiers modifiés
-- `chemin/fichier.ext` — description courte du changement
+- `chemin/fichier.ext` — description courte
 
 ### Fichiers déjà à jour
-- `chemin/fichier.ext` (liste groupée)
+- (liste groupée)
 
 ### Alertes
-- Toute incohérence détectée mais non corrigible automatiquement (ex: test manquant nécessitant du code métier)
+- Incohérences non corrigées automatiquement
 ```
 
 ## Règles
 
-- Ne modifie **que** ce qui est nécessaire pour remettre les fichiers en phase. Pas de refactoring, pas d'ajout de fonctionnalités.
-- Préserve le style et le formatage existant de chaque fichier.
-- Pour les README, mets à jour la date "Dernière mise à jour" avec le mois et l'année courants.
-- Si un module backend existe mais n'a pas d'entrée dans le Support (`MODULES`), **ajoute-le** seulement s'il est pertinent pour l'utilisateur final (pas les modules purement techniques comme `access_control`, `uploads`, `dashboard`, `rates`, `super_admin`).
-- Si tu détectes une incohérence que tu ne peux pas résoudre automatiquement (ex: une page importée dans App.tsx mais le fichier n'existe pas), signale-la dans les **Alertes** du rapport.
+- Ne modifier **que** ce qui remet la doc ou les règles en phase avec le code ; pas de refactor ni nouvelle fonctionnalité.
+- Préserver style et formatage existants.
+- Pour les dates « Dernière mise à jour », utiliser la **date du jour** (jour/mois/année si le fichier le précise déjà ainsi).

@@ -64,7 +64,7 @@ Il complète (sans les remplacer) le [`README.md`](../README.md) à la racine ; 
 | | |
 |--|--|
 | **Nature** | Règle projet au format **`.mdc`** (YAML + Markdown). Contient les conventions Python / FastAPI pour tout ce qui est sous `backend/`. |
-| **Contenu actuel (résumé)** | Point d’entrée `main:app`, dossiers `routers/` / `services/` / `models/` / `utils/` (services incl. conversationalist, signaux, géocodage), logging pipeline (`pipeline_log`), tests pytest + CI sans Supabase réel, français pour les messages utilisateur, migrations sous `supabase/migrations/`. |
+| **Contenu actuel (résumé)** | Point d’entrée `main:app`, dossiers `routers/` (auth, chat, **agent**, search, credits) / `services/` / `models/` / `utils/` (services incl. conversationalist, modes, signaux, géocodage, relevance, atelier), logging pipeline (`pipeline_log`), tests pytest + CI sans Supabase réel, français pour les messages utilisateur, migrations sous `supabase/migrations/`. |
 | **Frontmatter actuel** | `globs: backend/**`, `alwaysApply: false`. |
 
 **Comment Cursor l’utilise**
