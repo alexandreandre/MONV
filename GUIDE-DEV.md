@@ -30,7 +30,7 @@ npm run dev
 ```bash
 cd backend
 source venv/bin/activate
-uvicorn app.main:app --reload
+uvicorn main:app --reload
 ```
 
 *(Si ton environnement Python est ailleurs, adapte la ligne `source …` comme d’habitude sur ta machine.)*
