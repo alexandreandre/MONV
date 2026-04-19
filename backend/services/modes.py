@@ -62,14 +62,13 @@ MODE_PRIORITY_COLUMNS: dict[Mode, list[str]] = {
         # Comportement actuel : on garde l'ordre par défaut.
     ],
     "sous_traitant": [
-        # Acheteur : on veut juger taille, ancienneté, capacité.
         "effectif_label",
         "date_creation",
-        "forme_juridique",
         "categorie_entreprise",
-        "numero_tva",
-        "site_web",
         "telephone",
+        "site_web",
+        "ville",
+        "forme_juridique",
     ],
     "benchmark": [
         # Panneau représentatif : lecture secteur / marché (CA N et N-1, effectifs, rentabilité).
@@ -117,14 +116,22 @@ MODE_ORCHESTRATOR_ADDENDUM: dict[Mode, str] = {
     "prospection": "",
     "sous_traitant": (
         "\n\nMODE ACTIF : SOUS-TRAITANT.\n"
-        "L'utilisateur cherche un sous-traitant ou prestataire à qui confier "
-        "une exécution, pas un client à démarcher.\n"
-        "- Priorise SIRENE pour les filtres NAF/effectif/zone (capacité = critère clé).\n"
-        "- Si aucun effectif n'est précisé, suppose au minimum 3 salariés "
+        "L'utilisateur cherche un prestataire ou sous-traitant à qui confier "
+        "une exécution. Il n'est PAS en mode prospection commerciale.\n"
+        "CRITÈRES CLÉS à extraire et prioriser :\n"
+        "1. Type de prestation exacte (métier, spécialité technique)\n"
+        "2. Capacité minimale : effectif, tranche de taille\n"
+        "3. Zone géographique d'intervention\n"
+        "4. Ancienneté minimum si mentionnée (entreprise établie = gage de sérieux)\n"
+        "RÈGLES :\n"
+        "- Priorise SIRENE avec filtres NAF/effectif/zone stricts.\n"
+        "- Si aucun effectif précisé : suppose minimum 3 salariés "
         "(tranche_effectif_salarie='02,03,11,12,21,22,31,32,41,42,51,52,53').\n"
-        "- Inclure dans `columns` : effectif_label, date_creation, forme_juridique, "
-        "categorie_entreprise, numero_tva, site_web, telephone.\n"
-        "- Ne propose pas Pappers sauf si l'utilisateur demande explicitement CA / dirigeants."
+        "- Ne propose PAS Pappers sauf si l'utilisateur demande explicitement CA ou dirigeants.\n"
+        "- Inclure dans `columns` : effectif_label, date_creation, categorie_entreprise, "
+        "telephone, site_web, ville, forme_juridique.\n"
+        "- Le message de résultats doit cadrer les résultats comme une liste de "
+        "prestataires potentiels à qualifier, pas comme des prospects à démarcher."
     ),
     "benchmark": (
         "\n\nMODE ACTIF : BENCHMARK (secteur / marché).\n"

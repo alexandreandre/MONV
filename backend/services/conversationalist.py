@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from models.schemas import GuardResult, QcmQuestion, QcmOption
+from services.modes import normalize_mode
 from utils.llm import llm_json_call
 from config import settings
 
@@ -55,6 +56,9 @@ Réponds UNIQUEMENT avec un JSON valide :
     ]
 }
 
+CRITÈRE SPÉCIAL :
+- "secteur_confirmation" : ne génère PAS cette question ici — elle est insérée séparément en tête de QCM quand le Guard l'exige.
+
 EXEMPLES D'OPTIONS PAR CRITÈRE :
 
 Secteur (adapter selon contexte) :
@@ -76,10 +80,83 @@ Taille :
 Chiffre d'affaires :
 - Moins de 500K€, 500K€ - 2M€, 2M€ - 10M€,
   10M€ - 50M€, Plus de 50M€, Peu importe
+
+MODE SOUS-TRAITANT — questions spécifiques à privilégier :
+
+Capacité requise (id: "capacite") :
+- 1 à 5 personnes (artisan / micro-structure)
+- 5 à 20 personnes (PME spécialisée)
+- 20 personnes et plus (structure établie)
+- Peu importe
+
+Type de mission (id: "type_mission") :
+- Mission ponctuelle
+- Partenariat régulier / récurrent
+- Sous-traitance en cascade
+- Peu importe
+
+Certification / label requis (id: "certification") :
+- RGE (travaux énergie)
+- QUALIBAT (BTP)
+- ISO 9001 (qualité)
+- Aucune exigence particulière
+
+Ancienneté minimum (id: "anciennete") :
+- +2 ans
+- +5 ans
+- +10 ans
+- Peu importe
+
+MODE RACHAT — questions spécifiques à privilégier :
+
+Budget d'acquisition (id: "budget_acquisition") :
+- Moins de 500k€
+- 500k€ — 2M€
+- 2M€ — 10M€
+- Plus de 10M€
+- Non défini pour l'instant
+
+Profil de cible (id: "profil_cible") :
+- Entreprise saine et rentable
+- Entreprise en difficulté (retournement)
+- Transmission familiale / départ retraite
+- Peu importe
+
+Type de reprise (id: "type_reprise") :
+- Reprise totale avec les salariés
+- Rachat de fonds de commerce uniquement
+- Prise de participation minoritaire
+- Peu importe
+"""
+
+SECTOR_CONFIRMATION_SYSTEM = """\
+Tu génères UNE seule question à choix unique pour lever une ambiguïté sectorielle B2B en France.
+L'utilisateur a utilisé un terme qui peut désigner plusieurs activités d'entreprises différentes.
+
+Réponds UNIQUEMENT avec un JSON valide :
+{
+    "question": "Phrase courte en français (ex. préciser le type d'activité recherchée)",
+    "options": [
+        {"id": "identifiant_snake_unique", "label": "Libellé concret, émoji optionnel", "free_text": false},
+        ... 3 ou 4 interprétations métier distinctes ...
+        {"id": "autre", "label": "✏️ Autre (précisez)", "free_text": true}
+    ]
+}
+
+Contraintes :
+- 3 à 4 options métier concrètes + exactement une option "Autre" en dernier avec free_text=true
+- Toutes les autres options : free_text=false
+- Choix unique implicite (pas de champ multiple)
+- Textes en français
 """
 
 
-def _build_context(guard_result: GuardResult) -> str:
+def _build_context(
+    guard_result: GuardResult,
+    missing_override: list[str] | None = None,
+    *,
+    skip_infer_missing: bool = False,
+) -> str:
     parts = [f"Requête utilisateur : « {guard_result.original_query} »"]
     parts.append(f"Intent : {guard_result.intent}")
 
@@ -105,8 +182,11 @@ def _build_context(guard_result: GuardResult) -> str:
     if found:
         parts.append(f"Déjà détecté : {', '.join(found)}")
 
-    missing = guard_result.missing_criteria
-    if not missing:
+    if missing_override is not None:
+        missing = list(missing_override)
+    else:
+        missing = list(guard_result.missing_criteria or [])
+    if not missing and not skip_infer_missing:
         missing = _infer_missing(guard_result)
     parts.append(f"Critères manquants : {json.dumps(missing)}")
 
@@ -156,6 +236,80 @@ def _parse_questions(raw: dict) -> tuple[str, list[QcmQuestion]]:
     return intro, questions
 
 
+def _fallback_sector_confirmation_question(guard_result: GuardResult) -> QcmQuestion:
+    term = (
+        (guard_result.entities.secteur or "").strip()
+        or (guard_result.entities.mots_cles[0] if guard_result.entities.mots_cles else "")
+        or "ce secteur"
+    )
+    return QcmQuestion(
+        id="secteur_confirmation",
+        question=f"« {term} » peut correspondre à plusieurs activités. Laquelle vises-tu ?",
+        options=[
+            QcmOption(id="services_conseil", label="Services aux entreprises / conseil", free_text=False),
+            QcmOption(id="commerce_distribution", label="Commerce / distribution / retail", free_text=False),
+            QcmOption(id="artisanat_industrie_btp", label="Artisanat / industrie / BTP", free_text=False),
+            QcmOption(id="sante_sport_loisirs", label="Santé / sport / loisirs / bien-être", free_text=False),
+            QcmOption(id="autre", label="✏️ Autre (précisez)", free_text=True),
+        ],
+        multiple=False,
+    )
+
+
+async def _generate_sector_confirmation_question(
+    guard_result: GuardResult,
+) -> QcmQuestion:
+    base_m = list(guard_result.missing_criteria or [])
+    skip_one = len(base_m) == 1 and base_m[0] == "secteur_confirmation"
+    ctx = _build_context(
+        guard_result,
+        missing_override=base_m,
+        skip_infer_missing=skip_one,
+    )
+    ambiguous_term = (
+        (guard_result.entities.secteur or "").strip()
+        or (guard_result.entities.mots_cles[0] if guard_result.entities.mots_cles else "")
+        or "le secteur mentionné"
+    )
+    user_block = f"Terme ambigu à clarifier : « {ambiguous_term} »\n\n{ctx}"
+    try:
+        raw = await llm_json_call(
+            model=settings.GUARD_MODEL,
+            system=SECTOR_CONFIRMATION_SYSTEM,
+            messages=[{"role": "user", "content": user_block}],
+            max_tokens=512,
+            temperature=0.2,
+        )
+        qtext = str(raw.get("question", "")).strip()
+        opts_raw = raw.get("options", [])
+        if not qtext or not isinstance(opts_raw, list) or len(opts_raw) < 2:
+            return _fallback_sector_confirmation_question(guard_result)
+        wrapped = {
+            "intro": "",
+            "questions": [
+                {
+                    "id": "secteur_confirmation",
+                    "question": qtext,
+                    "options": opts_raw,
+                    "multiple": False,
+                }
+            ],
+        }
+        _, questions = _parse_questions(wrapped)
+        if not questions:
+            return _fallback_sector_confirmation_question(guard_result)
+        q0 = questions[0]
+        q0 = QcmQuestion(
+            id="secteur_confirmation",
+            question=q0.question,
+            options=q0.options,
+            multiple=False,
+        )
+        return q0
+    except Exception:
+        return _fallback_sector_confirmation_question(guard_result)
+
+
 _FALLBACK_QUESTIONS: dict[str, QcmQuestion] = {
     "secteur": QcmQuestion(
         id="secteur",
@@ -195,16 +349,116 @@ _FALLBACK_QUESTIONS: dict[str, QcmQuestion] = {
         ],
         multiple=False,
     ),
+    "capacite": QcmQuestion(
+        id="capacite",
+        question="Quelle capacité requise ?",
+        options=[
+            QcmOption(id="micro", label="1 à 5 personnes (artisan / micro-structure)"),
+            QcmOption(id="pme_specialisee", label="5 à 20 personnes (PME spécialisée)"),
+            QcmOption(id="structure_etablie", label="20 personnes et plus (structure établie)"),
+            QcmOption(id="any", label="Peu importe"),
+        ],
+        multiple=False,
+    ),
+    "budget_acquisition": QcmQuestion(
+        id="budget_acquisition",
+        question="Quel est ton budget d'acquisition ?",
+        options=[
+            QcmOption(id="moins_500k", label="Moins de 500k€"),
+            QcmOption(id="500k_2m", label="500k€ — 2M€"),
+            QcmOption(id="2m_10m", label="2M€ — 10M€"),
+            QcmOption(id="plus_10m", label="Plus de 10M€"),
+            QcmOption(id="non_defini", label="Non défini pour l'instant"),
+        ],
+        multiple=False,
+    ),
+    "profil_cible": QcmQuestion(
+        id="profil_cible",
+        question="Quel profil de cible tu recherches ?",
+        options=[
+            QcmOption(id="saine", label="Entreprise saine et rentable"),
+            QcmOption(id="difficulte", label="Entreprise en difficulté (retournement)"),
+            QcmOption(id="transmission", label="Transmission familiale / départ retraite"),
+            QcmOption(id="peu_importe", label="Peu importe"),
+        ],
+        multiple=False,
+    ),
+    "type_reprise": QcmQuestion(
+        id="type_reprise",
+        question="Quel type de reprise tu envisages ?",
+        options=[
+            QcmOption(id="totale", label="Reprise totale avec les salariés"),
+            QcmOption(id="fonds", label="Rachat de fonds de commerce uniquement"),
+            QcmOption(id="participation", label="Prise de participation minoritaire"),
+            QcmOption(id="peu_importe", label="Peu importe"),
+        ],
+        multiple=False,
+    ),
 }
+
+
+def _swap_taille_for_capacite_sous_traitant(
+    questions: list[QcmQuestion],
+    mode: str,
+    guard_result: GuardResult,
+) -> list[QcmQuestion]:
+    """En mode sous-traitant, remplace la question taille par capacité si pertinent."""
+    if normalize_mode(mode) != "sous_traitant":
+        return questions
+    missing = list(guard_result.missing_criteria or [])
+    if "taille" not in missing and "capacite" not in missing:
+        return questions
+    capacite_q = _FALLBACK_QUESTIONS["capacite"]
+    return [capacite_q if q.id == "taille" else q for q in questions]
+
+
+def _apply_rachat_qualification_qcm(
+    questions: list[QcmQuestion],
+    mode: str,
+    guard_result: GuardResult,
+) -> list[QcmQuestion]:
+    """Mode rachat : remplace le lot LLM par les 3 questions de qualification si prévues et absentes."""
+    if normalize_mode(mode) != "rachat":
+        return questions
+    missing = guard_result.missing_criteria or []
+    if "budget_acquisition" not in missing:
+        return questions
+    if any(q.id == "budget_acquisition" for q in questions):
+        return questions
+    triple = [
+        _FALLBACK_QUESTIONS["budget_acquisition"],
+        _FALLBACK_QUESTIONS["profil_cible"],
+        _FALLBACK_QUESTIONS["type_reprise"],
+    ]
+    if questions and questions[0].id == "secteur_confirmation":
+        return [questions[0]] + triple
+    return triple
 
 
 async def generate_qcm(
     guard_result: GuardResult,
     conversation_history: list[dict] | None = None,
+    mode: str = "prospection",
 ) -> tuple[str, list[QcmQuestion]]:
     """Génère un QCM structuré pour les critères manquants."""
 
-    context = _build_context(guard_result)
+    raw_missing = list(guard_result.missing_criteria or [])
+    sector_q: QcmQuestion | None = None
+    if "secteur_confirmation" in raw_missing:
+        sector_q = await _generate_sector_confirmation_question(guard_result)
+
+    missing_main = [m for m in raw_missing if m != "secteur_confirmation"]
+    has_sector_confirm = "secteur_confirmation" in raw_missing
+    skip_infer = has_sector_confirm and len(missing_main) == 0
+
+    if has_sector_confirm:
+        context = _build_context(
+            guard_result,
+            missing_override=missing_main,
+            skip_infer_missing=skip_infer,
+        )
+    else:
+        context = _build_context(guard_result)
 
     messages: list[dict] = []
     if conversation_history:
@@ -220,11 +474,27 @@ async def generate_qcm(
             temperature=0.3,
         )
         intro, questions = _parse_questions(raw)
+        if sector_q:
+            questions = [sector_q] + questions
+        questions = _swap_taille_for_capacite_sous_traitant(questions, mode, guard_result)
+        questions = _apply_rachat_qualification_qcm(questions, mode, guard_result)
         if questions:
             return intro, questions
     except Exception:
         pass
 
     missing = guard_result.missing_criteria or _infer_missing(guard_result)
-    fallback_qs = [_FALLBACK_QUESTIONS[m] for m in missing if m in _FALLBACK_QUESTIONS]
-    return "Pour affiner ta recherche :", fallback_qs or list(_FALLBACK_QUESTIONS.values())[:2]
+    missing_fb = [m for m in missing if m != "secteur_confirmation"]
+    fallback_qs: list[QcmQuestion] = []
+    for m in missing_fb:
+        key = m
+        if normalize_mode(mode) == "sous_traitant" and m == "taille":
+            key = "capacite"
+        fq = _FALLBACK_QUESTIONS.get(key)
+        if fq is not None:
+            fallback_qs.append(fq)
+    merged = ([sector_q] if sector_q else []) + fallback_qs
+    merged = _apply_rachat_qualification_qcm(merged, mode, guard_result)
+    if merged:
+        return "Pour affiner ta recherche :", merged
+    return "Pour affiner ta recherche :", list(_FALLBACK_QUESTIONS.values())[:2]

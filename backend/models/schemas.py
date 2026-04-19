@@ -127,6 +127,11 @@ class GuardResult(BaseModel):
     clarification_needed: bool = False
     clarification_question: str | None = None
     missing_criteria: list[str] = []  # ex: ["secteur", "zone_geo", "taille"]
+    sector_ambiguous: bool = False
+    # True si le secteur détecté peut correspondre à plusieurs activités
+    # distinctes (ex: "padel" vs "paddle", "yoga" studio vs produit, etc.)
+    sector_confirmed: str | None = None
+    # Terme exact confirmé par l'utilisateur après clarification
     original_query: str = ""
 
 
