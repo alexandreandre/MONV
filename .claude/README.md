@@ -33,8 +33,8 @@ Même contenu que **`.cursor/rules/`** pour `backend.mdc` et `frontend.mdc` : à
 
 | Fichier | Rôle |
 |---------|------|
-| `backend.mdc` | `main:app`, structure `routers/` (dont `agent`) / `services/` / `models/` (services : filtre, guard, conversationalist, modes, orchestrateur, APIs, signaux, géocodage, relevance, atelier, export), `pipeline_log`, tests pytest + CI sans Supabase réel. |
-| `frontend.mdc` | Next.js 15 App Router, React 19, Tailwind, imports, textes UI en français, vérification via `npm run build`. |
+| `backend.mdc` | `main:app`, structure `routers/` (dont `agent`) / `services/` / `models/` (filtre, guard, conversationalist, modes, orchestrateur, APIs, Places/plan Places, signaux, géocodage, relevance, pitch digital, zones, atelier dont mutations, export), `pipeline_log`, tests pytest + CI sans Supabase réel. |
+| `frontend.mdc` | Next.js 15 App Router, React 19, Tailwind, shadcn/ui (Radix), next-themes, Sonner, imports, textes UI en français, vérification via `npm run build`. |
 
 ---
 

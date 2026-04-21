@@ -39,7 +39,7 @@ Pour chaque fichier ci-dessous, comparer au résultat de l’étape 1. **Modifie
 | # | Fichier | Quoi vérifier |
 |---|---------|---------------|
 | 2 | `.claude/rules/backend.mdc` | Point d’entrée, liste des dossiers, routers (y compris `agent`), services (y compris `modes`, `relevance`, `atelier_*`), logging, tests/CI — conformes au backend actuel. |
-| 3 | `.claude/rules/frontend.mdc` | Stack Next.js 15 App Router, React 19, Tailwind, absence de Vite/Radix si toujours vrai ; qualité via `npm run build`. |
+| 3 | `.claude/rules/frontend.mdc` | Stack réelle Next.js 15 App Router, React 19, Tailwind, shadcn/ui (Radix) si présent dans `package.json`, next-themes, Sonner, etc. ; pas de Vite ; qualité via `npm run build`. |
 | 4 | `.cursor/rules/backend.mdc` | **Identique** à `.claude/rules/backend.mdc`. |
 | 5 | `.cursor/rules/frontend.mdc` | **Identique** à `.claude/rules/frontend.mdc`. |
 

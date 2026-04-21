@@ -64,7 +64,7 @@ Il complète (sans les remplacer) le [`README.md`](../README.md) à la racine ; 
 | | |
 |--|--|
 | **Nature** | Règle projet au format **`.mdc`** (YAML + Markdown). Contient les conventions Python / FastAPI pour tout ce qui est sous `backend/`. |
-| **Contenu actuel (résumé)** | Point d’entrée `main:app`, dossiers `routers/` (auth, chat, **agent**, search, credits) / `services/` / `models/` / `utils/` (services incl. conversationalist, modes, signaux, géocodage, relevance, atelier), logging pipeline (`pipeline_log`), tests pytest + CI sans Supabase réel, français pour les messages utilisateur, migrations sous `supabase/migrations/`. |
+| **Contenu actuel (résumé)** | Point d’entrée `main:app`, dossiers `routers/` (auth, chat, **agent**, search, credits) / `services/` / `models/` / `utils/` (services incl. conversationalist, modes, plan Places, signaux, géocodage, relevance, pitch digital, politique de zones, atelier dont mutations), logging pipeline (`pipeline_log`), tests pytest + CI sans Supabase réel, français pour les messages utilisateur, migrations sous `supabase/migrations/`. |
 | **Frontmatter actuel** | `globs: backend/**`, `alwaysApply: false`. |
 
 **Comment Cursor l’utilise**
@@ -93,7 +93,7 @@ Il complète (sans les remplacer) le [`README.md`](../README.md) à la racine ; 
 | | |
 |--|--|
 | **Nature** | Règle projet **`.mdc`** pour tout ce qui est sous `frontend/`. |
-| **Contenu actuel (résumé)** | Next.js 15 App Router, React 19, TypeScript, Tailwind, imports, pas de gros refactors hors demande, textes UI en français ; qualité via `npm run build` (pas de script `lint` npm actuellement). |
+| **Contenu actuel (résumé)** | Next.js 15 App Router, React 19, TypeScript, Tailwind, shadcn/ui (Radix), next-themes, Sonner, imports, pas de gros refactors hors demande, textes UI en français ; qualité via `npm run build` (pas de script `lint` npm actuellement). |
 | **Frontmatter actuel** | `globs: frontend/**`, `alwaysApply: false`. |
 
 **Comment Cursor l’utilise**
@@ -107,7 +107,7 @@ Il complète (sans les remplacer) le [`README.md`](../README.md) à la racine ; 
 
 **Ce que vous ne faites pas**
 
-- Ne pas y mettre la doc exhaustive de chaque composant : lien vers `frontend/README.md` si besoin.
+- Ne pas y mettre la doc exhaustive de chaque composant : le détail d’architecture est dans le [`README.md`](../README.md) racine.
 
 **Quand modifier ce fichier**
 

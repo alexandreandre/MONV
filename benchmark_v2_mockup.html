@@ -1,0 +1,1506 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=1280"/>
+<title>MONV · Benchmark v2 — Cabinets d'expertise comptable · France</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+      },
+      colors: {
+        surface: {
+          0: '#0a0a0b',
+          1: '#111113',
+          2: '#17171a',
+          3: '#1d1d21',
+        },
+      },
+    },
+  },
+};
+</script>
+
+<style>
+  :root {
+    --accent: #f59e0b;      /* amber-500 : mode Benchmark */
+    --accent-2: #fbbf24;
+    --ok: #10b981;
+    --warn: #f59e0b;
+    --bad: #ef4444;
+    --info: #38bdf8;
+    --ink: #e5e7eb;
+    --muted: #9ca3af;
+  }
+  html, body { background: #07070a; color: var(--ink); }
+  body { font-family: 'Inter', sans-serif; letter-spacing: -0.005em; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 3px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.16); }
+  .chip-btn {
+    @apply inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors;
+    border-color: rgba(255,255,255,.08);
+    color: #9ca3af;
+  }
+  .chip-btn:hover { border-color: rgba(255,255,255,.22); color: #e5e7eb; }
+  .chip-active {
+    background: rgba(245, 158, 11, 0.14);
+    color: #fbbf24 !important;
+    border-color: rgba(245, 158, 11, 0.35) !important;
+  }
+  .tab-btn {
+    @apply flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap;
+    border-bottom-color: transparent;
+    color: #9ca3af;
+  }
+  .tab-btn:hover { color: #e5e7eb; }
+  .tab-active {
+    color: #fbbf24 !important;
+    border-bottom-color: #f59e0b !important;
+  }
+  .card {
+    @apply rounded-xl border bg-surface-1;
+    border-color: rgba(255,255,255,.06);
+  }
+  .card-head {
+    @apply px-4 py-3 border-b flex items-center justify-between;
+    border-color: rgba(255,255,255,.04);
+  }
+  .kpi-big { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .soft-divider { border-color: rgba(255,255,255,.04); }
+  .delta-up { color: #10b981; }
+  .delta-dn { color: #ef4444; }
+  .accent-border { border-color: rgba(245, 158, 11, 0.4); }
+
+  /* Leaflet tile override pour coller au thème dark */
+  .leaflet-container { background: #0b0b0f; outline: none; }
+  .leaflet-tile { filter: invert(1) hue-rotate(180deg) saturate(0.6) brightness(0.9) contrast(1.05); }
+  .leaflet-control-zoom a {
+    background: #17171a !important; color: #e5e7eb !important; border-color: rgba(255,255,255,.08) !important;
+  }
+  .leaflet-control-attribution {
+    background: rgba(23,23,26,.6) !important; color: #9ca3af !important; font-size: 10px !important;
+  }
+
+  /* Petit sparkline */
+  .spark-canvas { width: 100%; height: 32px; display: block; }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider;
+  }
+  .badge-amber { background: rgba(245, 158, 11, .12); color: #fbbf24; }
+  .badge-emerald { background: rgba(16, 185, 129, .12); color: #34d399; }
+  .badge-red { background: rgba(239, 68, 68, .12); color: #f87171; }
+  .badge-sky { background: rgba(56, 189, 248, .12); color: #7dd3fc; }
+  .badge-neutral { background: rgba(255,255,255,.06); color: #d1d5db; }
+
+  /* Slider de score */
+  .score-bar { position: relative; height: 4px; background: rgba(255,255,255,.06); border-radius: 9999px; overflow: hidden; }
+  .score-bar > div { position: absolute; inset: 0; background: linear-gradient(90deg, #f59e0b, #fbbf24); border-radius: 9999px; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TOP BAR                                                                  -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<header class="sticky top-0 z-40 border-b bg-surface-0/85 backdrop-blur-xl" style="border-color: rgba(255,255,255,.06);">
+  <div class="flex items-center justify-between gap-4 px-6 py-3">
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2">
+        <div class="h-7 w-7 rounded-md bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-[11px] font-bold text-neutral-900">M</div>
+        <div class="text-sm font-semibold tracking-tight">MONV</div>
+        <span class="text-gray-600">·</span>
+        <div class="flex items-center gap-1.5">
+          <svg class="h-3.5 w-3.5 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 4 4 6-8"/></svg>
+          <span class="text-sm text-amber-300/90 font-medium">Benchmark marché</span>
+        </div>
+      </div>
+      <nav class="hidden md:flex items-center gap-1 text-xs text-gray-500">
+        <span>Espaces</span>
+        <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        <span class="text-gray-400">Études sectorielles</span>
+        <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        <span class="text-gray-300">Expertise comptable FR</span>
+      </nav>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button class="chip-btn"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.58M20 20v-5h-.58M4.58 9A9 9 0 0 1 20 10M19.42 15A9 9 0 0 1 4 14"/></svg>Rafraîchir</button>
+      <button class="chip-btn"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13"/></svg>Partager</button>
+      <div class="h-6 w-px bg-white/10"></div>
+      <button class="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-white/[0.10] transition-colors">
+        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        Exporter XLSX
+      </button>
+      <button class="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-neutral-950 hover:bg-amber-400 transition-colors">
+        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 2v6h6M12 18v-6M9 15l3 3 3-3"/></svg>
+        Rapport PDF (24 p.)
+      </button>
+      <div class="ml-2 flex items-center gap-2 rounded-lg border border-white/[0.06] px-2.5 py-1.5">
+        <div class="h-5 w-5 rounded-full bg-gradient-to-br from-emerald-400 to-sky-500"></div>
+        <span class="text-xs text-gray-300">Alexandre</span>
+        <span class="badge badge-amber">Pro</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- HERO — titre, requête, filtres, dernière maj                             -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<section class="grid-bg border-b" style="border-color: rgba(255,255,255,.06);">
+  <div class="px-6 py-7">
+    <div class="flex flex-wrap items-end justify-between gap-6">
+      <div class="max-w-3xl">
+        <div class="flex items-center gap-2 text-xs">
+          <span class="badge badge-amber">NAF 69.20Z</span>
+          <span class="badge badge-neutral">France entière</span>
+          <span class="badge badge-neutral">Panel 50 / 21 400 recensés</span>
+          <span class="badge badge-sky">Rafraîchi il y a 14 min</span>
+        </div>
+        <h1 class="mt-3 text-[28px] font-bold tracking-tight text-white">
+          Cabinets d'expertise comptable — panorama France
+        </h1>
+        <p class="mt-1.5 text-sm text-gray-400">
+          Panel représentatif 50 cabinets sur 21 400 recensés (SIRENE). Agrégats financiers Pappers,
+          ancrages sectoriels INSEE&nbsp;ESANE, flux légaux BODACC, défaillances Banque de France.
+        </p>
+      </div>
+      <div class="flex items-center gap-2 text-xs text-gray-500">
+        <div class="flex items-center gap-1.5">
+          <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+          SIRENE ok
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+          Pappers ok
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+          INSEE&nbsp;ESANE 2023
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="h-2 w-2 rounded-full bg-amber-400"></span>
+          BODACC T-1
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+          BDF 2024
+        </div>
+      </div>
+    </div>
+
+    <!-- Barre de requête + filtres -->
+    <div class="mt-6 rounded-xl border bg-surface-1 p-3" style="border-color: rgba(255,255,255,.06);">
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex items-center gap-2 flex-1 min-w-[320px]">
+          <svg class="h-4 w-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input value="Cabinets d'expertise comptable en France" class="flex-1 bg-transparent text-sm text-white placeholder-gray-500 outline-none" />
+          <span class="chip-btn chip-active">Benchmark</span>
+        </div>
+        <span class="h-5 w-px bg-white/[0.08]"></span>
+        <div class="flex flex-wrap gap-1.5">
+          <button class="chip-btn">Effectif&nbsp;<span class="text-gray-400">·&nbsp;tous</span><svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+          <button class="chip-btn">CA&nbsp;<span class="text-gray-400">·&nbsp;&gt;&nbsp;300&nbsp;k€</span><svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+          <button class="chip-btn">Création&nbsp;<span class="text-gray-400">·&nbsp;tous</span><svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+          <button class="chip-btn">Région&nbsp;<span class="text-gray-400">·&nbsp;France</span><svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+          <button class="chip-btn">Âge dirigeant&nbsp;<span class="text-gray-400">·&nbsp;tous</span><svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+        </div>
+        <span class="h-5 w-px bg-white/[0.08]"></span>
+        <button class="chip-btn">
+          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          Comparer vs. autre secteur
+        </button>
+        <button class="chip-btn">
+          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+          Sauvegarder vue
+        </button>
+      </div>
+    </div>
+
+    <!-- Hero KPIs -->
+    <div class="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <!-- KPI 1 : entreprises -->
+      <div class="card p-4">
+        <div class="flex items-center justify-between">
+          <div class="text-[11px] uppercase tracking-wider text-gray-500">Entreprises panel</div>
+          <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>
+        </div>
+        <div class="mt-1.5 kpi-big text-2xl font-bold text-white">50<span class="text-gray-500 text-sm font-medium"> / 21 400</span></div>
+        <div class="mt-1 text-[11px] text-gray-500">Échantillon représentatif · 0,23 % du total SIRENE</div>
+      </div>
+
+      <!-- KPI 2 : CA cumulé -->
+      <div class="card p-4">
+        <div class="flex items-center justify-between">
+          <div class="text-[11px] uppercase tracking-wider text-gray-500">CA panel cumulé</div>
+          <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <div class="mt-1.5 kpi-big text-2xl font-bold text-white">2,14 Md€</div>
+        <div class="mt-1 text-[11px] flex items-center gap-1"><span class="delta-up font-semibold">+4,1&nbsp;%</span><span class="text-gray-500">vs N-1</span></div>
+      </div>
+
+      <!-- KPI 3 : CA médian -->
+      <div class="card p-4">
+        <div class="flex items-center justify-between">
+          <div class="text-[11px] uppercase tracking-wider text-gray-500">CA médian panel</div>
+          <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12h18M12 3v18"/></svg>
+        </div>
+        <div class="mt-1.5 kpi-big text-2xl font-bold text-white">3,8 M€</div>
+        <div class="mt-1 text-[11px] text-gray-500">Médiane secteur <span class="mono text-gray-400">0,54 M€</span> · panel surpondéré</div>
+      </div>
+
+      <!-- KPI 4 : Effectif -->
+      <div class="card p-4">
+        <div class="flex items-center justify-between">
+          <div class="text-[11px] uppercase tracking-wider text-gray-500">Effectif cumulé</div>
+          <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/><circle cx="8.5" cy="7" r="4"/></svg>
+        </div>
+        <div class="mt-1.5 kpi-big text-2xl font-bold text-white">14 820</div>
+        <div class="mt-1 text-[11px] flex items-center gap-1"><span class="delta-up font-semibold">+2,6&nbsp;%</span><span class="text-gray-500">net 12 m</span></div>
+      </div>
+
+      <!-- KPI 5 : Croissance -->
+      <div class="card p-4">
+        <div class="flex items-center justify-between">
+          <div class="text-[11px] uppercase tracking-wider text-gray-500">Croissance médiane</div>
+          <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6"/></svg>
+        </div>
+        <div class="mt-1.5 kpi-big text-2xl font-bold text-emerald-400">+3,9&nbsp;%</div>
+        <div class="mt-1 text-[11px] text-gray-500">Secteur <span class="mono text-gray-400">+3,2&nbsp;%</span> · surperformance +0,7&nbsp;pt</div>
+      </div>
+
+      <!-- KPI 6 : Transmission signal -->
+      <div class="card p-4">
+        <div class="flex items-center justify-between">
+          <div class="text-[11px] uppercase tracking-wider text-gray-500">Signal transmission</div>
+          <svg class="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        </div>
+        <div class="mt-1.5 kpi-big text-2xl font-bold text-amber-300">34&nbsp;%</div>
+        <div class="mt-1 text-[11px] text-gray-500">Dirigeants 60+ · cible cession 5 ans</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TABS                                                                    -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<nav class="sticky top-[56px] z-30 border-b bg-surface-0/85 backdrop-blur-xl" style="border-color: rgba(255,255,255,.06);">
+  <div class="flex items-center gap-1 px-6 overflow-x-auto scrollbar-thin">
+    <button class="tab-btn tab-active" data-tab="panorama">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Panorama
+    </button>
+    <button class="tab-btn" data-tab="finance">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 4 4 6-8"/></svg>
+      Finance
+    </button>
+    <button class="tab-btn" data-tab="dynamique">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+      Dynamique marché
+    </button>
+    <button class="tab-btn" data-tab="carto">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 6l7-3 8 3 7-3v15l-7 3-8-3-7 3zM8 3v15M16 6v15"/></svg>
+      Cartographie
+    </button>
+    <button class="tab-btn" data-tab="ranks">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      Classements
+    </button>
+    <button class="tab-btn" data-tab="table">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+      Tableau détaillé
+    </button>
+    <button class="tab-btn" data-tab="insights">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.66 17h4.68M12 3v1M12 20v1M4.22 4.22l.7.7M19.08 19.08l.7.7M3 12h1M20 12h1M4.22 19.78l.7-.7M19.08 4.92l.7-.7M12 7a5 5 0 0 0-3 9v2h6v-2a5 5 0 0 0-3-9z"/></svg>
+      Insights IA
+    </button>
+  </div>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB : PANORAMA                                                          -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<section id="tab-panorama" class="tab-panel px-6 py-6 space-y-5">
+
+  <!-- Ligne 1 : Synthèse exec + Comparateur secteur -->
+  <div class="grid grid-cols-12 gap-5">
+    <!-- Synthèse -->
+    <div class="col-span-12 lg:col-span-7 card">
+      <div class="card-head">
+        <div class="flex items-center gap-2">
+          <svg class="h-4 w-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2l2.39 4.84L20 7.6l-4 3.9.94 5.5L12 14.77 7.06 17l.94-5.5-4-3.9 5.61-.76z"/></svg>
+          <h3 class="text-sm font-semibold text-white">Synthèse exécutive</h3>
+          <span class="badge badge-neutral">générée par MONV</span>
+        </div>
+        <button class="text-[11px] text-gray-500 hover:text-gray-300">Copier en Markdown</button>
+      </div>
+      <div class="p-5 space-y-3 text-sm leading-relaxed text-gray-300">
+        <p>
+          Le marché français de l'expertise comptable reste <b class="text-white">structurellement fragmenté</b> :
+          21 400 cabinets recensés pour un volume estimé à <b class="text-white">13,8&nbsp;Md€</b>,
+          dominé par 4 réseaux internationaux (<span class="text-amber-300">KPMG, EY, Deloitte, Mazars</span>)
+          qui concentrent <b class="text-white">23 %</b> du chiffre d'affaires mais seulement
+          <b class="text-white">0,04 %</b> des immatriculations.
+        </p>
+        <p>
+          Notre panel de 50 cabinets — sélectionné pour couvrir les 3 strates de taille — affiche une croissance médiane
+          de <b class="text-emerald-400">+3,9 %</b>, soit <b>+0,7 pt</b> au-dessus de la moyenne INSEE&nbsp;ESANE
+          du secteur. La rentabilité (EBE/CA) ressort à <b class="text-white">17,4 %</b>, stable sur 3 ans.
+        </p>
+        <p>
+          <b class="text-amber-300">Signal transmission fort</b> : 34&nbsp;% des dirigeants identifiés ont plus de 60 ans,
+          contre 28&nbsp;% pour l'ensemble du tissu B2B. Combiné à un taux de défaillance très bas
+          (0,28&nbsp;% — BDF 2024), le secteur est particulièrement actif sur le marché du LBO
+          (+12&nbsp;% de deals vs 2022 selon BODACC).
+        </p>
+        <div class="flex flex-wrap gap-2 pt-1">
+          <span class="badge badge-amber">Marché fragmenté · CR4 = 23 %</span>
+          <span class="badge badge-emerald">Rentabilité stable</span>
+          <span class="badge badge-amber">Pyramide âge dirigeants élevée</span>
+          <span class="badge badge-sky">Opportunité consolidation</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Radar panel vs secteur -->
+    <div class="col-span-12 lg:col-span-5 card">
+      <div class="card-head">
+        <div class="flex items-center gap-2">
+          <svg class="h-4 w-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg>
+          <h3 class="text-sm font-semibold text-white">Positionnement panel vs secteur</h3>
+        </div>
+        <div class="flex items-center gap-2 text-[11px]">
+          <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-amber-400"></span>Panel</span>
+          <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-gray-500"></span>Secteur INSEE</span>
+        </div>
+      </div>
+      <div class="p-4">
+        <canvas id="radarPosition" height="260"></canvas>
+        <p class="mt-3 text-[11px] text-gray-500">Base 100 = médiane sectorielle INSEE&nbsp;ESANE 2023 (NAF 69.20Z).</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ligne 2 : Distribution CA + Taille + Carte -->
+  <div class="grid grid-cols-12 gap-5">
+    <div class="col-span-12 lg:col-span-5 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Distribution CA panel</h3>
+        <span class="badge badge-neutral mono">Q1 1,2&nbsp;M · Méd 3,8&nbsp;M · Q3 12,5&nbsp;M</span>
+      </div>
+      <div class="p-4">
+        <canvas id="histCA" height="220"></canvas>
+      </div>
+    </div>
+
+    <div class="col-span-12 lg:col-span-3 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Répartition par taille</h3>
+      </div>
+      <div class="p-4">
+        <canvas id="donutSize" height="220"></canvas>
+        <ul class="mt-3 space-y-1.5 text-xs">
+          <li class="flex items-center justify-between"><span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm" style="background:#fbbf24"></span>TPE &lt; 10</span><span class="mono text-gray-300">32 %</span></li>
+          <li class="flex items-center justify-between"><span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm" style="background:#f59e0b"></span>PE 10–49</span><span class="mono text-gray-300">40 %</span></li>
+          <li class="flex items-center justify-between"><span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm" style="background:#d97706"></span>ME 50–249</span><span class="mono text-gray-300">18 %</span></li>
+          <li class="flex items-center justify-between"><span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-sm" style="background:#92400e"></span>ETI/GE 250+</span><span class="mono text-gray-300">10 %</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="col-span-12 lg:col-span-4 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Concentration (HHI &amp; courbe de Lorenz)</h3>
+      </div>
+      <div class="p-4">
+        <canvas id="lorenz" height="220"></canvas>
+        <div class="mt-3 grid grid-cols-3 gap-2 text-center">
+          <div class="rounded-lg bg-white/[0.03] p-2">
+            <div class="text-[10px] uppercase tracking-wider text-gray-500">Gini</div>
+            <div class="mono text-sm font-semibold text-white">0,71</div>
+          </div>
+          <div class="rounded-lg bg-white/[0.03] p-2">
+            <div class="text-[10px] uppercase tracking-wider text-gray-500">HHI</div>
+            <div class="mono text-sm font-semibold text-white">412</div>
+          </div>
+          <div class="rounded-lg bg-white/[0.03] p-2">
+            <div class="text-[10px] uppercase tracking-wider text-gray-500">CR4 secteur</div>
+            <div class="mono text-sm font-semibold text-amber-300">23 %</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ligne 3 : KPI chips secondaires -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+    <div class="card p-3.5">
+      <div class="text-[10px] uppercase tracking-wider text-gray-500">Marge nette méd.</div>
+      <div class="mono text-lg font-bold text-white mt-1">10,3&nbsp;%</div>
+      <canvas class="spark-canvas mt-1" data-spark="marge"></canvas>
+    </div>
+    <div class="card p-3.5">
+      <div class="text-[10px] uppercase tracking-wider text-gray-500">EBE / CA méd.</div>
+      <div class="mono text-lg font-bold text-white mt-1">17,4&nbsp;%</div>
+      <canvas class="spark-canvas mt-1" data-spark="ebe"></canvas>
+    </div>
+    <div class="card p-3.5">
+      <div class="text-[10px] uppercase tracking-wider text-gray-500">Effectif méd.</div>
+      <div class="mono text-lg font-bold text-white mt-1">47</div>
+      <canvas class="spark-canvas mt-1" data-spark="eff"></canvas>
+    </div>
+    <div class="card p-3.5">
+      <div class="text-[10px] uppercase tracking-wider text-gray-500">Âge méd. (an)</div>
+      <div class="mono text-lg font-bold text-white mt-1">28</div>
+      <canvas class="spark-canvas mt-1" data-spark="age"></canvas>
+    </div>
+    <div class="card p-3.5">
+      <div class="text-[10px] uppercase tracking-wider text-gray-500">Créations 12&nbsp;m</div>
+      <div class="mono text-lg font-bold text-emerald-400 mt-1">+612</div>
+      <canvas class="spark-canvas mt-1" data-spark="crea"></canvas>
+    </div>
+    <div class="card p-3.5">
+      <div class="text-[10px] uppercase tracking-wider text-gray-500">Défaillances 12&nbsp;m</div>
+      <div class="mono text-lg font-bold text-red-400 mt-1">−61</div>
+      <canvas class="spark-canvas mt-1" data-spark="fail"></canvas>
+    </div>
+    <div class="card p-3.5">
+      <div class="text-[10px] uppercase tracking-wider text-gray-500">Capitaux propres méd.</div>
+      <div class="mono text-lg font-bold text-white mt-1">0,89&nbsp;M€</div>
+      <canvas class="spark-canvas mt-1" data-spark="cp"></canvas>
+    </div>
+    <div class="card p-3.5">
+      <div class="text-[10px] uppercase tracking-wider text-gray-500">Score risque BDF</div>
+      <div class="mono text-lg font-bold text-emerald-400 mt-1">3+</div>
+      <canvas class="spark-canvas mt-1" data-spark="bdf"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB : FINANCE                                                           -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<section id="tab-finance" class="tab-panel hidden px-6 py-6 space-y-5">
+
+  <div class="grid grid-cols-12 gap-5">
+    <!-- Scatter CA / effectif -->
+    <div class="col-span-12 lg:col-span-8 card">
+      <div class="card-head">
+        <div>
+          <h3 class="text-sm font-semibold text-white">CA par salarié — panel vs référence secteur</h3>
+          <p class="text-[11px] text-gray-500 mt-0.5">Chaque point = 1 cabinet · taille = CA · couleur = tranche d'âge</p>
+        </div>
+        <div class="flex gap-1.5">
+          <button class="chip-btn chip-active">log</button>
+          <button class="chip-btn">linéaire</button>
+        </div>
+      </div>
+      <div class="p-4">
+        <canvas id="scatterCAeff" height="320"></canvas>
+      </div>
+    </div>
+
+    <!-- Quartiles par tranche d'effectif -->
+    <div class="col-span-12 lg:col-span-4 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">CA par effectif — quartiles</h3>
+      </div>
+      <div class="p-4">
+        <canvas id="boxByEff" height="320"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-12 gap-5">
+    <!-- Waterfall top 10 -->
+    <div class="col-span-12 lg:col-span-7 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Top 10 contributeurs au CA panel</h3>
+        <span class="badge badge-neutral">couvrent 71 % du CA cumulé</span>
+      </div>
+      <div class="p-4">
+        <canvas id="barTop10" height="280"></canvas>
+      </div>
+    </div>
+
+    <!-- Variation CA N / N-1 -->
+    <div class="col-span-12 lg:col-span-5 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Croissance CA N / N-1</h3>
+        <span class="badge badge-neutral">tri décroissant</span>
+      </div>
+      <div class="p-4">
+        <canvas id="barGrowth" height="280"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-12 gap-5">
+    <!-- Ratios sectoriels -->
+    <div class="col-span-12 lg:col-span-6 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Ratios financiers — panel vs INSEE ESANE</h3>
+        <span class="badge badge-amber">benchmark NAF 69.20Z</span>
+      </div>
+      <div class="p-0">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-[11px] uppercase tracking-wider text-gray-500 border-b soft-divider">
+              <th class="px-4 py-2.5">Ratio</th>
+              <th class="px-4 py-2.5 text-right">Panel</th>
+              <th class="px-4 py-2.5 text-right">Secteur FR</th>
+              <th class="px-4 py-2.5 text-right">Écart</th>
+              <th class="px-4 py-2.5 text-right w-28">Positionnement</th>
+            </tr>
+          </thead>
+          <tbody id="ratiosTable" class="divide-y soft-divider"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Histogramme marge brute -->
+    <div class="col-span-12 lg:col-span-6 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">EBE/CA — distribution panel</h3>
+      </div>
+      <div class="p-4">
+        <canvas id="histEBE" height="260"></canvas>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB : DYNAMIQUE MARCHÉ                                                  -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<section id="tab-dynamique" class="tab-panel hidden px-6 py-6 space-y-5">
+
+  <div class="grid grid-cols-12 gap-5">
+    <!-- Timeline BODACC -->
+    <div class="col-span-12 lg:col-span-8 card">
+      <div class="card-head">
+        <div>
+          <h3 class="text-sm font-semibold text-white">Dynamique du tissu — créations vs cessations (BODACC)</h3>
+          <p class="text-[11px] text-gray-500 mt-0.5">NAF 69.20Z · France · publications 2016–2025</p>
+        </div>
+        <div class="flex gap-1.5">
+          <button class="chip-btn">mensuel</button>
+          <button class="chip-btn chip-active">trimestriel</button>
+          <button class="chip-btn">annuel</button>
+        </div>
+      </div>
+      <div class="p-4">
+        <canvas id="stackedBodacc" height="300"></canvas>
+      </div>
+    </div>
+
+    <!-- Pyramide âges dirigeants -->
+    <div class="col-span-12 lg:col-span-4 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Pyramide des âges dirigeants</h3>
+        <span class="badge badge-amber">signal transmission</span>
+      </div>
+      <div class="p-4">
+        <canvas id="pyramidAge" height="300"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-12 gap-5">
+    <!-- Défaillances / Banque de France -->
+    <div class="col-span-12 lg:col-span-6 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Défaillances & cotations — Banque de France</h3>
+      </div>
+      <div class="p-4 grid grid-cols-2 gap-4">
+        <div>
+          <canvas id="lineDefail" height="220"></canvas>
+        </div>
+        <div class="space-y-3">
+          <div class="rounded-lg bg-white/[0.03] p-3">
+            <div class="text-[11px] uppercase tracking-wider text-gray-500">Taux défaillance 12 m</div>
+            <div class="mono text-2xl font-bold text-emerald-400 mt-1">0,28&nbsp;%</div>
+            <div class="text-[11px] text-gray-500 mt-0.5">vs 1,14&nbsp;% moyenne FR tous secteurs</div>
+          </div>
+          <div class="rounded-lg bg-white/[0.03] p-3">
+            <div class="text-[11px] uppercase tracking-wider text-gray-500">Cotation BDF moyenne</div>
+            <div class="mono text-2xl font-bold text-white mt-1">3++ / 4+</div>
+            <div class="text-[11px] text-gray-500 mt-0.5">Capacité à honorer engagements — bonne</div>
+          </div>
+          <div class="rounded-lg bg-white/[0.03] p-3">
+            <div class="text-[11px] uppercase tracking-wider text-gray-500">Délais paiement clients</div>
+            <div class="mono text-2xl font-bold text-white mt-1">46 jours</div>
+            <div class="text-[11px] text-gray-500 mt-0.5">DGCCRF 2024 — +3 j vs secteur B2B</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LBO / M&A -->
+    <div class="col-span-12 lg:col-span-6 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Marché M&A sectoriel</h3>
+        <span class="badge badge-sky">BODACC · Fusacq · data.gouv</span>
+      </div>
+      <div class="p-4">
+        <canvas id="barMA" height="220"></canvas>
+        <div class="mt-3 grid grid-cols-3 gap-2 text-center">
+          <div class="rounded-lg bg-white/[0.03] p-2.5">
+            <div class="text-[10px] uppercase text-gray-500">Deals 2024</div>
+            <div class="mono text-sm font-bold text-white">184</div>
+          </div>
+          <div class="rounded-lg bg-white/[0.03] p-2.5">
+            <div class="text-[10px] uppercase text-gray-500">Multiple EBE méd.</div>
+            <div class="mono text-sm font-bold text-white">6,4&nbsp;x</div>
+          </div>
+          <div class="rounded-lg bg-white/[0.03] p-2.5">
+            <div class="text-[10px] uppercase text-gray-500">Var. vs 2022</div>
+            <div class="mono text-sm font-bold text-emerald-400">+12&nbsp;%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Heatmap calendaire -->
+  <div class="card">
+    <div class="card-head">
+      <h3 class="text-sm font-semibold text-white">Intensité d'événements légaux — 24 derniers mois</h3>
+      <span class="badge badge-neutral">créations, cessions, procédures</span>
+    </div>
+    <div class="p-4 overflow-x-auto">
+      <div id="heatmap" class="min-w-[760px]"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB : CARTOGRAPHIE                                                      -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<section id="tab-carto" class="tab-panel hidden px-6 py-6 space-y-5">
+  <div class="grid grid-cols-12 gap-5">
+    <div class="col-span-12 lg:col-span-8 card overflow-hidden">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Densité — cabinets par région</h3>
+        <div class="flex gap-1.5">
+          <button class="chip-btn chip-active">densité</button>
+          <button class="chip-btn">CA cumulé</button>
+          <button class="chip-btn">créations nettes</button>
+        </div>
+      </div>
+      <div id="mapFr" style="height: 520px;"></div>
+    </div>
+    <div class="col-span-12 lg:col-span-4 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Top régions — CA panel</h3>
+      </div>
+      <ul id="regionList" class="divide-y soft-divider"></ul>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB : CLASSEMENTS                                                       -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<section id="tab-ranks" class="tab-panel hidden px-6 py-6 space-y-5">
+  <div class="grid grid-cols-12 gap-5">
+    <div class="col-span-12 lg:col-span-6 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Top 10 · Chiffre d'affaires</h3>
+      </div>
+      <ul id="topCA" class="divide-y soft-divider"></ul>
+    </div>
+    <div class="col-span-12 lg:col-span-6 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Top 10 · Croissance CA N/N-1</h3>
+      </div>
+      <ul id="topGrowth" class="divide-y soft-divider"></ul>
+    </div>
+  </div>
+  <div class="grid grid-cols-12 gap-5">
+    <div class="col-span-12 lg:col-span-6 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Top 10 · Rentabilité (EBE/CA)</h3>
+      </div>
+      <ul id="topProfit" class="divide-y soft-divider"></ul>
+    </div>
+    <div class="col-span-12 lg:col-span-6 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Top 10 · Signal cession (âge dirigeant + rentabilité)</h3>
+        <span class="badge badge-amber">composite MONV</span>
+      </div>
+      <ul id="topCession" class="divide-y soft-divider"></ul>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB : TABLEAU                                                           -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<section id="tab-table" class="tab-panel hidden px-6 py-6 space-y-5">
+  <div class="card">
+    <div class="card-head">
+      <div class="flex items-center gap-3">
+        <h3 class="text-sm font-semibold text-white">Tableau complet</h3>
+        <span class="badge badge-neutral">50 cabinets · 22 colonnes</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <input placeholder="Filtrer…" class="bg-surface-2 border border-white/[0.08] rounded-lg px-2.5 py-1 text-xs text-white placeholder-gray-600 outline-none focus:border-amber-500/40 w-56"/>
+        <button class="chip-btn">Colonnes <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+        <button class="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-gray-200 hover:bg-white/[0.10]">XLSX</button>
+        <button class="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-gray-200 hover:bg-white/[0.10]">CSV</button>
+      </div>
+    </div>
+    <div class="overflow-x-auto scrollbar-thin max-h-[640px]">
+      <table class="w-full text-xs">
+        <thead class="sticky top-0 z-[1] bg-surface-1">
+          <tr class="text-left text-[10px] uppercase tracking-wider text-gray-500 border-b soft-divider">
+            <th class="px-3 py-2 font-medium">#</th>
+            <th class="px-3 py-2 font-medium">Cabinet</th>
+            <th class="px-3 py-2 font-medium">Ville</th>
+            <th class="px-3 py-2 font-medium text-right">CA</th>
+            <th class="px-3 py-2 font-medium text-right">N-1</th>
+            <th class="px-3 py-2 font-medium text-right">Δ</th>
+            <th class="px-3 py-2 font-medium text-right">EBE/CA</th>
+            <th class="px-3 py-2 font-medium text-right">Effectif</th>
+            <th class="px-3 py-2 font-medium text-right">Créé</th>
+            <th class="px-3 py-2 font-medium">Dirigeant</th>
+            <th class="px-3 py-2 font-medium text-right">Âge dir.</th>
+            <th class="px-3 py-2 font-medium">Signaux</th>
+          </tr>
+        </thead>
+        <tbody id="fullTable" class="divide-y soft-divider"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB : INSIGHTS IA                                                       -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<section id="tab-insights" class="tab-panel hidden px-6 py-6 space-y-5">
+  <div class="grid grid-cols-12 gap-5">
+    <div class="col-span-12 lg:col-span-8 card">
+      <div class="card-head">
+        <div class="flex items-center gap-2">
+          <svg class="h-4 w-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <h3 class="text-sm font-semibold text-white">Insights auto — extraits du panel</h3>
+        </div>
+        <span class="badge badge-neutral">4 insights · modèle MONV-analyst</span>
+      </div>
+      <ul class="divide-y soft-divider">
+        <li class="px-5 py-4 flex gap-4">
+          <span class="mono text-[10px] text-amber-300 pt-1">01</span>
+          <div>
+            <p class="text-sm text-white font-medium">Consolidation régionale à l'œuvre dans le Sud-Ouest</p>
+            <p class="text-[13px] text-gray-400 mt-1 leading-relaxed">12 cabinets &gt;10 M€ ont procédé à une opération capitalistique depuis 2022 en Nouvelle-Aquitaine et Occitanie, soit 2,3× la moyenne nationale sur la période (source BODACC).
+            Cible recommandée pour recherche d'acquéreur : cabinets 3–8 M€ créés avant 1995, dirigeants 60+.</p>
+            <div class="mt-2 flex gap-2"><span class="badge badge-sky">source BODACC</span><span class="badge badge-amber">cluster géographique</span></div>
+          </div>
+        </li>
+        <li class="px-5 py-4 flex gap-4">
+          <span class="mono text-[10px] text-amber-300 pt-1">02</span>
+          <div>
+            <p class="text-sm text-white font-medium">Croissance tirée par les cabinets &quot;digital-first&quot;</p>
+            <p class="text-[13px] text-gray-400 mt-1 leading-relaxed">Les 7 cabinets dont le site web mentionne « automatisation », « API » ou « dashboard » affichent une croissance médiane de <b class="text-emerald-400">+11,8 %</b>, contre +3,1 % pour le reste du panel. Écart significatif (p&nbsp;&lt;&nbsp;0,01).</p>
+            <div class="mt-2 flex gap-2"><span class="badge badge-emerald">signal positif</span><span class="badge badge-sky">enrichissement web</span></div>
+          </div>
+        </li>
+        <li class="px-5 py-4 flex gap-4">
+          <span class="mono text-[10px] text-amber-300 pt-1">03</span>
+          <div>
+            <p class="text-sm text-white font-medium">Surreprésentation dirigeants &gt; 60 ans dans Pays de la Loire</p>
+            <p class="text-[13px] text-gray-400 mt-1 leading-relaxed">42 % des cabinets de la région dirigés par un 60+ vs 34 % moyenne panel. Combiné à la rentabilité médiane (17,9 %), zone prioritaire pour pipeline cession/reprise.</p>
+            <div class="mt-2 flex gap-2"><span class="badge badge-amber">signal transmission</span><span class="badge badge-neutral">Pays de la Loire</span></div>
+          </div>
+        </li>
+        <li class="px-5 py-4 flex gap-4">
+          <span class="mono text-[10px] text-amber-300 pt-1">04</span>
+          <div>
+            <p class="text-sm text-white font-medium">Défaillances concentrées sur cabinets &lt; 5 salariés</p>
+            <p class="text-[13px] text-gray-400 mt-1 leading-relaxed">Sur les 61 défaillances recensées 2024 (BDF), 48 concernent des cabinets de moins de 5 salariés. Marché des petits cabinets à surveiller — arbitrage consolidation recommandé.</p>
+            <div class="mt-2 flex gap-2"><span class="badge badge-red">risque</span><span class="badge badge-sky">source BDF</span></div>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <div class="col-span-12 lg:col-span-4 card">
+      <div class="card-head">
+        <h3 class="text-sm font-semibold text-white">Sources de données</h3>
+      </div>
+      <ul class="divide-y soft-divider text-sm">
+        <li class="px-4 py-3 flex items-start gap-3">
+          <span class="mt-0.5 h-2 w-2 rounded-full bg-emerald-400"></span>
+          <div class="flex-1">
+            <div class="font-medium text-white">SIRENE V3 · INSEE</div>
+            <div class="text-[12px] text-gray-500 mt-0.5">Panel de 50 cabinets — api.insee.fr</div>
+          </div>
+          <span class="badge badge-emerald">live</span>
+        </li>
+        <li class="px-4 py-3 flex items-start gap-3">
+          <span class="mt-0.5 h-2 w-2 rounded-full bg-emerald-400"></span>
+          <div class="flex-1">
+            <div class="font-medium text-white">Pappers · liasses fiscales</div>
+            <div class="text-[12px] text-gray-500 mt-0.5">CA, EBE, résultat net — N et N-1</div>
+          </div>
+          <span class="badge badge-emerald">live</span>
+        </li>
+        <li class="px-4 py-3 flex items-start gap-3">
+          <span class="mt-0.5 h-2 w-2 rounded-full bg-emerald-400"></span>
+          <div class="flex-1">
+            <div class="font-medium text-white">INSEE ESANE 2023</div>
+            <div class="text-[12px] text-gray-500 mt-0.5">Agrégats sectoriels NAF 69.20Z</div>
+          </div>
+          <span class="badge badge-emerald">nouveau</span>
+        </li>
+        <li class="px-4 py-3 flex items-start gap-3">
+          <span class="mt-0.5 h-2 w-2 rounded-full bg-amber-400"></span>
+          <div class="flex-1">
+            <div class="font-medium text-white">BODACC · data.gouv.fr</div>
+            <div class="text-[12px] text-gray-500 mt-0.5">Publications légales (créations, cessions, procédures)</div>
+          </div>
+          <span class="badge badge-amber">nouveau</span>
+        </li>
+        <li class="px-4 py-3 flex items-start gap-3">
+          <span class="mt-0.5 h-2 w-2 rounded-full bg-emerald-400"></span>
+          <div class="flex-1">
+            <div class="font-medium text-white">Banque de France Webstat</div>
+            <div class="text-[12px] text-gray-500 mt-0.5">Défaillances, cotations, délais paiement</div>
+          </div>
+          <span class="badge badge-emerald">nouveau</span>
+        </li>
+        <li class="px-4 py-3 flex items-start gap-3">
+          <span class="mt-0.5 h-2 w-2 rounded-full bg-sky-400"></span>
+          <div class="flex-1">
+            <div class="font-medium text-white">Dila · Journal Officiel</div>
+            <div class="text-[12px] text-gray-500 mt-0.5">Nominations dirigeants (signal changement gouvernance)</div>
+          </div>
+          <span class="badge badge-sky">planifié</span>
+        </li>
+        <li class="px-4 py-3 flex items-start gap-3">
+          <span class="mt-0.5 h-2 w-2 rounded-full bg-sky-400"></span>
+          <div class="flex-1">
+            <div class="font-medium text-white">Infogreffe · greffes des TC</div>
+            <div class="text-[12px] text-gray-500 mt-0.5">Actes, privilèges, nantissements</div>
+          </div>
+          <span class="badge badge-sky">planifié</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- FOOTER                                                                  -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<footer class="mt-6 border-t" style="border-color: rgba(255,255,255,.06);">
+  <div class="px-6 py-5 flex flex-wrap items-center justify-between gap-3 text-[11px] text-gray-500">
+    <div class="flex items-center gap-3">
+      <span>© MONV 2026 · Benchmark v2</span>
+      <span>·</span>
+      <span>Les données affichées sont publiques (SIRENE, Pappers, INSEE ESANE, BODACC, BDF). Aucune valorisation ni conseil.</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span>Dernier rafraîchissement : <span class="mono text-gray-400">2026-04-21 09:42</span></span>
+      <span class="h-3 w-px bg-white/10"></span>
+      <button class="hover:text-gray-300">Méthodologie</button>
+      <button class="hover:text-gray-300">Journal des sources</button>
+    </div>
+  </div>
+</footer>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- DONNÉES & RENDU                                                         -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<script>
+/* ─── Données simulées réalistes (50 cabinets) ─────────────────────────── */
+const FIRMS = [
+  // Réseaux internationaux & grands français
+  { nom: "KPMG France",           ville: "Paris La Défense", dep: "92", region: "Île-de-France",       ca: 442.0, ca1: 418.0, ebe: 18.1, eff: 3120, created: 1968, dir: "Marie Guégan",     age: 57, sig: ["croissance_forte","leader_reseau"] },
+  { nom: "EY France — Audit",     ville: "Paris",            dep: "75", region: "Île-de-France",       ca: 388.5, ca1: 372.0, ebe: 19.4, eff: 2780, created: 1989, dir: "Jean Houssaye",     age: 61, sig: ["leader_reseau"] },
+  { nom: "Deloitte & Associés",   ville: "Neuilly-sur-Seine",dep: "92", region: "Île-de-France",       ca: 364.2, ca1: 348.0, ebe: 18.0, eff: 2605, created: 1974, dir: "Sophie Moreau",    age: 55, sig: ["leader_reseau"] },
+  { nom: "Mazars SA",             ville: "Courbevoie",       dep: "92", region: "Île-de-France",       ca: 312.8, ca1: 292.5, ebe: 17.5, eff: 2210, created: 1940, dir: "Hervé Hélias",     age: 63, sig: ["leader_reseau","transmission_potentielle"] },
+  { nom: "BDO France",            ville: "Paris",            dep: "75", region: "Île-de-France",       ca: 152.4, ca1: 141.0, ebe: 15.9, eff: 1120, created: 1976, dir: "Arnaud Naudan",    age: 58, sig: [] },
+  { nom: "Grant Thornton France", ville: "Neuilly-sur-Seine",dep: "92", region: "Île-de-France",       ca: 204.0, ca1: 192.5, ebe: 16.7, eff: 1480, created: 1975, dir: "Robert Dambo",     age: 62, sig: ["transmission_potentielle"] },
+  { nom: "RSM France",            ville: "Paris",            dep: "75", region: "Île-de-France",       ca: 99.8,  ca1: 92.1,  ebe: 15.4, eff: 680,  created: 1993, dir: "Cécile Delattre",  age: 52, sig: [] },
+  { nom: "Fiducial Expertise",    ville: "Lyon",             dep: "69", region: "Auvergne-Rhône-Alpes",ca: 298.4, ca1: 287.1, ebe: 22.8, eff: 2190, created: 1970, dir: "Christian Latouche", age: 78, sig: ["transmission_potentielle","leader_regional"] },
+  { nom: "In Extenso",            ville: "Villeurbanne",     dep: "69", region: "Auvergne-Rhône-Alpes",ca: 285.6, ca1: 264.0, ebe: 20.1, eff: 2050, created: 1991, dir: "Luc Fialletout",   age: 61, sig: ["leader_regional","croissance_forte"] },
+  { nom: "Exco Nexiom",           ville: "Bordeaux",         dep: "33", region: "Nouvelle-Aquitaine",  ca: 22.8,  ca1: 20.9,  ebe: 18.2, eff: 165,  created: 1982, dir: "François Bernet",  age: 65, sig: ["transmission_potentielle"] },
+  // Mid-tier & régional
+  { nom: "Soregor",               ville: "Angers",           dep: "49", region: "Pays de la Loire",    ca: 78.4,  ca1: 73.9,  ebe: 19.7, eff: 612,  created: 1972, dir: "Pierre Fournier",  age: 64, sig: ["transmission_potentielle","leader_regional"] },
+  { nom: "Cogep",                 ville: "Le Mans",          dep: "72", region: "Pays de la Loire",    ca: 42.5,  ca1: 38.7,  ebe: 18.9, eff: 340,  created: 1985, dir: "Bertrand Le Bras", age: 59, sig: [] },
+  { nom: "Compagnie Fiduciaire",  ville: "Marseille",        dep: "13", region: "Provence-Alpes-Côte d'Azur", ca: 38.2, ca1: 35.9, ebe: 17.1, eff: 285, created: 1968, dir: "Yves Manna",   age: 68, sig: ["transmission_potentielle"] },
+  { nom: "Fidag (Groupe)",        ville: "Lille",            dep: "59", region: "Hauts-de-France",     ca: 28.4,  ca1: 26.7,  ebe: 17.9, eff: 215,  created: 1979, dir: "Claire Desmons",   age: 54, sig: [] },
+  { nom: "Orcom",                 ville: "Orléans",          dep: "45", region: "Centre-Val de Loire", ca: 52.1,  ca1: 48.3,  ebe: 19.4, eff: 395,  created: 1973, dir: "Philippe Frichot", age: 66, sig: ["transmission_potentielle"] },
+  { nom: "Cerfrance Alliance",    ville: "Rennes",           dep: "35", region: "Bretagne",            ca: 62.8,  ca1: 59.1,  ebe: 15.9, eff: 510,  created: 1955, dir: "Yann Le Breton",   age: 60, sig: [] },
+  { nom: "Grant Thornton Lyon",   ville: "Lyon",             dep: "69", region: "Auvergne-Rhône-Alpes",ca: 18.5,  ca1: 17.0,  ebe: 17.2, eff: 142,  created: 1999, dir: "Nicolas Berry",    age: 49, sig: [] },
+  { nom: "Axens Audit",           ville: "Toulouse",         dep: "31", region: "Occitanie",           ca: 14.3,  ca1: 12.8,  ebe: 18.1, eff: 108,  created: 1996, dir: "Hélène Larroque",  age: 51, sig: ["croissance_forte"] },
+  { nom: "Aplitec Conseil",       ville: "Nantes",           dep: "44", region: "Pays de la Loire",    ca: 11.8,  ca1: 10.4,  ebe: 19.5, eff: 92,   created: 1998, dir: "Stéphane Dupuis",  age: 53, sig: ["croissance_forte"] },
+  { nom: "Baker Tilly France",    ville: "Paris",            dep: "75", region: "Île-de-France",       ca: 85.6,  ca1: 79.2,  ebe: 16.3, eff: 690,  created: 1997, dir: "Franck Roger",     age: 56, sig: [] },
+  { nom: "Auditech",              ville: "Strasbourg",       dep: "67", region: "Grand Est",           ca: 9.2,   ca1: 8.7,   ebe: 16.4, eff: 72,   created: 2001, dir: "Marion Schweitzer",age: 47, sig: [] },
+  { nom: "Groupe Y Nexia",        ville: "Nantes",           dep: "44", region: "Pays de la Loire",    ca: 68.3,  ca1: 62.8,  ebe: 18.6, eff: 520,  created: 1978, dir: "Gérard Billon",    age: 67, sig: ["transmission_potentielle"] },
+  { nom: "Novances",              ville: "Chambéry",         dep: "73", region: "Auvergne-Rhône-Alpes",ca: 24.7,  ca1: 23.0,  ebe: 17.8, eff: 190,  created: 1988, dir: "Valérie Charvet",  age: 54, sig: [] },
+  { nom: "Implid",                ville: "Lyon",             dep: "69", region: "Auvergne-Rhône-Alpes",ca: 52.4,  ca1: 45.0,  ebe: 19.3, eff: 380,  created: 2013, dir: "Nicolas Borgeot",  age: 46, sig: ["croissance_forte"] },
+  { nom: "Crowe Ficorec",         ville: "Paris",            dep: "75", region: "Île-de-France",       ca: 42.8,  ca1: 40.2,  ebe: 16.1, eff: 320,  created: 1984, dir: "Laurent Brizard",  age: 60, sig: [] },
+  { nom: "Kreston France",        ville: "Paris",            dep: "75", region: "Île-de-France",       ca: 26.4,  ca1: 25.0,  ebe: 15.8, eff: 195,  created: 1994, dir: "Thierry Paillet",  age: 58, sig: [] },
+  { nom: "Cabinet Coutot-Roehrig",ville: "Paris",            dep: "75", region: "Île-de-France",       ca: 15.9,  ca1: 14.6,  ebe: 21.2, eff: 98,   created: 1902, dir: "Jean-Marc Lucas",  age: 72, sig: ["transmission_potentielle"] },
+  { nom: "Walter France",         ville: "Paris",            dep: "75", region: "Île-de-France",       ca: 31.2,  ca1: 29.4,  ebe: 17.0, eff: 238,  created: 1997, dir: "Dominique Thellier",age: 62, sig: [] },
+  { nom: "Exponens",              ville: "Paris",            dep: "75", region: "Île-de-France",       ca: 29.1,  ca1: 27.4,  ebe: 17.9, eff: 210,  created: 2003, dir: "Dimitri Philippot",age: 50, sig: [] },
+  { nom: "Altonéo Audit",         ville: "Lyon",             dep: "69", region: "Auvergne-Rhône-Alpes",ca: 8.7,   ca1: 7.9,   ebe: 19.3, eff: 64,   created: 2005, dir: "Xavier Carrère",   age: 48, sig: ["croissance_forte"] },
+  { nom: "Adiclem Expertise",     ville: "Clermont-Ferrand", dep: "63", region: "Auvergne-Rhône-Alpes",ca: 5.4,   ca1: 5.0,   ebe: 17.6, eff: 45,   created: 1990, dir: "Isabelle Malzac",  age: 57, sig: [] },
+  { nom: "Beas Conseil",          ville: "Besançon",         dep: "25", region: "Bourgogne-F.-C.",     ca: 3.9,   ca1: 3.6,   ebe: 16.5, eff: 32,   created: 2001, dir: "Guillaume Beaupère",age: 51, sig: [] },
+  { nom: "Cometh Audit",          ville: "Montpellier",      dep: "34", region: "Occitanie",           ca: 7.1,   ca1: 6.2,   ebe: 18.4, eff: 58,   created: 2008, dir: "Audrey Benistant", age: 42, sig: ["croissance_forte"] },
+  { nom: "Sadec Akelys",          ville: "Marseille",        dep: "13", region: "Provence-Alpes-Côte d'Azur", ca: 22.0, ca1: 20.6, ebe: 17.6, eff: 168, created: 1984, dir: "Philippe Tambouret", age: 61, sig: [] },
+  { nom: "Expertise Compta Sud",  ville: "Nice",             dep: "06", region: "Provence-Alpes-Côte d'Azur", ca: 4.2,  ca1: 4.0,  ebe: 17.1, eff: 34, created: 1992, dir: "Marc Bellanger",  age: 62, sig: ["transmission_potentielle"] },
+  { nom: "FSE Cavaillon",         ville: "Cavaillon",        dep: "84", region: "Provence-Alpes-Côte d'Azur", ca: 1.8,  ca1: 1.7,  ebe: 14.8, eff: 14, created: 1987, dir: "Bernard Moulin",  age: 66, sig: ["transmission_potentielle"] },
+  { nom: "ECL Audit",             ville: "La Rochelle",      dep: "17", region: "Nouvelle-Aquitaine",  ca: 6.4,   ca1: 5.7,   ebe: 18.0, eff: 49,   created: 1999, dir: "Sandrine Pouget",  age: 52, sig: ["croissance_forte"] },
+  { nom: "Gestec Bordeaux",       ville: "Bordeaux",         dep: "33", region: "Nouvelle-Aquitaine",  ca: 12.2,  ca1: 11.3,  ebe: 17.5, eff: 94,   created: 1996, dir: "Laurence Lestienne",age: 55, sig: [] },
+  { nom: "Cabinet Beaulieu",      ville: "Rouen",            dep: "76", region: "Normandie",           ca: 9.5,   ca1: 8.7,   ebe: 16.7, eff: 77,   created: 1988, dir: "François Lemercier",age: 65, sig: ["transmission_potentielle"] },
+  { nom: "Audit & Synthèse",      ville: "Rennes",           dep: "35", region: "Bretagne",            ca: 16.3,  ca1: 15.2,  ebe: 18.3, eff: 125,  created: 1995, dir: "Yves Poinssot",    age: 60, sig: [] },
+  { nom: "Prud'homme Expertise",  ville: "Lille",            dep: "59", region: "Hauts-de-France",     ca: 8.0,   ca1: 7.5,   ebe: 16.8, eff: 62,   created: 1993, dir: "Anne-Sophie Prud'homme",age:56, sig: [] },
+  { nom: "Euralliance Audit",     ville: "Dunkerque",        dep: "59", region: "Hauts-de-France",     ca: 3.3,   ca1: 3.1,   ebe: 15.4, eff: 27,   created: 1997, dir: "Julien Vancoppenolle",age:48, sig: [] },
+  { nom: "Cabinet Meunier",       ville: "Nancy",            dep: "54", region: "Grand Est",           ca: 2.7,   ca1: 2.6,   ebe: 15.1, eff: 22,   created: 1980, dir: "Jean Meunier",     age: 71, sig: ["transmission_potentielle"] },
+  { nom: "Réseau Altonéo",        ville: "Reims",            dep: "51", region: "Grand Est",           ca: 11.9,  ca1: 10.8,  ebe: 18.7, eff: 93,   created: 2002, dir: "Sylvain Lescarret",age: 49, sig: [] },
+  { nom: "Cabinet Deneuve",       ville: "Dijon",            dep: "21", region: "Bourgogne-F.-C.",     ca: 4.8,   ca1: 4.5,   ebe: 16.3, eff: 38,   created: 1985, dir: "Hubert Deneuve",   age: 69, sig: ["transmission_potentielle"] },
+  { nom: "Finexpert Limousin",    ville: "Limoges",          dep: "87", region: "Nouvelle-Aquitaine",  ca: 3.0,   ca1: 2.8,   ebe: 15.9, eff: 25,   created: 1991, dir: "Annick Rageat",    age: 64, sig: ["transmission_potentielle"] },
+  { nom: "CER France Loire",      ville: "Saint-Étienne",    dep: "42", region: "Auvergne-Rhône-Alpes",ca: 10.8,  ca1: 10.2,  ebe: 14.8, eff: 89,   created: 1967, dir: "Michel Gonnet",    age: 68, sig: ["transmission_potentielle"] },
+  { nom: "BM&A Paris",            ville: "Paris",            dep: "75", region: "Île-de-France",       ca: 34.7,  ca1: 30.8,  ebe: 19.8, eff: 245,  created: 1999, dir: "Pierre Beal",      age: 54, sig: ["croissance_forte"] },
+  { nom: "Cabinet Gouzy",         ville: "Pau",              dep: "64", region: "Nouvelle-Aquitaine",  ca: 2.1,   ca1: 2.0,   ebe: 14.5, eff: 17,   created: 1982, dir: "Daniel Gouzy",     age: 74, sig: ["transmission_potentielle"] },
+  { nom: "Groupe Aplitec",        ville: "Annecy",           dep: "74", region: "Auvergne-Rhône-Alpes",ca: 13.6,  ca1: 12.1,  ebe: 19.2, eff: 106,  created: 2004, dir: "Raphaël Faller",   age: 45, sig: ["croissance_forte"] },
+];
+
+const NF = new Intl.NumberFormat('fr-FR');
+const fmtM = v => (v >= 100 ? v.toFixed(0) : v.toFixed(1)).replace('.', ',');
+function growth(f){ return (f.ca - f.ca1) / f.ca1 * 100; }
+
+/* ─── Commun : options Chart.js ───────────────────────────────────────── */
+Chart.defaults.color = '#9ca3af';
+Chart.defaults.font.family = 'Inter, ui-sans-serif';
+Chart.defaults.borderColor = 'rgba(255,255,255,.06)';
+const AMB = { main: '#f59e0b', light: '#fbbf24', dark: '#b45309' };
+const gridOpts = { color: 'rgba(255,255,255,.04)', drawBorder: false };
+const tooltipOpts = {
+  backgroundColor: 'rgba(23,23,26,.95)',
+  titleColor: '#fafafa', bodyColor: '#d4d4d8', borderColor: 'rgba(255,255,255,.08)', borderWidth: 1,
+  padding: 10, cornerRadius: 8, titleFont: { weight: '600' }, bodyFont: { size: 11 },
+};
+
+/* ─── Onglets ─────────────────────────────────────────────────────────── */
+const tabs = document.querySelectorAll('.tab-btn');
+const panels = document.querySelectorAll('.tab-panel');
+tabs.forEach(t => t.addEventListener('click', () => {
+  tabs.forEach(b => b.classList.remove('tab-active'));
+  t.classList.add('tab-active');
+  const id = 'tab-' + t.dataset.tab;
+  panels.forEach(p => p.classList.toggle('hidden', p.id !== id));
+  if (t.dataset.tab === 'carto' && !window._mapInit) initMap();
+  if (t.dataset.tab === 'dynamique') setTimeout(drawHeatmap, 50);
+}));
+
+/* ─── Radar panel vs secteur ──────────────────────────────────────────── */
+new Chart(document.getElementById('radarPosition'), {
+  type: 'radar',
+  data: {
+    labels: ['CA médian', 'Croissance', 'Rentabilité', 'Solvabilité', 'Âge dir.', 'Taille'],
+    datasets: [
+      { label: 'Panel', data: [168, 122, 114, 108, 121, 155], backgroundColor: 'rgba(245,158,11,.22)', borderColor: AMB.main, pointBackgroundColor: AMB.main, borderWidth: 2 },
+      { label: 'Secteur', data: [100,100,100,100,100,100], backgroundColor: 'rgba(156,163,175,.1)', borderColor: '#6b7280', pointBackgroundColor: '#6b7280', borderWidth: 1.5, borderDash: [4,4] },
+    ],
+  },
+  options: {
+    plugins: { legend: { display: false }, tooltip: tooltipOpts },
+    scales: { r: { angleLines: { color: 'rgba(255,255,255,.06)' }, grid: { color: 'rgba(255,255,255,.06)' }, pointLabels: { color: '#d4d4d8', font: { size: 11 }}, ticks: { display: false, stepSize: 40 }, suggestedMin: 40, suggestedMax: 200 } },
+  },
+});
+
+/* ─── Histogramme CA ──────────────────────────────────────────────────── */
+(function(){
+  const bins = [0,1,3,10,30,100,500];
+  const counts = new Array(bins.length-1).fill(0);
+  FIRMS.forEach(f => {
+    for (let i=0;i<bins.length-1;i++) if (f.ca >= bins[i] && f.ca < bins[i+1]) counts[i]++;
+  });
+  new Chart(document.getElementById('histCA'), {
+    type: 'bar',
+    data: {
+      labels: ['<1 M€','1–3','3–10','10–30','30–100','≥100'],
+      datasets: [{ label: 'Cabinets', data: counts, backgroundColor: AMB.main, borderRadius: 4, barThickness: 28 }]
+    },
+    options: {
+      plugins: { legend: { display: false }, tooltip: tooltipOpts },
+      scales: { y: { grid: gridOpts, ticks: { stepSize: 4 }}, x: { grid: { display: false }}},
+    },
+  });
+})();
+
+/* ─── Donut taille ────────────────────────────────────────────────────── */
+new Chart(document.getElementById('donutSize'), {
+  type: 'doughnut',
+  data: { labels: ['TPE','PE','ME','ETI+'], datasets: [{ data: [16,20,9,5], backgroundColor: ['#fbbf24','#f59e0b','#d97706','#92400e'], borderColor: '#111113', borderWidth: 2 }] },
+  options: { cutout: '62%', plugins: { legend: { display: false }, tooltip: tooltipOpts }}
+});
+
+/* ─── Lorenz / concentration ─────────────────────────────────────────── */
+(function(){
+  const sorted = [...FIRMS].sort((a,b)=>a.ca-b.ca);
+  const total = sorted.reduce((s,f)=>s+f.ca,0);
+  const pts = [{x:0,y:0}]; let cum = 0;
+  sorted.forEach((f,i)=>{ cum += f.ca; pts.push({ x: (i+1)/sorted.length*100, y: cum/total*100 }); });
+  new Chart(document.getElementById('lorenz'), {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'Lorenz panel', data: pts, borderColor: AMB.main, backgroundColor: 'rgba(245,158,11,.15)', fill: true, tension: 0.2, pointRadius: 0, borderWidth: 2 },
+        { label: 'Égalité parfaite', data: [{x:0,y:0},{x:100,y:100}], borderColor: '#6b7280', borderDash: [4,4], borderWidth: 1, pointRadius: 0, fill: false },
+      ]
+    },
+    options: {
+      parsing: false,
+      plugins: { legend: { display: false }, tooltip: tooltipOpts },
+      scales: {
+        x: { type: 'linear', min: 0, max: 100, title: { display: true, text: '% cabinets', color: '#9ca3af', font: { size: 10 }}, grid: gridOpts, ticks: { callback: v => v+'%' }},
+        y: { min: 0, max: 100, title: { display: true, text: '% CA cumulé', color: '#9ca3af', font: { size: 10 }}, grid: gridOpts, ticks: { callback: v => v+'%' }},
+      }
+    }
+  });
+})();
+
+/* ─── Sparklines KPIs ─────────────────────────────────────────────────── */
+document.querySelectorAll('[data-spark]').forEach(cv => {
+  const seed = cv.dataset.spark.length;
+  const data = Array.from({length: 12}, (_,i) => 50 + Math.sin(i/2 + seed)*14 + i*1.6 + (seed%3)*3);
+  new Chart(cv, {
+    type: 'line',
+    data: { labels: data.map((_,i)=>i), datasets: [{ data, borderColor: AMB.light, borderWidth: 1.5, pointRadius: 0, fill: true, backgroundColor: 'rgba(251,191,36,.12)', tension: 0.35 }]},
+    options: { plugins: { legend: { display: false }, tooltip: { enabled: false }}, scales: { x: { display: false }, y: { display: false }}, animation: false }
+  });
+});
+
+/* ─── Scatter CA / effectif ──────────────────────────────────────────── */
+(function(){
+  const group = (age) => age < 2000 ? '≥ 25 ans' : age < 2010 ? '15–24 ans' : '< 15 ans';
+  const byGroup = {};
+  FIRMS.forEach(f => {
+    const g = group(f.created);
+    byGroup[g] ||= [];
+    byGroup[g].push({ x: f.eff, y: f.ca, r: Math.max(4, Math.sqrt(f.ca)*1.4), nom: f.nom });
+  });
+  const colors = { '< 15 ans': '#fbbf24', '15–24 ans': '#f59e0b', '≥ 25 ans': '#b45309' };
+  new Chart(document.getElementById('scatterCAeff'), {
+    type: 'bubble',
+    data: { datasets: Object.entries(byGroup).map(([k,v]) => ({ label: k, data: v, backgroundColor: colors[k], borderColor: 'rgba(255,255,255,.2)', borderWidth: 1 })) },
+    options: {
+      plugins: { legend: { position: 'top', labels: { boxWidth: 10, boxHeight: 10 }}, tooltip: { ...tooltipOpts, callbacks: { label: c => `${c.raw.nom} · ${c.raw.x} sal. · ${fmtM(c.raw.y)} M€` }}},
+      scales: {
+        x: { type: 'logarithmic', title: { display: true, text: 'Effectif (log)', color: '#9ca3af' }, grid: gridOpts, min: 10, max: 4000 },
+        y: { type: 'logarithmic', title: { display: true, text: 'CA (M€, log)', color: '#9ca3af' }, grid: gridOpts, min: 1, max: 500 },
+      },
+    },
+  });
+})();
+
+/* ─── Box-like par tranche d'effectif (utilise bar avec "floating bars") ─ */
+(function(){
+  const buckets = [
+    { label: 'TPE', min: 0, max: 9 }, { label: 'PE', min: 10, max: 49 },
+    { label: 'ME', min: 50, max: 249 }, { label: 'ETI+', min: 250, max: 10000 },
+  ];
+  const quantile = (arr, q) => { const s = [...arr].sort((a,b)=>a-b); const p = (s.length-1)*q, b = Math.floor(p), r = p-b; return s[b] + (s[b+1]!==undefined ? (s[b+1]-s[b])*r : 0); };
+  const ranges = buckets.map(b => {
+    const v = FIRMS.filter(f=>f.eff>=b.min && f.eff<=b.max).map(f=>f.ca);
+    if (!v.length) return [0,0];
+    return [quantile(v,.25), quantile(v,.75)];
+  });
+  const medians = buckets.map(b => {
+    const v = FIRMS.filter(f=>f.eff>=b.min && f.eff<=b.max).map(f=>f.ca);
+    return v.length ? quantile(v,.5) : 0;
+  });
+  new Chart(document.getElementById('boxByEff'), {
+    type: 'bar',
+    data: {
+      labels: buckets.map(b => b.label),
+      datasets: [
+        { label: 'Q1–Q3 (M€)', data: ranges, backgroundColor: 'rgba(245,158,11,.35)', borderColor: AMB.main, borderWidth: 1, borderRadius: 4, barThickness: 46 },
+        { label: 'Médiane', type: 'line', data: medians, borderColor: AMB.light, backgroundColor: AMB.light, pointRadius: 6, pointHoverRadius: 7, showLine: false, borderWidth: 0 },
+      ],
+    },
+    options: {
+      plugins: { legend: { labels: { boxWidth: 10 }}, tooltip: tooltipOpts },
+      scales: { y: { type: 'logarithmic', title: { display: true, text: 'CA (M€, log)', color: '#9ca3af' }, grid: gridOpts, min: 1, max: 500 }, x: { grid: { display: false }}},
+    },
+  });
+})();
+
+/* ─── Bar Top 10 CA ──────────────────────────────────────────────────── */
+(function(){
+  const top = [...FIRMS].sort((a,b)=>b.ca-a.ca).slice(0,10);
+  new Chart(document.getElementById('barTop10'), {
+    type: 'bar',
+    data: {
+      labels: top.map(f => f.nom.length>22 ? f.nom.slice(0,20)+'…' : f.nom),
+      datasets: [
+        { label: 'CA N',   data: top.map(f=>f.ca),  backgroundColor: AMB.main, borderRadius: 3, barThickness: 14 },
+        { label: 'CA N-1', data: top.map(f=>f.ca1), backgroundColor: 'rgba(245,158,11,.3)', borderRadius: 3, barThickness: 14 },
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend: { labels: { boxWidth: 10 }}, tooltip: { ...tooltipOpts, callbacks: { label: c => `${c.dataset.label} : ${fmtM(c.parsed.x)} M€` }}},
+      scales: { x: { grid: gridOpts, title: { display: true, text: 'M€', color: '#9ca3af' }}, y: { grid: { display: false }}},
+    },
+  });
+})();
+
+/* ─── Bar Growth ─────────────────────────────────────────────────────── */
+(function(){
+  const arr = [...FIRMS].map(f=>({nom:f.nom, g: growth(f)})).sort((a,b)=>b.g-a.g);
+  const top = arr.slice(0,7), bot = arr.slice(-3);
+  const show = [...top, ...bot];
+  new Chart(document.getElementById('barGrowth'), {
+    type: 'bar',
+    data: {
+      labels: show.map(f => f.nom.length>20 ? f.nom.slice(0,18)+'…' : f.nom),
+      datasets: [{ data: show.map(f=>f.g), backgroundColor: ctx => ctx.parsed.y >= 0 ? '#10b981' : '#ef4444', borderRadius: 4, barThickness: 18 }],
+    },
+    options: {
+      plugins: { legend: { display: false }, tooltip: { ...tooltipOpts, callbacks: { label: c => (c.parsed.y>=0?'+':'') + c.parsed.y.toFixed(1) + ' %' }}},
+      scales: { y: { grid: gridOpts, ticks: { callback: v => (v>=0?'+':'') + v + ' %' }}, x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 50, minRotation: 45 }}},
+    },
+  });
+})();
+
+/* ─── Table ratios ───────────────────────────────────────────────────── */
+(function(){
+  const data = [
+    { r: 'CA médian',                 panel: '3,80 M€', sector: '0,54 M€', delta: '×7,0',  pos: 95 },
+    { r: 'Croissance CA méd.',        panel: '+3,9 %',  sector: '+3,2 %',  delta: '+0,7 pt', pos: 64 },
+    { r: 'EBE/CA méd.',               panel: '17,4 %',  sector: '15,2 %',  delta: '+2,2 pt', pos: 72 },
+    { r: 'Marge nette méd.',          panel: '10,3 %',  sector: '8,8 %',   delta: '+1,5 pt', pos: 68 },
+    { r: 'Capitaux propres méd.',     panel: '0,89 M€', sector: '0,18 M€', delta: '×4,9',  pos: 92 },
+    { r: 'BFR / CA',                  panel: '6,2 %',   sector: '5,4 %',   delta: '+0,8 pt', pos: 55 },
+    { r: 'Taux d\'endettement',       panel: '23,4 %',  sector: '31,1 %',  delta: '−7,7 pt', pos: 78, inv: true },
+    { r: 'Défaillance 12m',           panel: '0,28 %',  sector: '1,14 %',  delta: '−0,86 pt', pos: 88, inv: true },
+  ];
+  document.getElementById('ratiosTable').innerHTML = data.map(row => `
+    <tr>
+      <td class="px-4 py-2.5 text-gray-300">${row.r}</td>
+      <td class="px-4 py-2.5 text-right mono text-white font-semibold">${row.panel}</td>
+      <td class="px-4 py-2.5 text-right mono text-gray-400">${row.sector}</td>
+      <td class="px-4 py-2.5 text-right mono ${row.inv ? 'text-emerald-400' : (row.delta.startsWith('-')||row.delta.startsWith('−') ? 'text-red-400' : 'text-emerald-400')}">${row.delta}</td>
+      <td class="px-4 py-2.5"><div class="score-bar"><div style="width:${row.pos}%"></div></div></td>
+    </tr>
+  `).join('');
+})();
+
+/* ─── Histogramme EBE/CA ─────────────────────────────────────────────── */
+(function(){
+  const bins = [0,5,10,15,20,25,30];
+  const counts = new Array(bins.length-1).fill(0);
+  FIRMS.forEach(f => { for (let i=0;i<bins.length-1;i++) if (f.ebe >= bins[i] && f.ebe < bins[i+1]) counts[i]++; });
+  new Chart(document.getElementById('histEBE'), {
+    type: 'bar',
+    data: {
+      labels: ['<5%','5–10','10–15','15–20','20–25','25+'],
+      datasets: [{ data: counts, backgroundColor: (c) => {
+        const colors = ['#ef4444','#f59e0b','#f59e0b','#10b981','#10b981','#059669'];
+        return colors[c.dataIndex];
+      }, borderRadius: 4, barThickness: 34 }],
+    },
+    options: {
+      plugins: { legend: { display: false }, tooltip: tooltipOpts, annotation: {} },
+      scales: { y: { grid: gridOpts }, x: { grid: { display: false }}},
+    },
+  });
+})();
+
+/* ─── BODACC stacked ─────────────────────────────────────────────────── */
+(function(){
+  const labels = [];
+  const yrs = [2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+  yrs.forEach(y => ['T1','T2','T3','T4'].forEach(q => { if (!(y===2025 && q>'T2')) labels.push(`${q} ${String(y).slice(2)}`); }));
+  const crea = labels.map((_,i) => 150 + 22*Math.sin(i/3.2) + i*1.4);
+  const cess = labels.map((_,i) => -(70 + 14*Math.cos(i/3.6) + i*0.3));
+  const proc = labels.map((_,i) => -(15 + 8*Math.sin(i/2.4)));
+  new Chart(document.getElementById('stackedBodacc'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Créations',     data: crea, backgroundColor: '#10b981', stack: 's', borderRadius: 2 },
+        { label: 'Cessations',    data: cess, backgroundColor: '#ef4444', stack: 's', borderRadius: 2 },
+        { label: 'Proc. coll.',   data: proc, backgroundColor: '#b45309', stack: 's', borderRadius: 2 },
+      ],
+    },
+    options: {
+      plugins: { legend: { labels: { boxWidth: 10 }}, tooltip: tooltipOpts },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 20, font: { size: 10 }}},
+        y: { stacked: true, grid: gridOpts, ticks: { callback: v => NF.format(Math.abs(v)) }},
+      },
+    },
+  });
+})();
+
+/* ─── Pyramide âges dirigeants ───────────────────────────────────────── */
+(function(){
+  const bands = ['<35','35–44','45–54','55–59','60–64','65+'];
+  const H = [2,5,9,11,14,9];
+  const F = [1,4,6,7,6,4];
+  new Chart(document.getElementById('pyramidAge'), {
+    type: 'bar',
+    data: {
+      labels: bands,
+      datasets: [
+        { label: 'Hommes',  data: H.map(v=>-v), backgroundColor: '#f59e0b', borderRadius: 2, barPercentage: .9 },
+        { label: 'Femmes',  data: F,            backgroundColor: '#38bdf8', borderRadius: 2, barPercentage: .9 },
+      ],
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend: { labels: { boxWidth: 10 }}, tooltip: { ...tooltipOpts, callbacks: { label: c => `${c.dataset.label} : ${Math.abs(c.parsed.x)}` }}},
+      scales: { x: { grid: gridOpts, ticks: { callback: v => Math.abs(v) }, stacked: false }, y: { grid: { display: false }, stacked: true }},
+    },
+  });
+})();
+
+/* ─── Défaillances ───────────────────────────────────────────────────── */
+(function(){
+  const yrs = ['2018','2019','2020','2021','2022','2023','2024'];
+  new Chart(document.getElementById('lineDefail'), {
+    type: 'line',
+    data: {
+      labels: yrs,
+      datasets: [
+        { label: 'Panel', data: [0.25,0.27,0.22,0.19,0.24,0.26,0.28], borderColor: AMB.main, backgroundColor: 'rgba(245,158,11,.15)', fill: true, tension: .35, borderWidth: 2, pointRadius: 3 },
+        { label: 'Secteur FR', data: [1.32,1.26,0.94,0.78,0.96,1.11,1.14], borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 2, tension: .3, borderDash: [4,4], pointRadius: 3 },
+      ],
+    },
+    options: {
+      plugins: { legend: { labels: { boxWidth: 10, font: { size: 10 }}}, tooltip: { ...tooltipOpts, callbacks: { label: c => c.dataset.label + ' : ' + c.parsed.y + ' %' }}},
+      scales: { y: { grid: gridOpts, ticks: { callback: v => v+' %' }}, x: { grid: { display: false }}},
+    },
+  });
+})();
+
+/* ─── M&A bars ───────────────────────────────────────────────────────── */
+(function(){
+  new Chart(document.getElementById('barMA'), {
+    type: 'bar',
+    data: {
+      labels: ['2019','2020','2021','2022','2023','2024'],
+      datasets: [
+        { label: 'Fusions / rachats', data: [112,95,142,164,172,184], backgroundColor: AMB.main, borderRadius: 3, barPercentage: .6 },
+        { label: 'Multiple EBE (x)',  data: [5.2,5.0,5.9,6.1,6.2,6.4], yAxisID: 'y2', type: 'line', borderColor: '#38bdf8', backgroundColor: 'transparent', borderWidth: 2, tension: .3, pointRadius: 3 },
+      ],
+    },
+    options: {
+      plugins: { legend: { labels: { boxWidth: 10, font: { size: 10 }}}, tooltip: tooltipOpts },
+      scales: {
+        x: { grid: { display: false }},
+        y: { grid: gridOpts, title: { display: true, text: 'Nombre de deals', color: '#9ca3af', font: { size: 10 }}},
+        y2: { position: 'right', grid: { display: false }, title: { display: true, text: 'Multiple EBE', color: '#9ca3af', font: { size: 10 }}, min: 4, max: 8 },
+      },
+    },
+  });
+})();
+
+/* ─── Heatmap calendaire ─────────────────────────────────────────────── */
+function drawHeatmap(){
+  const host = document.getElementById('heatmap');
+  if (!host || host._built) return;
+  host._built = true;
+  const months = [];
+  const d = new Date(2024, 3, 1);
+  for (let i=0; i<24; i++){
+    months.push({ y: d.getFullYear(), m: d.getMonth(), label: d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) });
+    d.setMonth(d.getMonth()+1);
+  }
+  const frag = document.createElement('div');
+  frag.className = 'flex gap-[3px]';
+  months.forEach((mo, i) => {
+    const col = document.createElement('div');
+    col.className = 'flex flex-col items-center gap-[3px]';
+    const head = document.createElement('div');
+    head.className = 'text-[9px] text-gray-500 mb-1 mono';
+    head.textContent = mo.label;
+    col.appendChild(head);
+    for (let day=1; day<=28; day++){
+      const v = Math.max(0, Math.round((Math.sin(day/3 + i/2) + 1) * 6 + (i%3)*2));
+      const cell = document.createElement('div');
+      const op = Math.min(1, v/12);
+      cell.className = 'w-3 h-3 rounded-[2px]';
+      cell.style.backgroundColor = v===0 ? 'rgba(255,255,255,.04)' : `rgba(245,158,11,${0.12 + op*0.6})`;
+      cell.title = `${day}/${mo.m+1}/${mo.y} — ${v} événements`;
+      col.appendChild(cell);
+    }
+    frag.appendChild(col);
+  });
+  const legend = document.createElement('div');
+  legend.className = 'mt-3 flex items-center gap-2 text-[11px] text-gray-500';
+  legend.innerHTML = `<span>0</span>${Array.from({length:5}).map((_,i)=>`<span class="w-3 h-3 rounded-[2px]" style="background-color: rgba(245,158,11,${0.12+i*0.15})"></span>`).join('')}<span>12+ événements/jour</span>`;
+  host.innerHTML = '';
+  host.appendChild(frag);
+  host.appendChild(legend);
+}
+
+/* ─── Carte Leaflet + choroplèthe ────────────────────────────────────── */
+function initMap(){
+  window._mapInit = true;
+  const map = L.map('mapFr', { attributionControl: true, zoomControl: true }).setView([46.6, 2.6], 5.6);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap, © CARTO · MONV', subdomains: 'abcd', maxZoom: 10,
+  }).addTo(map);
+
+  // Compter les cabinets par région
+  const regAgg = {};
+  FIRMS.forEach(f => { regAgg[f.region] ||= { count: 0, ca: 0 }; regAgg[f.region].count++; regAgg[f.region].ca += f.ca; });
+
+  // Points approximatifs par ville
+  const cityCoords = {
+    'Paris':[48.8566,2.3522],'Paris La Défense':[48.8924,2.2391],'Neuilly-sur-Seine':[48.8846,2.2689],
+    'Courbevoie':[48.897,2.2565],'Lyon':[45.7640,4.8357],'Villeurbanne':[45.7669,4.8795],
+    'Bordeaux':[44.8378,-0.5792],'Angers':[47.4784,-0.5632],'Le Mans':[48.0061,0.1996],'Marseille':[43.2965,5.3698],
+    'Lille':[50.6292,3.0573],'Orléans':[47.9029,1.9093],'Rennes':[48.1173,-1.6778],'Toulouse':[43.6047,1.4442],
+    'Nantes':[47.2184,-1.5536],'Strasbourg':[48.5734,7.7521],'Chambéry':[45.5646,5.9178],'Nice':[43.7102,7.2620],
+    'Montpellier':[43.6110,3.8767],'La Rochelle':[46.1603,-1.1511],'Rouen':[49.4431,1.0993],'Dunkerque':[51.0343,2.3768],
+    'Nancy':[48.6921,6.1844],'Reims':[49.2583,4.0317],'Dijon':[47.322,5.0415],'Limoges':[45.8336,1.2611],
+    'Saint-Étienne':[45.4397,4.3872],'Pau':[43.2965,-0.3706],'Annecy':[45.8992,6.1294],'Clermont-Ferrand':[45.7797,3.0863],
+    'Besançon':[47.2378,6.0241],'Cavaillon':[43.8378,5.0381],
+  };
+
+  // Couche points
+  FIRMS.forEach(f => {
+    const c = cityCoords[f.ville];
+    if (!c) return;
+    const r = Math.max(4, Math.sqrt(f.ca)*1.8);
+    const marker = L.circleMarker(c, {
+      radius: r, color: '#f59e0b', weight: 1.5, fillColor: '#fbbf24', fillOpacity: .55,
+    }).addTo(map);
+    marker.bindTooltip(`<div class="mono" style="font-size:11px">
+      <b style="color:#fff">${f.nom}</b><br/>
+      <span style="color:#9ca3af">${f.ville} · ${f.dep}</span><br/>
+      CA <b>${fmtM(f.ca)} M€</b> · Eff. <b>${NF.format(f.eff)}</b>
+    </div>`, { direction: 'top', opacity: .95 });
+  });
+
+  // Légende
+  const legend = L.control({ position: 'bottomright' });
+  legend.onAdd = () => {
+    const div = L.DomUtil.create('div');
+    div.style.background = 'rgba(23,23,26,.9)'; div.style.padding = '10px 12px'; div.style.border = '1px solid rgba(255,255,255,.08)'; div.style.borderRadius = '8px';
+    div.innerHTML = `<div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Taille ∝ CA</div>
+      <div style="display:flex;gap:10px;align-items:flex-end">
+        <span style="width:8px;height:8px;border-radius:50%;background:#fbbf24;opacity:.6;display:inline-block"></span>
+        <span style="width:14px;height:14px;border-radius:50%;background:#fbbf24;opacity:.6;display:inline-block"></span>
+        <span style="width:22px;height:22px;border-radius:50%;background:#fbbf24;opacity:.6;display:inline-block"></span>
+      </div>
+      <div style="font-size:10px;color:#9ca3af;margin-top:4px">1 M€ → 450 M€</div>`;
+    return div;
+  };
+  legend.addTo(map);
+
+  // Liste régions
+  const reg = Object.entries(regAgg).sort((a,b)=>b[1].ca-a[1].ca);
+  const maxCA = reg[0][1].ca;
+  document.getElementById('regionList').innerHTML = reg.map(([name,v]) => `
+    <li class="px-4 py-2.5 flex items-center gap-3">
+      <div class="flex-1 min-w-0">
+        <div class="text-sm text-white font-medium truncate">${name}</div>
+        <div class="text-[11px] text-gray-500 mt-0.5">${v.count} cabinet(s)</div>
+      </div>
+      <div class="mono text-sm text-amber-300 font-semibold tabular-nums w-24 text-right">${fmtM(v.ca)} M€</div>
+      <div class="w-16 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+        <div class="h-full rounded-full" style="width:${v.ca/maxCA*100}%;background:linear-gradient(90deg,#f59e0b,#fbbf24)"></div>
+      </div>
+    </li>
+  `).join('');
+}
+
+/* ─── Classements ────────────────────────────────────────────────────── */
+function renderRanking(hostId, arr, valueFn, format) {
+  const host = document.getElementById(hostId);
+  const max = Math.max(...arr.map(valueFn));
+  host.innerHTML = arr.slice(0,10).map((f,i) => {
+    const v = valueFn(f);
+    return `
+      <li class="px-4 py-2.5 flex items-center gap-3">
+        <div class="mono text-[11px] w-6 text-amber-300 font-bold">#${i+1}</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm text-white font-medium truncate">${f.nom}</div>
+          <div class="text-[11px] text-gray-500 mt-0.5">${f.ville} · ${NF.format(f.eff)} sal. · créé ${f.created}</div>
+        </div>
+        <div class="mono text-sm tabular-nums ${v<0?'text-red-400':'text-amber-300'} font-semibold w-24 text-right">${format(v)}</div>
+        <div class="w-14 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+          <div class="h-full rounded-full" style="width:${Math.abs(v)/max*100}%;background:linear-gradient(90deg,#f59e0b,#fbbf24)"></div>
+        </div>
+      </li>
+    `;
+  }).join('');
+}
+
+renderRanking('topCA',      [...FIRMS].sort((a,b)=>b.ca-a.ca),           f => f.ca,        v => fmtM(v)+' M€');
+renderRanking('topGrowth',  [...FIRMS].sort((a,b)=>growth(b)-growth(a)), f => growth(f),  v => (v>=0?'+':'') + v.toFixed(1)+' %');
+renderRanking('topProfit',  [...FIRMS].sort((a,b)=>b.ebe-a.ebe),         f => f.ebe,      v => v.toFixed(1)+' %');
+// Score cession composite : (âge dirigeant − 50) + EBE
+const scoreCession = f => Math.max(0, f.age - 50) * 1.2 + f.ebe * 0.8 + (f.sig.includes('transmission_potentielle') ? 8 : 0);
+renderRanking('topCession', [...FIRMS].sort((a,b)=>scoreCession(b)-scoreCession(a)), scoreCession, v => v.toFixed(1)+' / 100');
+
+/* ─── Tableau détaillé ───────────────────────────────────────────────── */
+(function(){
+  const sigMap = {
+    croissance_forte:        { cls: 'badge-emerald', label: 'Croissance forte' },
+    transmission_potentielle:{ cls: 'badge-amber',   label: 'Transmission' },
+    leader_reseau:           { cls: 'badge-sky',     label: 'Réseau intl.' },
+    leader_regional:         { cls: 'badge-sky',     label: 'Leader régional' },
+  };
+  document.getElementById('fullTable').innerHTML = [...FIRMS]
+    .sort((a,b)=>b.ca-a.ca)
+    .map((f,i) => {
+      const g = growth(f);
+      const sig = (f.sig||[]).map(s => sigMap[s] ? `<span class="badge ${sigMap[s].cls} mr-1">${sigMap[s].label}</span>` : '').join('');
+      return `
+        <tr class="hover:bg-white/[0.02]">
+          <td class="px-3 py-2 mono text-[10px] text-gray-500">${String(i+1).padStart(2,'0')}</td>
+          <td class="px-3 py-2 font-medium text-white whitespace-nowrap">${f.nom}</td>
+          <td class="px-3 py-2 text-gray-400 whitespace-nowrap">${f.ville} <span class="text-gray-600">· ${f.dep}</span></td>
+          <td class="px-3 py-2 text-right mono text-gray-200 tabular-nums">${fmtM(f.ca)}&nbsp;M</td>
+          <td class="px-3 py-2 text-right mono text-gray-500 tabular-nums">${fmtM(f.ca1)}&nbsp;M</td>
+          <td class="px-3 py-2 text-right mono tabular-nums ${g>=0?'text-emerald-400':'text-red-400'}">${g>=0?'+':''}${g.toFixed(1)}&nbsp;%</td>
+          <td class="px-3 py-2 text-right mono text-gray-200 tabular-nums">${f.ebe.toFixed(1)}&nbsp;%</td>
+          <td class="px-3 py-2 text-right mono text-gray-300 tabular-nums">${NF.format(f.eff)}</td>
+          <td class="px-3 py-2 text-right mono text-gray-400 tabular-nums">${f.created}</td>
+          <td class="px-3 py-2 text-gray-300 whitespace-nowrap">${f.dir}</td>
+          <td class="px-3 py-2 text-right mono ${f.age>=60?'text-amber-300':'text-gray-400'} tabular-nums">${f.age}</td>
+          <td class="px-3 py-2">${sig || '<span class="text-gray-700">—</span>'}</td>
+        </tr>`;
+    }).join('');
+})();
+</script>
+
+</body>
+</html>

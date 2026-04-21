@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MONV — Mode Benchmark · Fiche équipe · UI actuelle</title>
+  <style>
+    /*
+      Document optimisé PDF : fond blanc / crème, texte noir ou gris foncé.
+      Reprend la structure UI MONV (carte, onglets, barre d’export) en équivalent
+      thème clair (comme :root dans globals.css), accent ambre lisible à l’impression.
+    */
+    :root {
+      --background: #fafafa;
+      --foreground: #0a0a0a;
+      --card: #ffffff;
+      --muted: #f4f4f5;
+      --muted-foreground: #52525b;
+      --border: #e4e4e7;
+      --amber-border: #f59e0b;
+      --amber-bg: #fffbeb;
+      --amber-text: #92400e;
+      --sky: #0369a1;
+      --radius-xl: 0.75rem;
+      --radius-lg: 0.5rem;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--background);
+      color: var(--foreground);
+      line-height: 1.55;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--sky); text-decoration: none; font-weight: 500; }
+    a:hover { text-decoration: underline; }
+
+    .wrap { max-width: 820px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+
+    .cover {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 1.5rem 1.5rem 1.35rem;
+      margin-bottom: 1.75rem;
+      border-top: 3px solid var(--amber-border);
+    }
+    .author-cover {
+      border-top: 3px solid var(--foreground);
+      padding: 1.85rem 5.75rem 1.65rem 1.75rem;
+      position: relative;
+      background: linear-gradient(180deg, #fafafa 0%, #ffffff 45%);
+    }
+    /* Photo : place le fichier docs/benchmark_mode_author_avatar.jpg (ou .png) et adapte le src si besoin. */
+    .author-avatar-wrap {
+      position: absolute;
+      right: 1.25rem;
+      top: 1.1rem;
+      width: 4.5rem;
+      height: 4.5rem;
+      margin: 0;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      overflow: hidden;
+      background: var(--muted);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    .author-avatar {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 20%;
+      display: block;
+    }
+    .author-title-block {
+      position: relative;
+      padding: 0.2rem 0 0.15rem 1.45rem;
+      max-width: 28rem;
+    }
+    .author-title-block::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.12em;
+      bottom: 0.12em;
+      width: 5px;
+      border-radius: 2px;
+      background: linear-gradient(180deg, var(--amber-border) 0%, #d97706 55%, var(--foreground) 100%);
+    }
+    .author-title-block::after {
+      content: "";
+      position: absolute;
+      left: 7px;
+      top: 0.12em;
+      bottom: 0.12em;
+      width: 2px;
+      border-radius: 1px;
+      background: var(--foreground);
+      opacity: 0.88;
+    }
+    .author-cover .author-name {
+      margin: 0;
+      font-size: clamp(1.45rem, 3.2vw, 1.75rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.12;
+      color: var(--foreground);
+    }
+    .author-cover .author-name .author-name-accent {
+      color: var(--amber-text);
+      font-weight: 800;
+    }
+    .author-role-line {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+    .author-rule-h.long {
+      display: block;
+      flex-shrink: 0;
+      width: min(10rem, 28vw);
+      height: 1px;
+      border-radius: 1px;
+      opacity: 0.14;
+      background: linear-gradient(90deg, var(--foreground), transparent);
+    }
+    .author-rule-h.long.rev {
+      transform: scaleX(-1);
+    }
+    .author-cover .author-role {
+      margin: 0;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted-foreground);
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.55rem 0.2rem 0.45rem;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      border: 1px solid var(--amber-border);
+      background: var(--amber-bg);
+      color: var(--amber-text);
+    }
+    .pill svg { flex-shrink: 0; opacity: 0.95; }
+    .cover h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin: 0.65rem 0 0.45rem;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+      color: var(--foreground);
+    }
+    .cover .sub { color: var(--muted-foreground); font-size: 0.92rem; margin: 0 0 0.85rem; }
+    .cover .sub strong { color: var(--foreground); }
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      font-size: 0.78rem;
+      color: var(--muted-foreground);
+    }
+    .meta-row strong { color: var(--foreground); font-weight: 600; }
+
+    h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin: 1.75rem 0 0.55rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--foreground);
+    }
+    h3 { font-size: 0.95rem; font-weight: 600; margin: 1.2rem 0 0.4rem; color: var(--foreground); }
+    p { margin: 0.4rem 0 0.7rem; color: var(--muted-foreground); }
+    ul, ol { margin: 0.3rem 0 0.7rem 1.15rem; color: var(--muted-foreground); }
+    li { margin: 0.25rem 0; }
+    strong { color: var(--foreground); font-weight: 600; }
+
+    .junior-box,
+    .toc {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 1rem 1.1rem;
+      margin: 0.85rem 0 1.15rem;
+    }
+    .junior-box h3 { margin-top: 0; color: var(--amber-text); font-size: 0.9rem; }
+    .junior-box p, .junior-box li { font-size: 0.9rem; }
+
+    .toc h2 { margin-top: 0; border-bottom-color: var(--border); }
+    .toc ol { color: var(--muted-foreground); }
+    .toc a { color: var(--sky); }
+
+    .callout {
+      border-left: 3px solid var(--amber-border);
+      padding: 0.65rem 0.9rem;
+      margin: 0.85rem 0;
+      background: #fffbeb;
+      border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+      font-size: 0.9rem;
+      color: var(--foreground);
+      border: 1px solid #fde68a;
+      border-left-width: 3px;
+    }
+    .callout strong { color: var(--foreground); }
+
+    table.spec {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.84rem;
+      margin: 0.55rem 0 1rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+    }
+    table.spec th, table.spec td {
+      border-bottom: 1px solid var(--border);
+      padding: 0.5rem 0.6rem;
+      text-align: left;
+      vertical-align: top;
+      color: var(--muted-foreground);
+    }
+    table.spec tr:last-child td { border-bottom: none; }
+    table.spec th {
+      background: var(--muted);
+      color: var(--foreground);
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .ui-note {
+      font-size: 0.72rem;
+      color: var(--muted-foreground);
+      margin: 0.5rem 0 0.35rem;
+      padding: 0.35rem 0.5rem;
+      border-radius: var(--radius-lg);
+      background: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    /* ——— Maquette : même gabarit que ResultsTable (rounded-xl, card, zone tableau) ——— */
+    .mock-section { margin: 2rem 0; }
+    .mock-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted-foreground);
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+
+    .mock-results-root {
+      margin-top: 0.75rem;
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border);
+      background: var(--card);
+      overflow: hidden;
+    }
+    .mock-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--muted);
+    }
+    .mock-toolbar-left { min-width: 0; flex: 1; }
+    .mock-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .mock-title { font-size: 0.88rem; font-weight: 600; color: var(--foreground); margin: 0; }
+    .mock-sub { font-size: 0.7rem; color: var(--muted-foreground); margin: 0.2rem 0 0; line-height: 1.35; }
+    .mock-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: center;
+    }
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      min-height: 44px;
+      padding: 0 0.75rem;
+      border-radius: var(--radius-lg);
+      font-size: 0.8rem;
+      font-weight: 500;
+      border: 1px solid transparent;
+      background: var(--muted);
+      color: var(--muted-foreground);
+      border-color: var(--border);
+    }
+    .btn-primary-ui {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      min-height: 44px;
+      padding: 0 0.75rem;
+      border-radius: var(--radius-lg);
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: #0a0a0a;
+      color: #ffffff;
+      border: 1px solid #0a0a0a;
+    }
+    .btn-secondary-ui {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0 0.75rem;
+      border-radius: var(--radius-lg);
+      font-size: 0.8rem;
+      font-weight: 500;
+      background: var(--muted);
+      color: var(--muted-foreground);
+      border: 1px solid var(--border);
+    }
+
+    .mock-tabs-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      background: #ffffff;
+    }
+    .mock-tab {
+      padding: 0.35rem 0.65rem;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      color: var(--muted-foreground);
+      background: transparent;
+    }
+    .mock-tab.on {
+      border-color: var(--amber-border);
+      background: var(--amber-bg);
+      color: var(--amber-text);
+    }
+
+    .mock-body-pad { padding: 0.75rem; }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 0.45rem;
+      margin-bottom: 0.65rem;
+    }
+    .kpi {
+      border-radius: var(--radius-lg);
+      border: 1px solid #fcd34d;
+      background: var(--amber-bg);
+      padding: 0.5rem 0.55rem;
+    }
+    .kpi .k {
+      font-size: 0.58rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--amber-text);
+    }
+    .kpi .v {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin: 0.12rem 0;
+      color: var(--foreground);
+      font-variant-numeric: tabular-nums;
+    }
+    .kpi .s { font-size: 0.6rem; color: var(--muted-foreground); line-height: 1.35; }
+
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
+    @media (max-width: 640px) { .split { grid-template-columns: 1fr; } }
+
+    .chart-box {
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      background: var(--muted);
+      padding: 0.5rem 0.55rem;
+    }
+    .mock-chart-title {
+      margin: 0 0 0.4rem;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--muted-foreground);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 80px;
+      padding-bottom: 1rem;
+    }
+    .bar {
+      flex: 1;
+      min-height: 6px;
+      border-radius: 3px 3px 0 0;
+      background: linear-gradient(180deg, #fbbf24, #d97706);
+      border: 1px solid #b45309;
+      position: relative;
+    }
+    .bar span {
+      position: absolute;
+      bottom: -0.95rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.55rem;
+      font-weight: 500;
+      color: var(--muted-foreground);
+      white-space: nowrap;
+    }
+    .map-fake {
+      height: 124px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      background:
+        radial-gradient(circle at 25% 35%, rgba(14, 165, 233, 0.12), transparent 50%),
+        radial-gradient(circle at 75% 60%, rgba(245, 158, 11, 0.1), transparent 45%),
+        #f8fafc;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      padding: 0.4rem;
+    }
+    .map-legend {
+      font-size: 0.58rem;
+      font-weight: 600;
+      color: var(--foreground);
+      background: #ffffff;
+      border: 1px solid var(--border);
+      padding: 0.22rem 0.4rem;
+      border-radius: 4px;
+    }
+
+    .mock-table-title {
+      margin: 0.65rem 0 0.3rem;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--muted-foreground);
+    }
+    .panel-inner {
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      min-height: 120px;
+    }
+    table.grid {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.72rem;
+    }
+    table.grid thead { background: var(--muted); box-shadow: 0 1px 0 0 var(--border); }
+    table.grid th, table.grid td {
+      padding: 0.45rem 0.5rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    table.grid th {
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted-foreground);
+    }
+    table.grid td { color: var(--muted-foreground); }
+    table.grid td.name-col { font-weight: 500; color: var(--foreground); }
+    .id-cell { font-family: ui-monospace, monospace; font-size: 0.65rem; color: var(--foreground); }
+    .tag {
+      display: inline-flex;
+      font-size: 0.58rem;
+      font-weight: 500;
+      padding: 0.12rem 0.35rem;
+      border-radius: 0.35rem;
+      border: 1px solid #86efac;
+      background: #ecfdf5;
+      color: #14532d;
+    }
+    .tag.tag-warn {
+      border-color: #fcd34d;
+      background: #fffbeb;
+      color: var(--amber-text);
+    }
+    .foot-mock {
+      font-size: 0.62rem;
+      color: var(--muted-foreground);
+      margin-top: 0.5rem;
+      padding: 0.35rem 0.25rem 0;
+    }
+
+    /* ——— Composition Benchmark v2 (réf. benchmark_v2_mockup.html) ——— */
+    .bench-v2-root {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      background: #fff;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+    .bench-topbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.45rem 0.65rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--muted);
+      font-size: 0.68rem;
+    }
+    .bench-breadcrumb { color: var(--muted-foreground); }
+    .bench-top-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+    .bench-mini-btn {
+      padding: 0.2rem 0.45rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #fff;
+      font-size: 0.62rem;
+      font-weight: 600;
+      color: var(--foreground);
+    }
+    .bench-mini-btn.amber {
+      background: #fffbeb;
+      border-color: #fcd34d;
+      color: var(--amber-text);
+    }
+    .bench-hero { padding: 0.75rem 0.65rem; border-bottom: 1px solid var(--border); }
+    .bench-badges { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.45rem; }
+    .bench-badge {
+      font-size: 0.55rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--muted);
+      color: var(--foreground);
+    }
+    .bench-badge.amber { border-color: #fcd34d; background: #fffbeb; color: var(--amber-text); }
+    .bench-badge.sky { border-color: #7dd3fc; background: #f0f9ff; color: #0369a1; }
+    .bench-h1 { font-size: 1.05rem; font-weight: 800; margin: 0 0 0.3rem; color: var(--foreground); letter-spacing: -0.02em; }
+    .bench-hero-sub { font-size: 0.72rem; color: var(--muted-foreground); margin: 0 0 0.45rem; line-height: 1.45; }
+    .bench-status-row { display: flex; flex-wrap: wrap; gap: 0.55rem; font-size: 0.6rem; color: var(--muted-foreground); }
+    .bench-status-dot {
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #16a34a;
+      margin-right: 0.2rem;
+      vertical-align: middle;
+    }
+    .bench-status-dot.amber { background: #d97706; }
+    .bench-filter-strip { padding: 0.45rem 0.55rem; border-bottom: 1px solid var(--border); background: #fafafa; }
+    .bench-filter-row { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; font-size: 0.62rem; }
+    .bench-chip {
+      padding: 0.2rem 0.4rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--foreground);
+    }
+    .bench-chip.active { border-color: #f59e0b; background: #fffbeb; }
+    .bench-kpi6 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.35rem;
+      padding: 0.5rem 0.55rem;
+      border-bottom: 1px solid var(--border);
+    }
+    @media (min-width: 720px) {
+      .bench-kpi6 { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (min-width: 960px) {
+      .bench-kpi6 { grid-template-columns: repeat(6, 1fr); }
+    }
+    .bench-kpi-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.4rem 0.45rem;
+      background: #fff;
+    }
+    .bench-kpi-card .label {
+      font-size: 0.52rem;
+      text-transform: uppercase;
+      color: var(--muted-foreground);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .bench-kpi-card .val {
+      font-size: 0.95rem;
+      font-weight: 800;
+      margin: 0.1rem 0 0;
+      font-variant-numeric: tabular-nums;
+      color: var(--foreground);
+    }
+    .bench-kpi-card .val.green { color: #15803d; }
+    .bench-kpi-card .sub { font-size: 0.52rem; color: var(--muted-foreground); margin-top: 0.15rem; line-height: 1.3; }
+    .bench-tabs-long {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+      border-bottom: 2px solid var(--border);
+      padding: 0 0.4rem;
+      background: #fafafa;
+    }
+    .bench-tab-long {
+      padding: 0.4rem 0.45rem;
+      font-size: 0.58rem;
+      font-weight: 700;
+      color: var(--muted-foreground);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .bench-tab-long.on { color: var(--amber-text); border-bottom-color: #d97706; }
+    .bench-panorama { padding: 0.55rem; }
+    .bench-grid-7-5 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.45rem;
+    }
+    @media (min-width: 720px) {
+      .bench-grid-7-5 { grid-template-columns: 1.15fr 0.85fr; }
+    }
+    .bench-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; }
+    .bench-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.35rem 0.45rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--muted);
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--foreground);
+    }
+    .bench-card-body { padding: 0.45rem; font-size: 0.68rem; color: var(--muted-foreground); line-height: 1.45; }
+    .bench-placeholder {
+      min-height: 100px;
+      background: repeating-linear-gradient(-45deg, #f4f4f5, #f4f4f5 6px, #fff 6px, #fff 12px);
+      border: 1px dashed #c4c4cc;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.62rem;
+      color: var(--muted-foreground);
+      text-align: center;
+      padding: 0.45rem;
+    }
+    .bench-row-3 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.45rem;
+      margin-top: 0.45rem;
+    }
+    @media (min-width: 720px) {
+      .bench-row-3 { grid-template-columns: 1.1fr 0.65fr 0.9fr; }
+    }
+    .bench-mini-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.3rem; margin-top: 0.35rem; }
+    .bench-mini-stat {
+      text-align: center;
+      padding: 0.3rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--muted);
+      font-size: 0.52rem;
+      color: var(--muted-foreground);
+    }
+    .bench-mini-stat .num {
+      font-size: 0.8rem;
+      font-weight: 800;
+      font-family: ui-monospace, monospace;
+      display: block;
+      margin-top: 0.1rem;
+      color: var(--foreground);
+    }
+    .bench-mini-stat .num.amber { color: #b45309; }
+    .bench-spark-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.3rem;
+      margin-top: 0.45rem;
+    }
+    @media (min-width: 560px) { .bench-spark-row { grid-template-columns: repeat(4, 1fr); } }
+    @media (min-width: 840px) { .bench-spark-row { grid-template-columns: repeat(8, 1fr); } }
+    .bench-spark {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.3rem 0.35rem;
+      background: #fff;
+    }
+    .bench-spark .label { font-size: 0.5rem; text-transform: uppercase; color: var(--muted-foreground); font-weight: 600; }
+    .bench-spark .val { font-size: 0.78rem; font-weight: 800; font-family: ui-monospace, monospace; margin-top: 0.1rem; }
+    .bench-spark .spark-line { height: 20px; margin-top: 0.15rem; display: flex; align-items: flex-end; gap: 1px; }
+    .bench-spark .spark-line span { flex: 1; background: #d97706; border-radius: 1px; min-height: 2px; }
+    .bench-spark .val.red { color: #b91c1c; }
+    .bench-spark .val.green { color: #15803d; }
+    .bench-subsec { margin-top: 0.55rem; padding-top: 0.45rem; border-top: 1px dashed #d4d4d8; }
+    .bench-subsec h4 { font-size: 0.72rem; margin: 0 0 0.35rem; color: var(--foreground); }
+    .bench-row-2 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.45rem;
+      margin-top: 0.35rem;
+    }
+    @media (min-width: 640px) { .bench-row-2 { grid-template-columns: 1fr 1fr; } }
+    .bench-legend-list { font-size: 0.62rem; margin: 0.35rem 0 0; padding: 0; list-style: none; color: var(--foreground); }
+    .bench-legend-list li { display: flex; justify-content: space-between; margin: 0.2rem 0; }
+    .bench-sq { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 0.25rem; vertical-align: middle; }
+    .bench-footer-note {
+      font-size: 0.58rem;
+      color: var(--muted-foreground);
+      padding: 0.4rem 0.55rem;
+      border-top: 1px solid var(--border);
+      background: #fafafa;
+    }
+
+    .mock-export-bar {
+      border-top: 1px solid var(--border);
+      padding: 0.65rem 0.75rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .mock-export-bar p {
+      margin: 0;
+      font-size: 0.8rem;
+      color: var(--muted-foreground);
+    }
+    .mock-export-bar .n { color: var(--foreground); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    .print-hint {
+      font-size: 0.78rem;
+      color: var(--muted-foreground);
+      margin-top: 1.5rem;
+      padding: 0.65rem 0.75rem;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-lg);
+    }
+    .print-hint code {
+      font-size: 0.72rem;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      background: var(--muted);
+      border: 1px solid var(--border);
+      color: var(--foreground);
+    }
+
+    @page { size: A4; margin: 12mm 14mm; }
+    @media print {
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      html, body {
+        background: #ffffff !important;
+        color: #0a0a0a !important;
+      }
+      .wrap { padding: 0; max-width: 100%; background: #fff !important; }
+      .cover,
+      .junior-box,
+      .toc,
+      .mock-results-root,
+      .panel-inner {
+        background: #ffffff !important;
+        border-color: #d4d4d8 !important;
+      }
+      .mock-toolbar,
+      .mock-tabs-row,
+      .mock-export-bar,
+      .bench-topbar,
+      .bench-filter-strip,
+      .bench-tabs-long,
+      .bench-card-head,
+      .bench-footer-note {
+        background: #f4f4f5 !important;
+        border-color: #d4d4d8 !important;
+      }
+      .bench-v2-root,
+      .bench-card,
+      .bench-kpi-card,
+      .bench-spark,
+      .bench-panorama {
+        background: #ffffff !important;
+        border-color: #d4d4d8 !important;
+      }
+      p, li, .foot-mock, table.spec td {
+        color: #27272a !important;
+      }
+      .cover { break-inside: avoid; }
+      .author-cover {
+        background: #ffffff !important;
+      }
+      .author-avatar-wrap {
+        border-color: #d4d4d8 !important;
+      }
+      h2 { break-after: avoid; }
+      .mock-section { break-inside: avoid; page-break-inside: avoid; }
+      .no-print-hint { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="cover author-cover">
+      <figure class="author-avatar-wrap">
+        <img
+          class="author-avatar"
+          src="benchmark_mode_author_avatar.jpg"
+          alt="Portrait de Mathieu Avarguez"
+          width="72"
+          height="72"
+          decoding="async"
+        />
+      </figure>
+      <div class="author-title-block">
+        <h1 class="author-name">Mathieu <span class="author-name-accent">Avarguez</span></h1>
+        <div class="author-role-line">
+          <span class="author-rule-h long" aria-hidden="true"></span>
+          <p class="author-role">Développeur en pourparlers</p>
+          <span class="author-rule-h long rev" aria-hidden="true"></span>
+        </div>
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="Sommaire">
+      <h2>Sommaire</h2>
+      <ol>
+        <li><a href="#s1">Objectif produit</a></li>
+        <li><a href="#s2">Périmètre</a></li>
+        <li><a href="#s3">Utilisateurs</a></li>
+        <li><a href="#s4">Exemple cabinets d’expertise comptable</a></li>
+        <li><a href="#s5">Parcours</a></li>
+        <li><a href="#s6">Fonctionnalités</a></li>
+        <li><a href="#s7">Indicateurs écran</a></li>
+        <li><a href="#s8">Sources données</a></li>
+        <li><a href="#s9">Exports</a></li>
+        <li><a href="#s10">Règles UI</a></li>
+        <li><a href="#s11">Ordre de développement</a></li>
+        <li><a href="#s12">Composition cible (Benchmark v2)</a></li>
+        <li><a href="#maquette">Maquette statique (aperçu PDF)</a></li>
+      </ol>
+    </nav>
+
+    <section id="s1">
+      <h2>1. Objectif produit</h2>
+      <p>Passer d’une simple liste commentée à un <strong>mini-rapport</strong> : synthèse chiffrée, graphiques, tableau, exports — dans le même esprit visuel que le reste du chat MONV.</p>
+      <div class="callout">
+        <strong>Promesse :</strong> vue d’ensemble lisible + tableau exploitable + boutons d’export déjà familiers (Excel blanc, CSV discret), sans conseil en investissement ni juridique.
+      </div>
+    </section>
+
+    <section id="s2">
+      <h2>2. Périmètre</h2>
+      <h3>Inclus</h3>
+      <ul>
+        <li>Critères clairs (activité, zone, taille) à partir de la question.</li>
+        <li>Vue marché avec effectifs statistiques (X entreprises sur Y) par indicateur.</li>
+        <li>Tableau + filtres ; export = même contenu filtré.</li>
+        <li>Bloc sources et date.</li>
+      </ul>
+      <h3>Exclu</h3>
+      <ul>
+        <li>Pas de recommandation d’achat/vente, pas de valorisation, pas de conseil personnalisé.</li>
+        <li>Pas de mélange visuel entre chiffres « liste MONV » et statistiques nationales externes sans encart séparé.</li>
+      </ul>
+    </section>
+
+    <section id="s3">
+      <h2>3. Utilisateurs</h2>
+      <table class="spec">
+        <thead><tr><th>Profil</th><th>Besoin</th></tr></thead>
+        <tbody>
+          <tr><td>Consultant / stratège</td><td>Synthèse + tableau pour slide ou annexe</td></tr>
+          <tr><td>Analyste</td><td>Dispersion, export Excel</td></tr>
+          <tr><td>Dirigeant</td><td>Peu de jargon, repères clairs</td></tr>
+          <tr><td>Commercial</td><td>Filtres, carte, liste ciblée</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="s4">
+      <h2>4. Exemple : cabinets d’expertise comptable</h2>
+      <p>Exemple de question : effectifs 10–200, France, chiffre d’affaires et évolution. Le titre du dossier et les filtres doivent refléter ce périmètre ; le badge de mode reste <strong>Benchmark</strong> (style ambre comme dans l’app).</p>
+    </section>
+
+    <section id="s5">
+      <h2>5. Parcours</h2>
+      <ol>
+        <li>Choix du mode Benchmark + saisie.</li>
+        <li>Éventuellement QCM si la question est trop large.</li>
+        <li>Résultat : écran dossier (onglets Panorama → Insights) ou emboîtement progressif depuis le message « résultats » actuel.</li>
+        <li>Filtres → recalcul des agrégés sur la liste visible.</li>
+        <li>Export pack ou Excel/CSV comme aujourd’hui.</li>
+      </ol>
+    </section>
+
+    <section id="s6">
+      <h2>6. Fonctionnalités</h2>
+      <table class="spec">
+        <thead><tr><th>Brique</th><th>Comportement</th></tr></thead>
+        <tbody>
+          <tr><td>En-tête / hero</td><td>Badges périmètre, titre, sous-titre sources, pastilles d’état des flux</td></tr>
+          <tr><td>Barre d’actions</td><td>Rafraîchir, partager, XLSX, rapport PDF long</td></tr>
+          <tr><td>Filtres</td><td>Chips synchronisés avec le panel (effectif, CA, région, …)</td></tr>
+          <tr><td>Rangée KPI</td><td>6 tuiles minimum (volume, CA, croissance, signaux…)</td></tr>
+          <tr><td>Onglets analytiques</td><td>Panorama, Finance, Dynamique, Carto, Classements, Tableau, Insights</td></tr>
+          <tr><td>Graphiques</td><td>Radar, histogrammes, donut, Lorenz, séries temporelles, carte</td></tr>
+          <tr><td>Tableau</td><td>Tri, recherche, colonnes, pagination (aligné ResultsTable)</td></tr>
+          <tr><td>Comparaison</td><td>Option « comparer vs autre secteur » ou lignes sélectionnées</td></tr>
+          <tr><td>Synthèse &amp; IA</td><td>Bloc rédactionnel + insights numérotés avec badges source</td></tr>
+          <tr><td>Exports</td><td>Excel, CSV, PDF multi-pages</td></tr>
+          <tr><td>Sources</td><td>Liste explicite copiable (SIRENE, Pappers, …)</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="s7">
+      <h2>7. Indicateurs</h2>
+      <p>Tous calculés sur la liste filtrée ; chaque carte indique le nombre d’entreprises utilisées.</p>
+      <table class="spec">
+        <thead><tr><th>Indicateur</th><th>Intérêt</th></tr></thead>
+        <tbody>
+          <tr><td>Part avec CA connu</td><td>Qualité du dossier</td></tr>
+          <tr><td>CA médian</td><td>Ordre de grandeur</td></tr>
+          <tr><td>Fourchette quartiles</td><td>Homogénéité / dispersion</td></tr>
+          <tr><td>Résultat / CA médian</td><td>Rentabilité relative</td></tr>
+          <tr><td>Répartition effectifs</td><td>Structure du panel</td></tr>
+          <tr><td>Régions dominantes</td><td>Lecture géographique</td></tr>
+          <tr><td>Part avec variation CA</td><td>Possibilité de parler de dynamique</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="s8">
+      <h2>8. Sources</h2>
+      <p>Annuaire entreprises, enrichissements financiers selon abonnement ; l’onglet Sources liste le détail pour le dossier courant.</p>
+    </section>
+
+    <section id="s9">
+      <h2>9. Exports</h2>
+      <ul>
+        <li>Résumé (mêmes KPI que l’écran + complétude).</li>
+        <li>Détail (lignes = tableau filtré).</li>
+        <li>Sources + date.</li>
+      </ul>
+    </section>
+
+    <section id="s10">
+      <h2>10. Règles UI</h2>
+      <ul>
+        <li>Réutiliser les composants / classes du chat : carte <code style="font-size:0.85em;padding:0 .25rem;background:var(--muted);border-radius:4px;border:1px solid var(--border)">rounded-xl border-border bg-card</code>.</li>
+        <li>Mode Benchmark : accent <strong>ambre</strong> (badges, bordures actives), comme <code style="font-size:0.85em;padding:0 .25rem;background:var(--muted);border-radius:4px;border:1px solid var(--border)">MODE_META.benchmark</code>.</li>
+        <li>Bouton export principal : dans l’app en thème sombre, <strong>fond blanc et texte très foncé</strong> ; sur support papier / PDF noir sur blanc, un bouton <strong>noir avec texte blanc</strong> reste lisible et équivalent visuellement.</li>
+        <li>Texte secondaire : <code style="font-size:0.85em;padding:0 .25rem;background:var(--muted);border-radius:4px;border:1px solid var(--border)">text-muted-foreground</code>.</li>
+      </ul>
+    </section>
+
+    <section id="s11">
+      <h2>11. Ordre de développement suggéré</h2>
+      <ol>
+        <li><strong>Squelette page</strong> : barre globale (exports, partage) + hero (badges, titre, ligne de fraîcheur des sources).</li>
+        <li><strong>Filtres</strong> : barre type chips (effectif, CA, région, etc.) branchée sur le même état que le tableau.</li>
+        <li><strong>Rangée KPI principale</strong> (6 tuiles) + recalcul quand les filtres changent.</li>
+        <li><strong>Onglets</strong> : Panorama puis Finance, Dynamique, Carto, Classements, Tableau, Insights — au minimum coquilles vides + contenu Panorama + Tableau existant.</li>
+        <li><strong>Graphiques</strong> : histogrammes / donut / radar avec données réelles ou mock ; export image optionnel.</li>
+        <li><strong>Insights IA</strong> : liste d’extraits sourcés ; encart « Sources » aligné sur le mock v2.</li>
+        <li><strong>Pack export</strong> : XLSX multi-feuilles + PDF long format quand le produit valide.</li>
+      </ol>
+    </section>
+
+    <section id="s12">
+      <h2>12. Composition cible (référence <code style="font-size:0.85em;padding:0 .25rem;background:var(--muted);border:1px solid var(--border);border-radius:4px">benchmark_v2_mockup.html</code>)</h2>
+      <p>Chaque zone correspond à un bloc de la maquette v2. Les données « macro » (INSEE ESANE, BODACC, etc.) ne s’affichent qu’avec libellés de source et, si besoin, encarts séparés du panel MONV.</p>
+      <table class="spec">
+        <thead>
+          <tr><th>Zone</th><th>Contenu</th><th>Objectif utilisateur</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Barre supérieure</td><td>MONV · fil d’Ariane · Rafraîchir · Partager · Exporter XLSX · Rapport PDF</td><td>Actions globales sans quitter le dossier</td></tr>
+          <tr><td>Hero</td><td>Badges NAF, zone, taille panel / univers, dernière maj · titre · sous-titre sources · pastilles d’état (SIRENE, Pappers, …)</td><td>Cadrage immédiat du périmètre et de la fraîcheur</td></tr>
+          <tr><td>Barre filtres</td><td>Requête + chips (effectif, CA, création, région, âge dirigeant…) + comparer / sauvegarder vue</td><td>Affiner le panel et les agrégats</td></tr>
+          <tr><td>6 KPI principaux</td><td>Panel / total, CA cumulé, CA médian, effectif cumulé, croissance médiane, signal transmission…</td><td>Lecture exécutive en une ligne</td></tr>
+          <tr><td>Onglet Panorama</td><td>Synthèse exéc. · radar panel vs secteur · distribution CA · taille (donut) · concentration (Lorenz, Gini, HHI, CR4) · 8 mini-KPI + sparklines</td><td>Story + forme du marché</td></tr>
+          <tr><td>Onglet Finance</td><td>Scatter CA / effectif · boxplots · top 10 CA · croissance N/N-1 · tableau ratios vs secteur · EBE/CA</td><td>Analyse financière comparative</td></tr>
+          <tr><td>Onglet Dynamique</td><td>Créations / cessations (BODACC) · pyramide âges dirigeants · défaillances BDF · M&amp;A · heatmap événements</td><td>Tendances et risques dans le temps</td></tr>
+          <tr><td>Onglet Cartographie</td><td>Carte (densité, CA cumulé, créations nettes) · top régions</td><td>Lecture territoriale</td></tr>
+          <tr><td>Onglet Classements</td><td>Top 10 CA, croissance, EBE/CA, score cession composite</td><td>Repérage des extrêmes</td></tr>
+          <tr><td>Onglet Tableau</td><td>Grille complète, recherche, choix de colonnes, XLSX / CSV</td><td>Travail analyste / export</td></tr>
+          <tr><td>Onglet Insights IA</td><td>Liste d’insights numérotés + badges source · colonne « Sources de données »</td><td>Pistes de lecture sourcées (non prescriptif)</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="maquette" class="mock-section">
+      <h2>13. Maquette statique (aperçu PDF) — composition type v2</h2>
+      <p style="margin-top:0">Données d’illustration. Les zones hachurées représentent les graphiques (Chart.js / Leaflet dans <code style="font-size:inherit;padding:0 .2rem;background:var(--muted);border:1px solid var(--border);border-radius:4px">benchmark_v2_mockup.html</code>).</p>
+
+      <div class="mock-label">Écran Benchmark — cabinets d’expertise comptable · France</div>
+      <div class="bench-v2-root">
+        <div class="bench-topbar">
+          <div class="bench-breadcrumb"><strong>MONV</strong> › Études sectorielles › Expertise comptable FR</div>
+          <div class="bench-top-actions">
+            <span class="bench-mini-btn">Rafraîchir</span>
+            <span class="bench-mini-btn">Partager</span>
+            <span class="bench-mini-btn">XLSX</span>
+            <span class="bench-mini-btn amber">Rapport PDF</span>
+          </div>
+        </div>
+        <div class="bench-hero">
+          <div class="bench-badges">
+            <span class="bench-badge amber">NAF 69.20Z</span>
+            <span class="bench-badge">France entière</span>
+            <span class="bench-badge">Panel 50 / 21 400</span>
+            <span class="bench-badge sky">Maj il y a 14 min</span>
+          </div>
+          <h3 class="bench-h1">Cabinets d’expertise comptable — panorama France</h3>
+          <p class="bench-hero-sub">Panel représentatif sur SIRENE ; agrégats financiers Pappers ; références sectorielles INSEE ESANE ; publications BODACC / Banque de France lorsque branchées.</p>
+          <div class="bench-status-row">
+            <span><span class="bench-status-dot"></span>SIRENE</span>
+            <span><span class="bench-status-dot"></span>Pappers</span>
+            <span><span class="bench-status-dot"></span>INSEE ESANE</span>
+            <span><span class="bench-status-dot amber"></span>BODACC</span>
+            <span><span class="bench-status-dot"></span>BdF</span>
+          </div>
+        </div>
+        <div class="bench-filter-strip">
+          <div class="bench-filter-row">
+            <span class="bench-chip active">Benchmark</span>
+            <span class="bench-chip">Effectif · tous</span>
+            <span class="bench-chip">CA · &gt; 300 k€</span>
+            <span class="bench-chip">Région · France</span>
+            <span class="bench-chip">Comparer vs autre secteur</span>
+            <span class="bench-chip">Sauvegarder vue</span>
+          </div>
+        </div>
+        <div class="bench-kpi6">
+          <div class="bench-kpi-card"><div class="label">Entreprises panel</div><div class="val">50<span style="font-size:.65rem;font-weight:600;color:var(--muted-foreground)"> / 21 400</span></div><div class="sub">Échantillon · 0,23 % du total</div></div>
+          <div class="bench-kpi-card"><div class="label">CA panel cumulé</div><div class="val">2,14 Md€</div><div class="sub"><span class="val green" style="font-size:.7rem">+4,1 %</span> vs N-1</div></div>
+          <div class="bench-kpi-card"><div class="label">CA médian</div><div class="val">3,8 M€</div><div class="sub">vs médiane secteur</div></div>
+          <div class="bench-kpi-card"><div class="label">Effectif cumulé</div><div class="val">14 820</div><div class="sub">+2,6 % net 12 m</div></div>
+          <div class="bench-kpi-card"><div class="label">Croissance médiane</div><div class="val green">+3,9 %</div><div class="sub">vs secteur +0,7 pt</div></div>
+          <div class="bench-kpi-card"><div class="label">Signal transmission</div><div class="val" style="color:#b45309">34 %</div><div class="sub">Dirigeants 60+</div></div>
+        </div>
+        <div class="bench-tabs-long">
+          <span class="bench-tab-long on">Panorama</span>
+          <span class="bench-tab-long">Finance</span>
+          <span class="bench-tab-long">Dynamique marché</span>
+          <span class="bench-tab-long">Cartographie</span>
+          <span class="bench-tab-long">Classements</span>
+          <span class="bench-tab-long">Tableau détaillé</span>
+          <span class="bench-tab-long">Insights IA</span>
+        </div>
+        <div class="bench-panorama">
+          <div class="bench-grid-7-5">
+            <div class="bench-card">
+              <div class="bench-card-head">Synthèse exécutive <span style="font-size:.58rem;font-weight:600;color:var(--muted-foreground)">· générée MONV</span></div>
+              <div class="bench-card-body">
+                <p style="margin:0 0 .35rem"><strong>Marché fragmenté</strong> : milliers de cabinets, tête de marché partagée entre réseaux et indépendants. Le panel sélectionné montre une croissance médiane supérieure à la moyenne sectorielle lorsque les données sont complètes.</p>
+                <p style="margin:0"><span style="display:inline-block;padding:.12rem .35rem;border-radius:4px;border:1px solid #fcd34d;background:#fffbeb;font-size:.58rem;margin-right:.25rem">CR4</span><span style="display:inline-block;padding:.12rem .35rem;border-radius:4px;border:1px solid #86efac;background:#ecfdf5;font-size:.58rem;margin-right:.25rem">Rentabilité</span><span style="display:inline-block;padding:.12rem .35rem;border-radius:4px;border:1px solid #7dd3fc;background:#f0f9ff;font-size:.58rem">Transmission</span></p>
+              </div>
+            </div>
+            <div class="bench-card">
+              <div class="bench-card-head">Radar · panel vs secteur</div>
+              <div class="bench-placeholder">Graphique radar (CA, effectif, croissance, EBE/CA, âge dirigeant…)<br/>Base 100 = médiane sectorielle</div>
+            </div>
+          </div>
+          <div class="bench-row-3">
+            <div class="bench-card">
+              <div class="bench-card-head">Distribution CA · Q1 / médiane / Q3</div>
+              <div class="bench-placeholder" style="min-height:88px">Histogramme CA</div>
+            </div>
+            <div class="bench-card">
+              <div class="bench-card-head">Répartition par taille</div>
+              <div class="bench-placeholder" style="min-height:88px">Donut effectifs</div>
+              <ul class="bench-legend-list">
+                <li><span class="bench-sq" style="background:#fbbf24"></span>TPE &lt; 10 <span>32 %</span></li>
+                <li><span class="bench-sq" style="background:#d97706"></span>PE 10–49 <span>40 %</span></li>
+                <li><span class="bench-sq" style="background:#92400e"></span>ME+ <span>28 %</span></li>
+              </ul>
+            </div>
+            <div class="bench-card">
+              <div class="bench-card-head">Concentration · Lorenz / HHI</div>
+              <div class="bench-placeholder" style="min-height:88px">Courbe Lorenz</div>
+              <div class="bench-mini-stats">
+                <div class="bench-mini-stat">Gini<div class="num">0,71</div></div>
+                <div class="bench-mini-stat">HHI<div class="num">412</div></div>
+                <div class="bench-mini-stat">CR4<div class="num amber">23 %</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="bench-spark-row">
+            <div class="bench-spark"><div class="label">Marge nette méd.</div><div class="val">10,3 %</div><div class="spark-line"><span style="height:40%"></span><span style="height:55%"></span><span style="height:45%"></span><span style="height:70%"></span><span style="height:60%"></span><span style="height:75%"></span></div></div>
+            <div class="bench-spark"><div class="label">EBE / CA méd.</div><div class="val">17,4 %</div><div class="spark-line"><span style="height:50%"></span><span style="height:52%"></span><span style="height:48%"></span><span style="height:55%"></span><span style="height:53%"></span><span style="height:58%"></span></div></div>
+            <div class="bench-spark"><div class="label">Effectif méd.</div><div class="val">47</div><div class="spark-line"><span style="height:35%"></span><span style="height:40%"></span><span style="height:38%"></span><span style="height:42%"></span><span style="height:45%"></span><span style="height:44%"></span></div></div>
+            <div class="bench-spark"><div class="label">Âge méd. société</div><div class="val">28</div><div class="spark-line"><span style="height:60%"></span><span style="height:58%"></span><span style="height:62%"></span><span style="height:55%"></span><span style="height:59%"></span><span style="height:61%"></span></div></div>
+            <div class="bench-spark"><div class="label">Créations 12 m</div><div class="val green">+612</div><div class="spark-line"><span style="height:30%"></span><span style="height:45%"></span><span style="height:50%"></span><span style="height:65%"></span><span style="height:70%"></span><span style="height:72%"></span></div></div>
+            <div class="bench-spark"><div class="label">Défaill. 12 m</div><div class="val red">−61</div><div class="spark-line"><span style="height:70%"></span><span style="height:65%"></span><span style="height:55%"></span><span style="height:50%"></span><span style="height:45%"></span><span style="height:40%"></span></div></div>
+            <div class="bench-spark"><div class="label">Cap. propres méd.</div><div class="val">0,89 M€</div><div class="spark-line"><span style="height:45%"></span><span style="height:48%"></span><span style="height:50%"></span><span style="height:52%"></span><span style="height:51%"></span><span style="height:54%"></span></div></div>
+            <div class="bench-spark"><div class="label">Score risque BDF</div><div class="val green">3+</div><div class="spark-line"><span style="height:55%"></span><span style="height:56%"></span><span style="height:54%"></span><span style="height:57%"></span><span style="height:58%"></span><span style="height:60%"></span></div></div>
+          </div>
+
+          <div class="bench-subsec">
+            <h4>Onglet Finance (aperçu)</h4>
+            <div class="bench-row-2">
+              <div class="bench-card"><div class="bench-card-head">CA / effectif — scatter</div><div class="bench-placeholder" style="min-height:100px">Nuage de points + référence secteur</div></div>
+              <div class="bench-card"><div class="bench-card-head">CA par effectif — quartiles</div><div class="bench-placeholder" style="min-height:100px">Boîtes à moustaches</div></div>
+            </div>
+          </div>
+          <div class="bench-subsec">
+            <h4>Onglets Dynamique · Cartographie · Classements · Tableau · Insights</h4>
+            <p style="font-size:.68rem;color:var(--muted-foreground);margin:0">Même largeur de page : séries temporelles BODACC, carte Leaflet, listes Top 10, grille complète avec filtres, liste d’insights sourcés + colonne « Sources » — voir <strong>benchmark_v2_mockup.html</strong> pour le détail interactif.</p>
+          </div>
+        </div>
+        <div class="bench-footer-note">
+          Intégration produit : réutiliser les patterns <strong>ResultsTable</strong> (pagination, export) dans l’onglet Tableau ; étendre le message « résultats » du chat avec cette coque ou une page dédiée « Dossier benchmark » selon choix produit.
+        </div>
+      </div>
+
+      <div class="mock-label" style="margin-top:1.25rem">Rappel — composant chat actuel (liste compacte)</div>
+      <div class="mock-results-root">
+        <div class="mock-toolbar">
+          <div class="mock-toolbar-left">
+            <div class="mock-title-row">
+              <span class="pill">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16V9"/><path d="M12 16v-5"/><path d="M17 16V6"/></svg>
+                Benchmark
+              </span>
+              <p class="mock-title">Même recherche — vue fil de discussion</p>
+            </div>
+            <p class="mock-sub">Tableau + carte + Excel / CSV (comportement MONV aujourd’hui)</p>
+          </div>
+        </div>
+        <div class="mock-body-pad" style="padding-bottom:0.5rem">
+          <div class="panel-inner">
+            <table class="grid">
+              <thead>
+                <tr><th>Signaux</th><th>Dénomination</th><th>Région</th><th>CA</th><th>Var.</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><span class="tag">Croissance</span></td><td class="name-col">Cabinet Hermès Associés</td><td>IDF</td><td>18,2 M€</td><td>+6,4 %</td></tr>
+                <tr><td><span class="tag">Stable</span></td><td class="name-col">Audit Loire Conseils</td><td>AURA</td><td>6,8 M€</td><td>+9,7 %</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="mock-export-bar">
+          <p><span class="n">10</span> sur <span class="n">847</span> (aperçu)</p>
+          <div style="display:flex;flex-wrap:wrap;gap:0.4rem">
+            <span class="btn-secondary-ui" style="min-height:40px;font-size:0.78rem">Carte</span>
+            <span class="btn-primary-ui" style="min-height:40px;font-size:0.78rem">Excel</span>
+            <span class="btn-secondary-ui" style="min-height:40px;font-size:0.78rem">CSV</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <p class="print-hint no-print-hint">
+      <strong>PDF :</strong> Fichier → Imprimer → Enregistrer en PDF — document <strong>fond blanc, texte noir</strong>. Fichier : <code>benchmark_mode_fiche_fonctionnelle_maquette.pdf</code>
+    </p>
+  </div>
+</body>
+</html>

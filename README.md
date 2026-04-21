@@ -30,7 +30,10 @@ MONV est une application **full stack** : un chat guide la recherche, des modèl
 MONV/
 ├── backend/                 # API FastAPI (Python)
 │   ├── main.py              # Application, CORS, routers, /api/health, /api/templates
-│   ├── benchmark_pipeline.py  # Script / bench optionnel sur le pipeline
+│   ├── benchmark_pipeline.py   # Bench optionnel sur le pipeline
+│   ├── benchmark_atelier.py
+│   ├── benchmark_relevance.py
+│   ├── benchmark_relevance_panel.py
 │   ├── config.py            # Paramètres (Pydantic Settings) + .env
 │   ├── requirements.txt
 │   ├── supabase/migrations/
@@ -57,14 +60,18 @@ MONV/
 │   │   ├── sirene.py        # Recherche Entreprises (data.gouv.fr)
 │   │   ├── pappers.py       # Enrichissement (clé optionnelle)
 │   │   ├── google_places.py # Commerces de niche + recoupement SIRENE (clé optionnelle)
+│   │   ├── plan_google_places.py  # Planification / requêtes Places structurées
 │   │   ├── signals.py       # Signaux métier (dirigeants, finances, etc.) sur les résultats
 │   │   ├── geocoding.py     # Géocodage des adresses pour carte / export
 │   │   ├── relevance.py     # Scoring / pertinence des résultats
+│   │   ├── digital_pitch_enrichment.py  # Enrichissement « pitch digital » (prospection)
+│   │   ├── zone_policy.py   # Règles géographiques / zones pour le plan de recherche
 │   │   ├── agent.py         # Orchestration agent Atelier (segments, persistance)
 │   │   ├── atelier_qcm.py   # QCM et prompts spécifiques atelier
 │   │   ├── atelier_coerce.py
 │   │   ├── atelier_heuristics.py
 │   │   ├── atelier_constants.py
+│   │   ├── atelier_mutations.py  # Mutations / persistance segments atelier
 │   │   └── export.py        # Génération Excel / CSV
 │   └── utils/
 │       ├── llm.py           # Client OpenAI-compatible → OpenRouter
@@ -76,12 +83,17 @@ MONV/
 │   └── src/
 │       ├── app/               # layout, page principale (App Router)
 │       ├── components/        # Chat, agent atelier, projets, modes, tableau, carte, auth, crédits…
+│       │   └── ui/            # shadcn/ui (primitives Radix)
 │       └── lib/
 │           ├── api.ts         # Client HTTP + types
 │           ├── landingTemplates.ts  # Modèles d’exemple (alignés avec GET /api/templates)
 │           ├── modes.ts       # Libellés / métadonnées des modes d’usage
 │           ├── agents.ts      # Constantes agent atelier
-│           └── conversationNav.ts  # Navigation conversation / projets (UI)
+│           ├── conversationNav.ts  # Navigation conversation / projets (UI)
+│           ├── utils.ts       # `cn` (clsx + tailwind-merge) et utilitaires partagés
+│           ├── cn.ts          # Ré-export de `cn` (alias pratique)
+│           ├── notify.ts      # Toasts (Sonner)
+│           └── stripEmojis.ts
 ├── prospection_pme.py         # Script CLI hors MONV (dataset Excel via API gouv)
 └── README.md
 ```
@@ -91,7 +103,7 @@ MONV/
 ## Prérequis
 
 - **Python** 3.11 ou supérieur (venv recommandé)
-- **Node.js** 18 ou supérieur
+- **Node.js** 18 ou supérieur (la CI GitHub utilise **Node 22**)
 - Un projet **[Supabase](https://supabase.com)** (gratuit suffisant pour le développement)
 - Une clé **[OpenRouter](https://openrouter.ai)** pour les appels LLM (compatible client OpenAI)
 - *(Optionnel)* une clé **[Pappers](https://www.pappers.fr/api)** pour dirigeants, CA, contacts enrichis
@@ -125,12 +137,18 @@ Fichier modèle : `backend/.env.example`. Copie-le en `backend/.env` et complèt
 | `FILTER_MODEL` | Non | Modèle couche 0 (défaut : `google/gemini-flash-1.5`) |
 | `GUARD_MODEL` | Non | Modèle guard / clarification (défaut : `anthropic/claude-3.5-haiku`) |
 | `ORCHESTRATOR_MODEL` | Non | Modèle orchestrateur (défaut : `anthropic/claude-3.5-sonnet`) |
+| `RELEVANCE_FILTER_MODEL` | Non | Post-filtrage des lignes de résultats (défaut : `openai/gpt-4o-mini`) |
+| `DIGITAL_PITCH_ENRICH_MODEL` | Non | Enrichissement pitch digital ; si vide → `RELEVANCE_FILTER_MODEL` |
+| `ATELIER_BUSINESS_MODEL` | Non | Atelier (plan + dossier) ; si vide → `ORCHESTRATOR_MODEL` |
 | `PAPPERS_API_KEY` | Non | Enrichissement Pappers |
 | `GOOGLE_PLACES_API_KEY` | Non | Découverte commerces (Places API) + lien SIRENE |
 | `SITE_URL` | Non | Référent OpenRouter (défaut : `http://localhost:3000`) |
 | `JWT_SECRET` | Fortement conseillé en prod | Secret de signature des JWT |
 | `PIPELINE_DEBUG` | Non | `true` → logs détaillés `[MONV.pipeline]` sur stderr |
 | `DEBUG` | Non | Mode debug FastAPI / comportements dev |
+| `SKIP_DB_VERIFY_ON_STARTUP` | Non | `true` en CI/tests sans Supabase réel (défaut : `false`) |
+| `CORS_ORIGINS` | Non | Origines CORS (virgules). Si vide : localhost + `SITE_URL` |
+| `UNLIMITED_CREDITS_EMAILS` | Non | E-mails (virgules) : export sans débit, solde affiché illimité |
 
 Les exports sont écrits dans le répertoire configuré par `EXPORTS_DIR` (défaut : `./exports` sous `backend/`).
 
@@ -244,7 +262,7 @@ python prospection_pme.py
 | Backend | FastAPI, Supabase Python client, Pydantic, JWT (python-jose), passlib/bcrypt, httpx, pandas/openpyxl |
 | LLM | OpenRouter (API OpenAI-compatible) |
 | Données | PostgreSQL hébergé par Supabase ; cache clé/valeur en table `cache` |
-| Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS, Lucide, react-markdown |
+| Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS, shadcn/ui (Radix), next-themes, Sonner, Lucide, react-markdown |
 
 ---
 
@@ -264,4 +282,4 @@ python prospection_pme.py
 
 *MONV — prospection B2B conversationnelle sur données France.*
 
-**Dernière mise à jour :** 17 avril 2026.
+**Dernière mise à jour :** 21 avril 2026.
