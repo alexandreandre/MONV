@@ -3,6 +3,10 @@
 import { useState, useRef, useEffect } from "react";
 import { ArrowUp, Loader2, Square } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+
 interface Props {
   onSend: (message: string) => void;
   disabled: boolean;
@@ -47,8 +51,8 @@ export default function ChatInput({
   const hasContent = value.trim().length > 0;
 
   return (
-    <div className="flex items-end gap-2 bg-surface-2 border border-white/[0.08] rounded-xl p-2 focus-within:border-white/[0.16] transition-colors">
-      <textarea
+    <div className="flex items-end gap-2 rounded-xl border border-input bg-muted/30 p-2 transition-colors focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/30">
+      <Textarea
         ref={textareaRef}
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -56,34 +60,33 @@ export default function ChatInput({
         placeholder={placeholder}
         disabled={disabled}
         rows={1}
-        className="flex-1 resize-none bg-transparent text-white placeholder-gray-600 outline-none px-2 py-1.5 text-sm leading-relaxed max-h-[200px]"
+        className="max-h-[200px] min-h-0 flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm leading-relaxed shadow-none focus-visible:ring-0"
       />
       {loading ? (
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="icon"
           onClick={() => onStop?.()}
           title="Arrêter la requête"
-          className="flex-shrink-0 p-2 rounded-lg transition-all bg-white/[0.12] text-white border border-white/[0.14] hover:bg-white/[0.18]"
+          className="shrink-0"
         >
-          <Square size={16} fill="currentColor" />
-        </button>
+          <Square className="size-4" fill="currentColor" />
+        </Button>
       ) : (
-        <button
+        <Button
           type="button"
+          size="icon"
           onClick={handleSubmit}
           disabled={disabled || !hasContent}
-          className={`flex-shrink-0 p-2 rounded-lg transition-all ${
-            hasContent && !disabled
-              ? "bg-white text-gray-950 hover:bg-gray-200"
-              : "bg-white/[0.06] text-gray-600 cursor-not-allowed"
-          }`}
+          className={cn("shrink-0", !hasContent || disabled ? "opacity-50" : "")}
         >
           {disabled ? (
-            <Loader2 size={16} className="animate-spin" />
+            <Loader2 className="size-4 animate-spin" />
           ) : (
-            <ArrowUp size={16} />
+            <ArrowUp className="size-4" />
           )}
-        </button>
+        </Button>
       )}
     </div>
   );

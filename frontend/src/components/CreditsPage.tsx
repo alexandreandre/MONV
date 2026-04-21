@@ -40,7 +40,7 @@ export default function CreditsPage({ user, onCreditsUpdated, onBack }: Props) {
     <div className="max-w-3xl mx-auto py-6 sm:py-10 px-4 sm:px-6">
       <button
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 active:text-white transition-colors mb-6 min-h-[44px]"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-muted-foreground active:text-foreground transition-colors mb-6 min-h-[44px]"
       >
         <ArrowLeft size={14} />
         Retour au chat
@@ -48,10 +48,10 @@ export default function CreditsPage({ user, onCreditsUpdated, onBack }: Props) {
 
       <div className="flex items-baseline justify-between mb-6 sm:mb-8">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Crédits</h1>
-          <p className="text-gray-500 text-sm mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Crédits</h1>
+          <p className="text-muted-foreground text-sm mt-1">
             Solde :{" "}
-            <span className="text-white font-semibold tabular-nums">
+            <span className="text-foreground font-semibold tabular-nums">
               {user.credits_unlimited ? "Illimité" : user.credits}
             </span>
             {!user.credits_unlimited && (
@@ -80,8 +80,8 @@ export default function CreditsPage({ user, onCreditsUpdated, onBack }: Props) {
               key={pack.id}
               className={`relative rounded-xl border p-5 transition-all ${
                 isPopular
-                  ? "border-white/[0.15] bg-surface-2"
-                  : "border-white/[0.06] bg-surface-1 hover:border-white/[0.12]"
+                  ? "border-border bg-muted/50"
+                  : "border-border bg-card hover:border-border"
               }`}
             >
               {isPopular && (
@@ -89,14 +89,14 @@ export default function CreditsPage({ user, onCreditsUpdated, onBack }: Props) {
                   Populaire
                 </span>
               )}
-              <h3 className="text-base font-semibold text-white">{pack.name}</h3>
+              <h3 className="text-base font-semibold text-foreground">{pack.name}</h3>
               <div className="mt-2 flex items-baseline gap-0.5">
-                <span className="text-2xl font-bold tabular-nums text-white">
+                <span className="text-2xl font-bold tabular-nums text-foreground">
                   {pack.price_euros}
                 </span>
-                <span className="text-gray-500 text-sm">&thinsp;&euro;</span>
+                <span className="text-muted-foreground text-sm">&thinsp;&euro;</span>
               </div>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {pack.credits} crédits &middot; {pack.price_per_credit.toFixed(2)}&thinsp;&euro;/cr.
               </p>
               <button
@@ -105,7 +105,7 @@ export default function CreditsPage({ user, onCreditsUpdated, onBack }: Props) {
                 className={`mt-4 w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors min-h-[44px] ${
                   isPopular
                     ? "bg-white text-gray-950 hover:bg-gray-200 active:bg-gray-300"
-                    : "bg-white/[0.06] text-gray-300 hover:bg-white/[0.1] active:bg-white/[0.15]"
+                    : "bg-white/[0.06] text-muted-foreground hover:bg-white/[0.1] active:bg-white/[0.15]"
                 } disabled:opacity-50`}
               >
                 {buying === pack.id ? "Traitement..." : "Acheter"}
@@ -115,7 +115,7 @@ export default function CreditsPage({ user, onCreditsUpdated, onBack }: Props) {
         })}
       </div>
 
-      <div className="rounded-xl border border-white/[0.06] bg-surface-1 p-5">
+      <div className="rounded-xl border border-border bg-card p-5">
         <h3 className="text-sm font-medium text-gray-400 mb-4 flex items-center gap-2">
           <Zap size={14} />
           Coût par recherche
@@ -124,10 +124,10 @@ export default function CreditsPage({ user, onCreditsUpdated, onBack }: Props) {
           {CREDIT_USAGE.map((item, i) => (
             <div
               key={i}
-              className="flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0"
+              className="flex items-center justify-between py-2.5 border-b border-border last:border-0"
             >
               <span className="text-sm text-gray-400">{item.action}</span>
-              <span className="text-sm font-medium tabular-nums text-white">
+              <span className="text-sm font-medium tabular-nums text-foreground">
                 {item.credits}
               </span>
             </div>

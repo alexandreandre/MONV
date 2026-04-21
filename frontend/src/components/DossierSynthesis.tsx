@@ -71,14 +71,14 @@ export default function DossierSynthesis({
               className={`rounded-xl border ${b.accent} p-4 scroll-mt-24`}
             >
               <div className="flex items-center gap-2 mb-3">
-                <Icon size={13} className="text-gray-300" />
-                <h4 className="text-xs font-semibold text-white">{b.title}</h4>
+                <Icon size={13} className="text-muted-foreground" />
+                <h4 className="text-xs font-semibold text-foreground">{b.title}</h4>
               </div>
               {b.ordered ? (
-                <ol className="space-y-2 text-xs text-gray-300 leading-relaxed">
+                <ol className="space-y-2 text-xs text-muted-foreground leading-relaxed">
                   {b.items.map((item, i) => (
                     <li key={i} className="flex gap-2">
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-white/[0.06] text-gray-300 text-[10px] font-semibold flex items-center justify-center tabular-nums">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-white/[0.06] text-muted-foreground text-[10px] font-semibold flex items-center justify-center tabular-nums">
                         {i + 1}
                       </span>
                       <span>{item}</span>
@@ -86,7 +86,7 @@ export default function DossierSynthesis({
                   ))}
                 </ol>
               ) : (
-                <ul className="space-y-2 text-xs text-gray-300 leading-relaxed">
+                <ul className="space-y-2 text-xs text-muted-foreground leading-relaxed">
                   {b.items.map((item, i) => (
                     <li key={i} className="flex items-start gap-2">
                       <span className="mt-1.5 w-1 h-1 rounded-full bg-gray-400 flex-shrink-0" />
@@ -101,13 +101,13 @@ export default function DossierSynthesis({
       </div>
 
       {synthesis.budget_estimatif && (
-        <div className="mt-3 rounded-xl border border-white/[0.06] bg-surface-1 px-4 py-3 flex items-center gap-3">
+        <div className="mt-3 rounded-xl border border-border bg-card px-4 py-3 flex items-center gap-3">
           <Coins size={14} className="text-amber-300 flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-[10px] uppercase tracking-[0.1em] text-gray-500">
+            <p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
               Budget estimatif indicatif
             </p>
-            <p className="text-sm text-gray-200 mt-0.5">
+            <p className="text-sm text-foreground mt-0.5">
               {synthesis.budget_estimatif}
             </p>
           </div>

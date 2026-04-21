@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import { apiPost, setToken, type AuthResponse } from "@/lib/api";
-import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface Props {
   onAuth: (user: AuthResponse["user"]) => void;
@@ -36,75 +45,65 @@ export default function AuthModal({
       const res = await apiPost<AuthResponse>(endpoint, body);
       setToken(res.access_token);
       onAuth(res.user);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erreur");
     } finally {
       setLoading(false);
     }
   };
 
-  const inputClass =
-    "w-full rounded-lg bg-surface-2 border border-white/[0.08] px-3.5 py-2.5 text-sm text-white placeholder-gray-600 focus:border-white/[0.2] focus:ring-1 focus:ring-white/[0.1] outline-none transition-colors";
-
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="relative w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-surface-1 border border-white/[0.08] p-6 sm:p-7 shadow-2xl animate-fade-in max-h-[95vh] overflow-y-auto">
-        <button
-          onClick={onClose}
-          className="absolute right-3.5 top-3.5 p-2 rounded-lg text-gray-600 hover:text-gray-300 hover:bg-white/[0.06] active:bg-white/[0.1] transition-colors"
-        >
-          <X size={18} />
-        </button>
-
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-white">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[95vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl">
             {mode === "register" ? "Créer un compte" : "Se connecter"}
-          </h2>
-          <p className="mt-1 text-sm text-gray-500">
+          </DialogTitle>
+          <DialogDescription>
             {mode === "register"
               ? "Inscription rapide, sans engagement"
               : "Content de vous revoir"}
-          </p>
-        </div>
+          </DialogDescription>
+        </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
           {mode === "register" && (
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">
+            <div className="space-y-1.5">
+              <Label htmlFor="auth-name" className="text-xs">
                 Nom
-              </label>
-              <input
+              </Label>
+              <Input
+                id="auth-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className={inputClass}
                 placeholder="Votre nom"
                 required
               />
             </div>
           )}
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">
+          <div className="space-y-1.5">
+            <Label htmlFor="auth-email" className="text-xs">
               Email
-            </label>
-            <input
+            </Label>
+            <Input
+              id="auth-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className={inputClass}
               placeholder="votre@email.com"
               required
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">
+          <div className="space-y-1.5">
+            <Label htmlFor="auth-password" className="text-xs">
               Mot de passe
-            </label>
-            <input
+            </Label>
+            <Input
+              id="auth-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className={inputClass}
               placeholder="••••••••"
               required
               minLength={4}
@@ -112,37 +111,35 @@ export default function AuthModal({
           </div>
 
           {error && (
-            <p className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+            <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-white text-gray-950 px-4 py-3 text-sm font-semibold hover:bg-gray-200 active:bg-gray-300 disabled:opacity-50 transition-colors min-h-[44px]"
-          >
+          <Button type="submit" disabled={loading} className="h-11 w-full">
             {loading
               ? "Chargement..."
               : mode === "register"
                 ? "S'inscrire"
                 : "Se connecter"}
-          </button>
+          </Button>
         </form>
 
-        <p className="mt-5 text-center text-sm text-gray-500">
+        <p className="text-center text-sm text-muted-foreground">
           {mode === "register" ? "Déjà un compte ?" : "Pas encore de compte ?"}
-          <button
+          <Button
+            type="button"
+            variant="link"
+            className="h-auto px-1 font-normal"
             onClick={() => {
               setMode(mode === "register" ? "login" : "register");
               setError("");
             }}
-            className="ml-1 text-white hover:underline underline-offset-2 transition-colors"
           >
             {mode === "register" ? "Se connecter" : "S'inscrire"}
-          </button>
+          </Button>
         </p>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

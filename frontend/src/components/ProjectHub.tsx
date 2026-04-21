@@ -35,7 +35,7 @@ function HubConversationRow({
         e.dataTransfer.setData("text/plain", conv.id);
         e.dataTransfer.effectAllowed = "move";
       }}
-      className="flex w-full items-stretch rounded-lg min-h-[44px] border border-transparent text-gray-300 hover:bg-white/[0.06] hover:text-white"
+      className="flex w-full items-stretch rounded-lg min-h-[44px] border border-transparent text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"
     >
       <a
         href={href}
@@ -54,7 +54,7 @@ function HubConversationRow({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center px-2 text-gray-500 hover:text-teal-200/90 shrink-0"
+        className="flex items-center px-2 text-muted-foreground hover:text-teal-200/90 shrink-0"
         title="Ouvrir dans un nouvel onglet"
         aria-label="Ouvrir dans un nouvel onglet"
       >
@@ -125,33 +125,33 @@ export default function ProjectHub({
         <button
           type="button"
           onClick={onLeaveProject}
-          className="self-start mb-6 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+          className="self-start mb-6 text-xs text-muted-foreground hover:text-muted-foreground transition-colors"
         >
           ← Toutes les recherches
         </button>
 
         <header className="flex gap-4 items-start mb-8 text-left">
           <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-gray-300"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-white/[0.04] text-muted-foreground"
             aria-hidden
           >
             <FolderOpen size={22} strokeWidth={1.75} />
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-medium text-gray-500">Projet</p>
-            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-white text-balance mt-0.5">
+            <p className="text-xs font-medium text-muted-foreground">Projet</p>
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground text-balance mt-0.5">
               {projectName}
             </h1>
-            <p className="mt-2 text-sm text-gray-500 leading-relaxed max-w-xl">
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed max-w-xl">
               Les recherches lancées ici restent dans ce dossier.
             </p>
           </div>
         </header>
 
-        <div className="w-full rounded-xl border border-white/[0.08] bg-surface-1/70 p-4 sm:p-5 mb-6">
+        <div className="w-full rounded-xl border border-border bg-card/70 p-4 sm:p-5 mb-6">
           <div className="mb-4">
-            <h2 className="text-xs font-medium text-gray-500">Nouvelle recherche</h2>
-            <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
+            <h2 className="text-xs font-medium text-muted-foreground">Nouvelle recherche</h2>
+            <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
               Même flux que l&apos;accueil, avec le projet présélectionné.
             </p>
           </div>
@@ -160,7 +160,7 @@ export default function ProjectHub({
             onChange={onModeChange}
             disabled={sending}
           />
-          <div className="mt-4 pt-4 border-t border-white/[0.07]">
+          <div className="mt-4 pt-4 border-t border-border">
             <ChatInput
               onSend={onSend}
               disabled={sending}
@@ -170,8 +170,8 @@ export default function ProjectHub({
             />
           </div>
           {templates.length > 0 && (
-            <div className="mt-5 pt-5 border-t border-white/[0.07]">
-              <p className="text-xs font-medium text-gray-500 mb-3">
+            <div className="mt-5 pt-5 border-t border-border">
+              <p className="text-xs font-medium text-muted-foreground mb-3">
                 Exemples · {MODE_META[selectedMode].label}
               </p>
               <TemplateCards
@@ -184,40 +184,40 @@ export default function ProjectHub({
         </div>
 
         <div className="w-full mb-8">
-          <p className="text-xs font-medium text-gray-500 mb-2">Atelier</p>
+          <p className="text-xs font-medium text-muted-foreground mb-2">Atelier</p>
           <button
             type="button"
             onClick={onOpenAtelier}
             disabled={sending}
-            className="group relative w-full overflow-hidden rounded-xl border border-white/[0.08] bg-surface-1 text-left hover:border-white/[0.14] disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
+            className="group relative w-full overflow-hidden rounded-xl border border-border bg-card text-left hover:border-border disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <div
               className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-teal-700/90"
               aria-hidden
             />
             <div className="relative flex items-center gap-3 pl-4 pr-3 py-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-teal-950/45 text-teal-200/95">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-teal-950/45 text-teal-200/95">
                 <Compass size={18} strokeWidth={2} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-white leading-snug">
+                <p className="text-sm font-medium text-foreground leading-snug">
                   Ouvrir l&apos;Atelier (rattaché à ce projet)
                 </p>
-                <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+                <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
                   Nouveau dossier par défaut ; tu peux aussi rattacher à un projet
                   existant depuis l&apos;écran Atelier.
                 </p>
               </div>
               <ArrowRight
                 size={16}
-                className="shrink-0 text-gray-500 group-hover:text-gray-300"
+                className="shrink-0 text-muted-foreground group-hover:text-muted-foreground"
                 aria-hidden
               />
             </div>
           </button>
         </div>
 
-        <h2 className="text-xs font-medium text-gray-500 mb-3">Conversations</h2>
+        <h2 className="text-xs font-medium text-muted-foreground mb-3">Conversations</h2>
 
         <div
           onDragOver={(e) => {
@@ -227,13 +227,13 @@ export default function ProjectHub({
           }}
           onDragLeave={handleDragLeaveHub}
           onDrop={handleDropOnHub}
-          className={`flex-1 min-h-[120px] rounded-xl border bg-surface-1/40 p-3 sm:p-4 transition-shadow ${
+          className={`flex-1 min-h-[120px] rounded-xl border bg-card/40 p-3 sm:p-4 transition-shadow ${
             hubDrop
               ? "border-teal-400/40 ring-2 ring-teal-400/35"
-              : "border-white/[0.06]"
+              : "border-border"
           }`}
         >
-          <p className="text-[10px] text-gray-600 mb-2 px-0.5">
+          <p className="text-[10px] text-muted-foreground mb-2 px-0.5">
             Glisse une conversation ici pour la ranger dans ce projet — ou vers
             Récents / un autre projet dans la barre latérale.
           </p>
@@ -248,10 +248,10 @@ export default function ProjectHub({
             </div>
           ) : conversationsInProject.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center py-10 px-4">
-              <p className="text-base font-semibold text-gray-300">
+              <p className="text-base font-semibold text-muted-foreground">
                 Aucune conversation pour le moment
               </p>
-              <p className="mt-2 text-sm text-gray-500 max-w-sm leading-relaxed">
+              <p className="mt-2 text-sm text-muted-foreground max-w-sm leading-relaxed">
                 {
                   "Les recherches de ce projet apparaîtront ici. Utilise le champ ci-dessus pour commencer."
                 }

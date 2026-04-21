@@ -119,20 +119,20 @@ function SegmentBlock({
   return (
     <div
       id={`atelier-segment-${segment.key}`}
-      className="rounded-2xl border border-white/[0.06] bg-surface-1 overflow-hidden scroll-mt-24"
+      className="rounded-2xl border border-border bg-card overflow-hidden scroll-mt-24"
     >
       <div className="flex w-full items-stretch gap-0">
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors text-left min-w-0"
+          className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left min-w-0"
         >
-          <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-gray-300">
+          <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-white/[0.04] border border-border flex items-center justify-center text-muted-foreground">
             <Icon size={16} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="text-sm font-semibold text-white">{segment.label}</h4>
+              <h4 className="text-sm font-semibold text-foreground">{segment.label}</h4>
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${modeMeta.badgeBg} ${modeMeta.badgeText}`}
               >
@@ -144,12 +144,12 @@ function SegmentBlock({
                   Hors annuaires MONV
                 </span>
               ) : hasResults ? (
-                <span className="text-[11px] tabular-nums text-gray-500">
+                <span className="text-[11px] tabular-nums text-muted-foreground">
                   {segment.total} résultat{segment.total > 1 ? "s" : ""}
                   {typeof segment.total_relevant === "number" &&
                     segment.total_relevant > 0 &&
                     segment.total_relevant !== segment.total && (
-                      <span className="text-gray-600">
+                      <span className="text-muted-foreground">
                         {" "}
                         · {segment.total_relevant} pertinent
                         {segment.total_relevant > 1 ? "s" : ""}
@@ -162,21 +162,21 @@ function SegmentBlock({
                   Indisponible
                 </span>
               ) : (
-                <span className="text-[11px] text-gray-600">Aucun résultat</span>
+                <span className="text-[11px] text-muted-foreground">Aucun résultat</span>
               )}
             </div>
             {segment.description && (
-              <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                 {segment.description}
               </p>
             )}
           </div>
-          <div className="flex-shrink-0 text-gray-500 self-center">
+          <div className="flex-shrink-0 text-muted-foreground self-center">
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </div>
         </button>
         {canRegen && (
-          <div className="flex items-center border-l border-white/[0.06] px-2 shrink-0">
+          <div className="flex items-center border-l border-border px-2 shrink-0">
             <button
               type="button"
               disabled={regenLoading}
@@ -184,7 +184,7 @@ function SegmentBlock({
                 ev.stopPropagation();
                 void handleRegenerate();
               }}
-              className="text-[11px] font-medium text-teal-300 hover:text-teal-200 disabled:opacity-40 px-2 py-2 rounded-lg hover:bg-white/[0.04] transition-colors whitespace-nowrap"
+              className="text-[11px] font-medium text-teal-300 hover:text-teal-200 disabled:opacity-40 px-2 py-2 rounded-lg hover:bg-muted/50 transition-colors whitespace-nowrap"
             >
               {regenLoading ? "Relance…" : "Relancer"}
             </button>
@@ -193,16 +193,16 @@ function SegmentBlock({
       </div>
 
       {expanded && (
-        <div className="border-t border-white/[0.04] px-1 pb-1">
+        <div className="border-t border-border px-1 pb-1">
           {isOutOfScope ? (
-            <p className="px-3 py-4 text-xs text-gray-400 leading-relaxed">
+            <p className="px-3 py-4 text-xs text-muted-foreground leading-relaxed">
               {segment.out_of_scope_note?.trim() ||
                 "Ce segment n’est pas couvert par les annuaires d’entreprises françaises MONV. Complète par recherche web ou terrain."}
             </p>
           ) : segment.error ? (
-            <p className="px-3 py-4 text-xs text-gray-500">
+            <p className="px-3 py-4 text-xs text-muted-foreground">
               {segment.error} Recherche associée :{" "}
-              <span className="text-gray-400">&laquo; {segment.query} &raquo;</span>
+              <span className="text-muted-foreground">&laquo; {segment.query} &raquo;</span>
             </p>
           ) : hasResults && segment.search_id ? (
             <ResultsTable
@@ -217,6 +217,7 @@ function SegmentBlock({
               exporting={exporting}
               mapPoints={segment.map_points}
               segmentLabelByKey={segmentLabelByKey}
+              resultsMode={normalizeMode(segment.mode)}
             />
           ) : hasResults ? (
             <ResultsTable
@@ -231,9 +232,10 @@ function SegmentBlock({
               exporting={false}
               mapPoints={segment.map_points}
               segmentLabelByKey={segmentLabelByKey}
+              resultsMode={normalizeMode(segment.mode)}
             />
           ) : (
-            <p className="px-3 py-4 text-xs text-gray-500">
+            <p className="px-3 py-4 text-xs text-muted-foreground">
               Aucune entreprise trouvée pour ce segment. Essaie d&rsquo;élargir
               la zone ou le secteur dans une nouvelle session.
             </p>

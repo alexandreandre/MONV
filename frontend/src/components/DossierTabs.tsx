@@ -20,11 +20,11 @@ export default function DossierTabs({ value, onChange, panels }: DossierTabsProp
   const ids = (Object.keys(LABELS) as DossierTabId[]).filter((k) => k in panels);
 
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-surface-1 overflow-hidden">
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
       <div
         role="tablist"
         aria-label="Sections du dossier"
-        className="flex border-b border-white/[0.06] bg-surface-2/80"
+        className="flex border-b border-border bg-muted/50/80"
       >
         {ids.map((id) => {
           const active = value === id;
@@ -38,8 +38,8 @@ export default function DossierTabs({ value, onChange, panels }: DossierTabsProp
               onClick={() => onChange(id)}
               className={`flex-1 min-h-[44px] px-3 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
                 active
-                  ? "text-white border-teal-500/80 bg-surface-1"
-                  : "text-gray-500 border-transparent hover:text-gray-300"
+                  ? "text-foreground border-teal-600/60 bg-card"
+                  : "text-muted-foreground border-transparent hover:text-muted-foreground"
               }`}
             >
               {LABELS[id]}

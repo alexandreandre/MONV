@@ -102,29 +102,29 @@ export default function DossierExecutiveOpening({
 
   return (
     <section
-      className="rounded-2xl border border-white/[0.08] bg-surface-1 px-5 py-5 sm:px-6"
+      className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6"
       aria-label="Lecture opérationnelle"
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 mb-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-4">
         Cadrage projet
       </p>
 
       {hasMeta ? (
         <dl className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
           {secteur ? (
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3.5 py-3">
-              <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+            <div className="rounded-lg border border-border bg-white/[0.02] px-3.5 py-3">
+              <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Secteur
               </dt>
-              <dd className="mt-1 text-sm font-medium text-gray-100 leading-snug">{secteur}</dd>
+              <dd className="mt-1 text-sm font-medium text-foreground leading-snug">{secteur}</dd>
             </div>
           ) : null}
           {showLoc ? (
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3.5 py-3">
-              <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+            <div className="rounded-lg border border-border bg-white/[0.02] px-3.5 py-3">
+              <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Localisation
               </dt>
-              <dd className="mt-1 text-sm font-medium text-gray-100 leading-snug">{loc}</dd>
+              <dd className="mt-1 text-sm font-medium text-foreground leading-snug">{loc}</dd>
             </div>
           ) : null}
         </dl>
@@ -138,12 +138,12 @@ export default function DossierExecutiveOpening({
             : "border-teal-500/20 bg-teal-500/[0.04]"
         }`}
       >
-        <div className="mb-3 flex flex-col gap-1 border-b border-white/[0.06] pb-3 sm:flex-row sm:items-end sm:justify-between">
-          <h3 className="text-[13px] font-semibold text-gray-100 leading-snug tracking-tight">
+        <div className="mb-3 flex flex-col gap-1 border-b border-border pb-3 sm:flex-row sm:items-end sm:justify-between">
+          <h3 className="text-[13px] font-semibold text-foreground leading-snug tracking-tight">
             Ordres de grandeur pour votre projet{" "}
-            <span className="font-normal text-gray-500">(scénario central)</span>
+            <span className="font-normal text-muted-foreground">(scénario central)</span>
           </h3>
-          <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-gray-500 shrink-0">
+          <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground shrink-0">
             Indicatif — à challenger
           </p>
         </div>
@@ -152,7 +152,7 @@ export default function DossierExecutiveOpening({
             <li
               key={i}
               className={`flex gap-3 text-[13px] leading-relaxed [font-variant-numeric:tabular-nums] ${
-                ordreIsPlaceholder ? "text-amber-100/90" : "text-gray-200"
+                ordreIsPlaceholder ? "text-amber-100/90" : "text-foreground"
               }`}
             >
               <span
@@ -168,16 +168,16 @@ export default function DossierExecutiveOpening({
       </div>
 
       {/* Premier conseil concret — toujours affiché */}
-      <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-4 sm:px-5 sm:py-4">
+      <div className="mt-4 rounded-xl border border-border bg-white/[0.02] px-4 py-4 sm:px-5 sm:py-4">
         <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-[13px] font-semibold text-gray-100 tracking-tight">
+          <h3 className="text-[13px] font-semibold text-foreground tracking-tight">
             Premier conseil concret
           </h3>
           <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-teal-400/90">
             Cette semaine
           </span>
         </div>
-        <p className="text-[13px] text-gray-200 leading-relaxed">
+        <p className="text-[13px] text-foreground leading-relaxed">
           {conseil || CONSEIL_PLACEHOLDER}
         </p>
       </div>

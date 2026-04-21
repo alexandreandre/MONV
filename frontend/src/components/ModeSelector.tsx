@@ -36,11 +36,11 @@ export default function ModeSelector({
               type="button"
               disabled={disabled}
               onClick={() => onChange(m)}
-              className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[36px] ${
+              className={`min-h-[36px] flex-shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                 active
                   ? meta.accent
-                  : "border-white/[0.08] text-gray-500 hover:text-gray-300 hover:border-white/[0.16]"
-              } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                  : "border-border text-muted-foreground hover:border-border hover:bg-muted/60 hover:text-foreground"
+              } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
             >
               <Icon size={13} />
               {meta.label}
@@ -69,17 +69,17 @@ export default function ModeSelector({
             type="button"
             disabled={disabled}
             onClick={() => onChange(m)}
-            className={`flex flex-col items-start gap-1 rounded-xl border px-3 py-3 text-left transition-all min-h-[44px] ${
+            className={`flex min-h-[44px] flex-col items-start gap-1 rounded-xl border px-3 py-3 text-left transition-all ${
               active
-                ? meta.accent + " shadow-[0_0_0_1px_rgba(255,255,255,0.04)]"
-                : "border-white/[0.06] bg-surface-1 hover:border-white/[0.12] hover:bg-surface-2 text-gray-400"
-            } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                ? meta.accent + " shadow-sm ring-1 ring-border/60"
+                : "border-border bg-card text-muted-foreground hover:border-border hover:bg-accent/40 hover:text-foreground"
+            } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
           >
-            <span className="inline-flex items-center gap-1.5 text-sm font-medium">
+            <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
               <Icon size={14} />
               {meta.label}
             </span>
-            <span className="text-[11px] text-gray-500 line-clamp-2 leading-snug">
+            <span className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
               {meta.description}
             </span>
           </button>

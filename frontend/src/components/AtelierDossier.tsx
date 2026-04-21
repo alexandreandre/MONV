@@ -128,7 +128,7 @@ export default function AtelierDossier({
       ref={dossierShellRef}
       className={`animate-fade-in ${
         isFullscreen
-          ? "min-h-full w-full bg-surface-0 overflow-y-auto overflow-x-hidden scrollbar-thin px-3 py-4 sm:px-6 sm:py-5 space-y-5"
+          ? "min-h-full w-full bg-background overflow-y-auto overflow-x-hidden scrollbar-thin px-3 py-4 sm:px-6 sm:py-5 space-y-5"
           : "space-y-5 mt-4"
       }`}
     >
@@ -155,7 +155,7 @@ export default function AtelierDossier({
               className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium min-h-[44px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500/50 ${
                 isFullscreen
                   ? "border-teal-500/40 bg-teal-500/10 text-teal-100 hover:bg-teal-500/15"
-                  : "border-white/[0.12] bg-surface-2 text-gray-200 hover:bg-white/[0.04]"
+                  : "border-border bg-muted/50 text-foreground hover:bg-muted/50"
               }`}
             >
               {isFullscreen ? (
@@ -169,7 +169,7 @@ export default function AtelierDossier({
               <button
                 type="button"
                 onClick={() => setBriefOpen(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-surface-2 px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-white/[0.04] min-h-[44px]"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/50 min-h-[44px]"
               >
                 <Pencil size={15} />
                 Affiner le brief
@@ -187,7 +187,7 @@ export default function AtelierDossier({
               type="button"
               disabled
               title="Bientôt"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.06] px-4 py-2.5 text-sm font-medium text-gray-500 min-h-[44px] cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-muted-foreground min-h-[44px] cursor-not-allowed"
             >
               <FileText size={15} />
               Rapport PDF
@@ -201,8 +201,8 @@ export default function AtelierDossier({
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,400px)] lg:items-start">
         <div className="min-w-0 space-y-3">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <h3 className="text-sm font-semibold text-white">Carte des flux</h3>
-            <p className="text-[11px] text-gray-500 leading-snug max-w-md">
+            <h3 className="text-sm font-semibold text-foreground">Carte des flux</h3>
+            <p className="text-[11px] text-muted-foreground leading-snug max-w-md">
               Valeur, trésorerie et information — les acteurs reliés à un segment ouvrent le
               tableau correspondant dans la colonne de droite.
             </p>
@@ -220,11 +220,11 @@ export default function AtelierDossier({
             id="atelier-section-segments"
             className="min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1 scrollbar-thin scroll-mt-24"
           >
-            <div className="mb-3 border-b border-white/[0.06] pb-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+            <div className="mb-3 border-b border-border pb-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Tableaux segmentés
               </p>
-              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                 Données pipeline MONV — la carte reste visible à gauche sur grand écran.
               </p>
             </div>
@@ -249,7 +249,7 @@ export default function AtelierDossier({
 
       <div className="space-y-8 scroll-mt-24" id="atelier-section-synthesis">
         <div>
-          <p className="text-xs text-gray-500 mb-3">
+          <p className="text-xs text-muted-foreground mb-3">
             Business Model Canvas — vue synthétique du projet.
           </p>
           <BusinessModelCanvas canvas={canvas} />

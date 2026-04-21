@@ -58,22 +58,22 @@ export default function TemplateCards({
         <button
           key={t.id}
           onClick={() => onSelect(t.query)}
-          className="group flex items-start gap-3 text-left rounded-lg border border-white/[0.06] bg-surface-1 px-4 py-3.5 hover:border-white/[0.11] hover:bg-surface-2 min-h-[44px]"
+          className="group flex items-start gap-3 text-left rounded-lg border border-border bg-card px-4 py-3.5 hover:border-border hover:bg-muted/50 min-h-[44px]"
         >
-          <span className="text-gray-600 mt-0.5 flex-shrink-0 group-hover:text-gray-500">
+          <span className="text-muted-foreground mt-0.5 flex-shrink-0 group-hover:text-muted-foreground">
             {ICONS[t.icon] || <Building size={16} />}
           </span>
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-gray-300 group-hover:text-gray-100 truncate">
+            <p className="truncate text-sm text-muted-foreground group-hover:text-foreground">
               {t.title}
             </p>
-            <p className="text-xs text-gray-600 mt-0.5 line-clamp-1">
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
               {t.description}
             </p>
           </div>
           <ArrowRight
             size={14}
-            className="text-gray-700 group-hover:text-gray-500 mt-1 flex-shrink-0 opacity-40 group-hover:opacity-70"
+            className="mt-1 flex-shrink-0 text-muted-foreground opacity-40 group-hover:opacity-70"
           />
         </button>
       ))}

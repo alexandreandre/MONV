@@ -110,12 +110,12 @@ export default function BriefDrawer({
     multiline?: boolean
   ) => (
     <label key={String(id)} className="block">
-      <span className="text-[11px] uppercase tracking-[0.1em] text-gray-500">
+      <span className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
         {label}
       </span>
       {multiline ? (
         <textarea
-          className="mt-1 w-full rounded-lg border border-white/[0.08] bg-surface-0 px-3 py-2 text-sm text-gray-200 min-h-[72px]"
+          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground min-h-[72px]"
           value={String(draft[id] ?? "")}
           onChange={(e) =>
             setDraft((d) => ({ ...d, [id]: e.target.value } as ProjectBrief))
@@ -124,7 +124,7 @@ export default function BriefDrawer({
       ) : (
         <input
           type="text"
-          className="mt-1 w-full rounded-lg border border-white/[0.08] bg-surface-0 px-3 py-2 text-sm text-gray-200"
+          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
           value={String(draft[id] ?? "")}
           onChange={(e) =>
             setDraft((d) => ({ ...d, [id]: e.target.value } as ProjectBrief))
@@ -142,13 +142,13 @@ export default function BriefDrawer({
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
       />
-      <aside className="relative w-full max-w-md h-full bg-surface-1 border-l border-white/[0.08] shadow-2xl flex flex-col animate-fade-in">
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[0.06]">
-          <h2 className="text-sm font-semibold text-white">Affiner le brief</h2>
+      <aside className="relative w-full max-w-md h-full bg-card border-l border-border shadow-2xl flex flex-col animate-fade-in">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border">
+          <h2 className="text-sm font-semibold text-foreground">Affiner le brief</h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.06]"
+            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60"
             aria-label="Fermer le panneau"
           >
             <X size={18} />
@@ -164,8 +164,8 @@ export default function BriefDrawer({
           {field("modele_revenus", "Modèle de revenus")}
           {field("ambition", "Ambition 2–3 ans", true)}
 
-          <div className="pt-2 border-t border-white/[0.06]">
-            <p className="text-[11px] uppercase tracking-[0.1em] text-gray-500 mb-2">
+          <div className="pt-2 border-t border-border">
+            <p className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground mb-2">
               Recalculer après enregistrement
             </p>
             <div className="flex flex-wrap gap-2">
@@ -178,7 +178,7 @@ export default function BriefDrawer({
               ).map(([key, label]) => (
                 <label
                   key={key}
-                  className="inline-flex items-center gap-2 text-xs text-gray-300 cursor-pointer"
+                  className="inline-flex items-center gap-2 text-xs text-muted-foreground cursor-pointer"
                 >
                   <input
                     type="checkbox"
@@ -190,17 +190,17 @@ export default function BriefDrawer({
                 </label>
               ))}
             </div>
-            <p className="text-[11px] text-gray-600 mt-2">
+            <p className="text-[11px] text-muted-foreground mt-2">
               Les segments relancent tout le pipeline (coût en crédits selon segments).
             </p>
           </div>
         </div>
-        <div className="border-t border-white/[0.06] p-4 space-y-2 flex flex-col gap-2">
+        <div className="border-t border-border p-4 space-y-2 flex flex-col gap-2">
           <button
             type="button"
             disabled={busy !== null}
             onClick={() => void handleRegenerateCanvas()}
-            className="w-full rounded-xl border border-white/[0.12] bg-surface-2 px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-white/[0.04] disabled:opacity-40"
+            className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/50 disabled:opacity-40"
           >
             {busy === "canvas" ? "Régénération…" : "Régénérer le canvas seul"}
           </button>

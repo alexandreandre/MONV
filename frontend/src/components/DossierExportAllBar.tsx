@@ -61,15 +61,15 @@ export default function DossierExportAllBar({
   }
 
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-surface-1 px-4 py-3 sm:px-5 sm:py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="rounded-2xl border border-border bg-card px-4 py-3 sm:px-5 sm:py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-[11px] uppercase tracking-[0.1em] text-gray-500">
+        <p className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
           Export dossier
         </p>
-        <p className="text-sm text-gray-300 mt-0.5">
-          <span className="tabular-nums text-white font-medium">{exportable.length}</span>{" "}
+        <p className="text-sm text-muted-foreground mt-0.5">
+          <span className="tabular-nums text-foreground font-medium">{exportable.length}</span>{" "}
           {exportable.length === 1 ? "segment exportable" : "segments exportables"} — coût cumulé{" "}
-          <span className="tabular-nums text-white font-medium">{totalCredits}</span> crédit
+          <span className="tabular-nums text-foreground font-medium">{totalCredits}</span> crédit
           {totalCredits > 1 ? "s" : ""} (Excel).
         </p>
         {!creditsUnlimited && userCredits < totalCredits && (

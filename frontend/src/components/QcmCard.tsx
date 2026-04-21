@@ -3,6 +3,12 @@
 import { useState } from "react";
 import { Check, ChevronRight, PenLine } from "lucide-react";
 import type { QcmPayload } from "@/lib/api";
+import { stripEmojis } from "@/lib/stripEmojis";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 interface Props {
   payload: QcmPayload;
@@ -15,6 +21,25 @@ interface Props {
 }
 
 type Answers = Record<string, { selected: string[]; freeText: string }>;
+
+/** Aligné sur `backend/services/conversationalist.py` — exclusif avec les autres options en multi. */
+const NEUTRAL_OPTION_IDS = new Set([
+  "any",
+  "peu_importe",
+  "pas_de_preference",
+  "non_defini",
+  "indetermine",
+  "incertain",
+  "nsp",
+  "tout",
+  "toutes",
+  "indifferent",
+  "peu_importe_zone",
+]);
+
+function isNeutralOptionId(id: string): boolean {
+  return NEUTRAL_OPTION_IDS.has(id.toLowerCase());
+}
 
 export default function QcmCard({
   payload,
@@ -37,12 +62,15 @@ export default function QcmCard({
     setAnswers((prev) => {
       const cur = prev[qId];
       let next: string[];
-      if (multiple) {
-        next = cur.selected.includes(optId)
-          ? cur.selected.filter((s) => s !== optId)
-          : [...cur.selected, optId];
-      } else {
+      if (!multiple) {
         next = cur.selected.includes(optId) ? [] : [optId];
+      } else if (isNeutralOptionId(optId)) {
+        next = cur.selected.includes(optId) ? [] : [optId];
+      } else {
+        const base = cur.selected.filter((s) => !isNeutralOptionId(s));
+        next = base.includes(optId)
+          ? base.filter((s) => s !== optId)
+          : [...base, optId];
       }
       return { ...prev, [qId]: { ...cur, selected: next } };
     });
@@ -92,7 +120,7 @@ export default function QcmCard({
   };
 
   return (
-    <div className="space-y-4 mt-3">
+    <div className="mt-3 space-y-4">
       {payload.questions.map((q) => {
         const a = answers[q.id];
         const showFreeInput = a?.selected.some((s) => {
@@ -101,85 +129,87 @@ export default function QcmCard({
         });
 
         return (
-          <div key={q.id}>
-            <p className="text-sm font-medium text-gray-200 mb-2">
-              {q.question}
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {q.options.map((opt) => {
-                const isSelected = a?.selected.includes(opt.id);
-                return (
-                  <button
-                    key={opt.id}
-                    disabled={submitted || disabled}
-                    onClick={() => toggle(q.id, opt.id, q.multiple ?? false)}
-                    className={`
-                      inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm min-h-[44px]
-                      border transition-all duration-150
-                      ${
-                        isSelected
-                          ? "bg-white text-gray-950 border-white"
-                          : "bg-transparent border-white/[0.12] text-gray-400 hover:border-white/[0.25] hover:text-white active:bg-white/[0.06]"
-                      }
-                      ${submitted ? "opacity-50 cursor-default" : "cursor-pointer"}
-                    `}
-                  >
-                    {isSelected && <Check size={13} />}
-                    {opt.free_text && !isSelected && <PenLine size={13} />}
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
+          <Card key={q.id} className="border-border/80 shadow-sm">
+            <CardContent className="space-y-3 p-4 sm:p-5">
+              <div>
+                <Label className="text-sm font-medium leading-snug text-foreground">
+                  {stripEmojis(q.question)}
+                </Label>
+                {q.multiple ? (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Plusieurs réponses possibles (sauf option « peu importe » /
+                    équivalent, seule).
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {q.options.map((opt) => {
+                  const isSelected = a?.selected.includes(opt.id);
+                  return (
+                    <Button
+                      key={opt.id}
+                      type="button"
+                      variant={isSelected ? "default" : "outline"}
+                      size="sm"
+                      disabled={submitted || disabled}
+                      onClick={() => toggle(q.id, opt.id, q.multiple ?? false)}
+                      className={cn(
+                        "min-h-[44px] h-auto whitespace-normal py-2 text-left font-normal",
+                        submitted && "cursor-default opacity-50"
+                      )}
+                    >
+                      {isSelected && <Check className="size-3.5 shrink-0" />}
+                      {opt.free_text && !isSelected && (
+                        <PenLine className="size-3.5 shrink-0" />
+                      )}
+                      {stripEmojis(opt.label)}
+                    </Button>
+                  );
+                })}
+              </div>
 
-            {showFreeInput && (
-              <input
-                type="text"
-                value={a?.freeText || ""}
-                onChange={(e) => setFreeText(q.id, e.target.value)}
-                disabled={submitted || disabled}
-                placeholder="Précisez ici..."
-                className="mt-2 w-full bg-surface-2 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-white/[0.2]"
-              />
-            )}
-          </div>
+              {showFreeInput && (
+                <Input
+                  type="text"
+                  value={a?.freeText || ""}
+                  onChange={(e) => setFreeText(q.id, e.target.value)}
+                  disabled={submitted || disabled}
+                  placeholder="Précisez ici..."
+                  className="mt-1"
+                />
+              )}
+            </CardContent>
+          </Card>
         );
       })}
 
       {helperText && (
-        <p className="text-xs text-gray-500 leading-relaxed">{helperText}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">{helperText}</p>
       )}
 
-      <button
+      <Button
         type="button"
         onClick={handleSubmit}
         disabled={!canSubmit || submitted || disabled}
         title={
           !canSubmit && !submitted
-            ? "Sélectionne au moins une réponse par question ; si tu choisis « Autre », précise dans le champ texte."
+            ? "Sélectionne au moins une réponse par question (plusieurs choix quand indiqué) ; si tu choisis « Autre », précise dans le champ texte."
             : undefined
         }
-        className={`
-          inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all min-h-[44px] w-full sm:w-auto justify-center
-          ${
-            canSubmit && !submitted
-              ? "bg-white text-gray-950 hover:bg-gray-200 active:bg-gray-300"
-              : "bg-white/[0.06] text-gray-600 cursor-not-allowed"
-          }
-        `}
+        className="min-h-[44px] w-full justify-center gap-2 sm:w-auto"
       >
         {submitted ? (
           <>
-            <Check size={15} />
+            <Check className="size-4" />
             Envoyé
           </>
         ) : (
           <>
             {submitLabel}
-            <ChevronRight size={15} />
+            <ChevronRight className="size-4" />
           </>
         )}
-      </button>
+      </Button>
     </div>
   );
 }

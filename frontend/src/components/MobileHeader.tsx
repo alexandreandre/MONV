@@ -1,7 +1,9 @@
 "use client";
 
-import { Menu, CreditCard, Compass } from "lucide-react";
+import { Menu, CreditCard, Compass, Search } from "lucide-react";
 import type { User } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface Props {
   user: User | null;
@@ -9,6 +11,8 @@ interface Props {
   onNavigateCredits: () => void;
   /** Accès rapide à l’agent Atelier (landing / chat). */
   onOpenAtelier?: () => void;
+  /** Ouvre la palette de commandes (⌘K). */
+  onOpenCommand?: () => void;
 }
 
 export default function MobileHeader({
@@ -16,55 +20,75 @@ export default function MobileHeader({
   onMenuOpen,
   onNavigateCredits,
   onOpenAtelier,
+  onOpenCommand,
 }: Props) {
   return (
-    <div className="md:hidden sticky top-0 z-30 flex items-center gap-2 px-2 py-2.5 bg-surface-0/90 backdrop-blur-md border-b border-white/[0.06]">
-      <button
+    <div
+      className={cn(
+        "sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-background/90 px-2 py-2 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 md:hidden"
+      )}
+    >
+      <Button
         type="button"
+        variant="ghost"
+        size="icon"
         onClick={onMenuOpen}
-        className="p-2 -ml-0.5 rounded-lg hover:bg-white/[0.06] active:bg-white/[0.1] text-gray-400 transition-colors shrink-0"
+        className="-ml-0.5 shrink-0"
         aria-label="Ouvrir le menu"
       >
-        <Menu size={20} />
-      </button>
+        <Menu className="size-5" />
+      </Button>
 
-      <span className="text-sm font-bold tracking-tight text-white flex-1 text-center min-w-0 truncate">
+      <span className="min-w-0 flex-1 truncate text-center text-sm font-semibold tracking-tight text-foreground">
         MONV
       </span>
 
-      <div className="flex items-center shrink-0 gap-0.5">
-        {onOpenAtelier && (
-          <button
+      <div className="flex shrink-0 items-center gap-0.5">
+        {onOpenCommand && (
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onOpenCommand}
+            aria-label="Rechercher et commandes"
+          >
+            <Search className="size-[18px]" />
+          </Button>
+        )}
+        {onOpenAtelier && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
             onClick={onOpenAtelier}
-            className="p-2 rounded-lg text-teal-300/90 hover:bg-teal-500/15 active:bg-teal-500/25 transition-colors"
+            className="text-primary"
             aria-label="Ouvrir l’agent Atelier"
           >
-            <Compass size={18} strokeWidth={2.25} />
-          </button>
+            <Compass className="size-[18px]" strokeWidth={2.25} />
+          </Button>
         )}
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={onNavigateCredits}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-500 hover:bg-white/[0.06] active:bg-white/[0.1] transition-colors"
+          className="gap-1 px-2 font-mono text-xs tabular-nums text-muted-foreground"
           aria-label="Crédits"
         >
-          <CreditCard size={15} />
-          <span className="text-xs tabular-nums font-medium min-w-[1.25rem] inline-flex justify-end">
-            {user ? (
-              user.credits_unlimited ? (
-                "∞"
-              ) : (
-                user.credits
-              )
+          <CreditCard className="size-[15px]" />
+          {user ? (
+            user.credits_unlimited ? (
+              "∞"
             ) : (
-              <span
-                className="h-3 w-7 rounded bg-white/[0.08] animate-pulse"
-                aria-hidden
-              />
-            )}
-          </span>
-        </button>
+              user.credits
+            )
+          ) : (
+            <span
+              className="inline-block h-3 w-7 animate-pulse rounded bg-muted"
+              aria-hidden
+            />
+          )}
+        </Button>
       </div>
     </div>
   );

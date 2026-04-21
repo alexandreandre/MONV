@@ -230,43 +230,43 @@ export default function DossierChecklist({ synthesis }: DossierChecklistProps) {
 
   return (
     <section
-      className="rounded-2xl border border-white/[0.08] bg-surface-1 px-5 py-5 sm:px-6"
+      className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6"
       aria-label="Checklist d’actions"
     >
-      <div className="mb-5 border-b border-white/[0.06] pb-4">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 mb-2">
+      <div className="mb-5 border-b border-border pb-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">
           Checklist d’action
         </p>
-        <h3 className="text-base sm:text-lg font-semibold text-white leading-snug">
+        <h3 className="text-base sm:text-lg font-semibold text-foreground leading-snug">
           {headline}
         </h3>
         {lede ? (
-          <p className="text-xs text-gray-500 mt-2 leading-relaxed">{lede}</p>
+          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{lede}</p>
         ) : null}
       </div>
 
       <div className="space-y-8">
         {data.sections.map((sec, si) => (
           <div key={si}>
-            <h4 className="text-xs font-semibold text-gray-200 tracking-tight mb-3">
+            <h4 className="text-xs font-semibold text-foreground tracking-tight mb-3">
               {sec.title}
               {sec.subtitle ? (
-                <span className="font-normal text-gray-500"> — {sec.subtitle}</span>
+                <span className="font-normal text-muted-foreground"> — {sec.subtitle}</span>
               ) : null}
             </h4>
-            <ul className="space-y-0 border border-white/[0.06] rounded-xl overflow-hidden divide-y divide-white/[0.05]">
+            <ul className="space-y-0 border border-border rounded-xl overflow-hidden divide-y divide-white/[0.05]">
               {sec.items.map((item, ii) => (
                 <li key={ii}>
                   <button
                     type="button"
                     onClick={() => openItem(sec.title, item)}
-                    className="w-full text-left px-3.5 py-3 sm:px-4 sm:py-3.5 flex gap-3 items-start hover:bg-white/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500/40 transition-colors"
+                    className="w-full text-left px-3.5 py-3 sm:px-4 sm:py-3.5 flex gap-3 items-start hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500/40 transition-colors"
                   >
                     <span
                       className="mt-1 h-3.5 w-3.5 shrink-0 rounded border border-white/25 bg-transparent"
                       aria-hidden
                     />
-                    <span className="text-sm text-gray-200 leading-relaxed min-w-0">
+                    <span className="text-sm text-foreground leading-relaxed min-w-0">
                       {item.label}
                     </span>
                   </button>
@@ -291,7 +291,7 @@ export default function DossierChecklist({ synthesis }: DossierChecklistProps) {
                       className="mt-1 h-3.5 w-3.5 shrink-0 rounded border border-amber-400/40 bg-transparent"
                       aria-hidden
                     />
-                    <span className="text-sm text-gray-200 leading-relaxed min-w-0">
+                    <span className="text-sm text-foreground leading-relaxed min-w-0">
                       {item.label}
                     </span>
                   </button>
@@ -317,14 +317,14 @@ export default function DossierChecklist({ synthesis }: DossierChecklistProps) {
                 aria-labelledby="checklist-guide-title"
                 className="flex h-full max-h-[min(100dvh,920px)] w-full max-w-md flex-col rounded-2xl border border-white/[0.1] bg-[#111114] shadow-2xl sm:max-h-[90vh]"
               >
-                <div className="flex items-start justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+                <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
                   <div className="min-w-0">
-                    <p className="text-[10px] uppercase tracking-[0.12em] text-gray-500 mb-1">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground mb-1">
                       {active.sectionTitle}
                     </p>
                     <h2
                       id="checklist-guide-title"
-                      className="text-sm font-semibold text-white leading-snug"
+                      className="text-sm font-semibold text-foreground leading-snug"
                     >
                       {active.label}
                     </h2>
@@ -332,7 +332,7 @@ export default function DossierChecklist({ synthesis }: DossierChecklistProps) {
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    className="shrink-0 rounded-lg border border-white/[0.08] p-2 text-gray-400 hover:bg-white/[0.05] hover:text-gray-200"
+                    className="shrink-0 rounded-lg border border-border p-2 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                     aria-label="Fermer"
                   >
                     <X size={16} aria-hidden />
@@ -340,11 +340,11 @@ export default function DossierChecklist({ synthesis }: DossierChecklistProps) {
                 </div>
                 <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-thin">
                   {active.guide ? (
-                    <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
+                    <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
                       {active.guide}
                     </p>
                   ) : (
-                    <p className="text-sm text-gray-500 leading-relaxed">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                       Priorisez cette action avec un conseil métier ou votre expert-comptable :
                       le détail dépend de votre situation (forme juridique, financement, local).
                     </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   MessageSquarePlus,
   History,
@@ -24,6 +24,22 @@ import {
   MONV_CONV_DRAG_TYPE,
   readConversationIdFromDataTransfer,
 } from "@/lib/conversationNav";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface Props {
   user: User | null;
@@ -66,9 +82,6 @@ function ConversationRow({
   onMove: (conversationId: string, folderId: string | null) => Promise<boolean>;
   onItemClick?: () => void;
 }) {
-  const detailsRef = useRef<HTMLDetailsElement>(null);
-  const closeMenu = () => detailsRef.current?.removeAttribute("open");
-
   const inFolder = Boolean(conv.folder_id);
   const href = conversationUrl(conv.id);
 
@@ -80,11 +93,12 @@ function ConversationRow({
         e.dataTransfer.setData("text/plain", conv.id);
         e.dataTransfer.effectAllowed = "move";
       }}
-      className={`flex w-full items-stretch rounded-lg min-h-[44px] border border-transparent ${
+      className={cn(
+        "flex min-h-[44px] w-full items-stretch rounded-lg border border-transparent",
         currentConvId === conv.id
-          ? "bg-white/[0.08] text-white border-white/[0.06]"
-          : "text-gray-500 hover:bg-white/[0.04] hover:text-gray-300"
-      }`}
+          ? "border-sidebar-border bg-sidebar-accent text-sidebar-foreground"
+          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground"
+      )}
     >
       <a
         href={href}
@@ -96,71 +110,69 @@ function ConversationRow({
           onSelect();
           onItemClick?.();
         }}
-        className="flex flex-1 min-w-0 items-center px-2 py-2 pr-1 text-left text-sm truncate text-inherit no-underline hover:text-inherit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 rounded-md"
+        className="flex min-w-0 flex-1 items-center truncate rounded-md px-2 py-2 pr-1 text-left text-sm text-inherit no-underline hover:text-inherit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/40 focus-visible:ring-inset"
       >
         {conv.title}
       </a>
-      <details
-        ref={detailsRef}
-        className="relative flex items-center shrink-0 group/details"
-      >
-        <summary
-          className="list-none flex h-full items-center justify-center px-2 rounded-r-lg cursor-pointer text-gray-500 hover:text-gray-300 outline-none focus-visible:ring-2 focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden"
-          onPointerDown={(e) => e.stopPropagation()}
-          aria-label="Options de la conversation"
-        >
-          <MoreHorizontal size={16} />
-        </summary>
-        <div
-          className="absolute right-0 top-full z-40 mt-0.5 w-[min(240px,calc(100vw-4rem))] rounded-xl border border-white/[0.08] bg-surface-0 py-1 shadow-xl"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-200 hover:bg-white/[0.06]"
-            onClick={() => closeMenu()}
-          >
-            <ExternalLink size={14} />
-            Ouvrir dans un nouvel onglet
-          </a>
-          <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500 border-t border-white/[0.06] mt-1 pt-2">
-            Déplacer vers
-          </p>
-          <button
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
+            className="h-auto shrink-0 rounded-l-none rounded-r-lg text-sidebar-foreground/70 hover:text-sidebar-foreground"
+            onPointerDown={(e) => e.stopPropagation()}
+            aria-label="Options de la conversation"
+          >
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          className="w-[min(240px,calc(100vw-4rem))]"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <DropdownMenuItem asChild>
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex cursor-default items-center gap-2"
+            >
+              <ExternalLink className="size-3.5" />
+              Ouvrir dans un nouvel onglet
+            </a>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-[10px] uppercase tracking-wide">
+            Déplacer vers
+          </DropdownMenuLabel>
+          <DropdownMenuItem
             disabled={!inFolder}
-            onClick={() => {
-              void onMove(conv.id, null)
-                .then((moved) => {
-                  if (moved) onItemClick?.();
-                })
-                .finally(closeMenu);
+            onSelect={() => {
+              void onMove(conv.id, null).then((moved) => {
+                if (moved) onItemClick?.();
+              });
             }}
-            className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-white/[0.06] disabled:opacity-35 disabled:pointer-events-none"
           >
             Récents
-          </button>
+          </DropdownMenuItem>
           {projectFolders.map((f) => (
-            <button
+            <DropdownMenuItem
               key={f.id}
-              type="button"
               disabled={conv.folder_id === f.id}
-              onClick={() => {
-                void onMove(conv.id, f.id)
-                  .then((moved) => {
-                    if (moved) onItemClick?.();
-                  })
-                  .finally(closeMenu);
+              className="truncate"
+              onSelect={() => {
+                void onMove(conv.id, f.id).then((moved) => {
+                  if (moved) onItemClick?.();
+                });
               }}
-              className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-white/[0.06] truncate disabled:opacity-35 disabled:pointer-events-none"
             >
               {f.name}
-            </button>
+            </DropdownMenuItem>
           ))}
-        </div>
-      </details>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -294,36 +306,37 @@ function SidebarContent({
 
   return (
     <>
-      <div className="p-3 space-y-2">
-        <button
+      <div className="space-y-2 p-3">
+        <Button
           type="button"
           onClick={() => nav(onNewChat)}
-          className="flex items-center gap-2 w-full rounded-lg bg-white text-gray-950 px-3.5 py-2 text-sm font-semibold hover:bg-gray-200 active:bg-gray-300 transition-colors min-h-[44px] focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1"
+          className="h-11 w-full justify-start gap-2 font-semibold"
         >
-          <MessageSquarePlus size={16} />
+          <MessageSquarePlus className="size-4" />
           Nouvelle recherche
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="outline"
           onClick={() => nav(() => onNavigate("atelier"))}
-          className="flex items-center gap-2.5 w-full rounded-xl border border-teal-500/30 bg-teal-950/20 text-teal-100 px-3.5 py-2.5 text-sm font-medium hover:bg-teal-950/35 hover:border-teal-400/35 active:bg-teal-950/45 transition-colors min-h-[44px] focus-visible:ring-2 focus-visible:ring-teal-400/45 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1"
+          className="h-auto min-h-11 w-full justify-start gap-2.5 rounded-xl border-primary/25 bg-sidebar-accent/50 py-2.5 text-left text-sidebar-foreground hover:bg-sidebar-accent"
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/20 text-teal-200">
-            <Compass size={17} strokeWidth={2.25} />
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+            <Compass className="size-[17px]" strokeWidth={2.25} />
           </span>
-          <span className="flex flex-col items-start gap-0.5 min-w-0 text-left">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-teal-300/90 leading-none">
+          <span className="flex min-w-0 flex-col items-start gap-0.5 text-left">
+            <span className="text-[11px] font-semibold uppercase leading-none tracking-wide text-primary">
               Agent
             </span>
-            <span className="text-[13px] font-semibold leading-tight truncate w-full text-white">
+            <span className="w-full truncate text-[13px] font-semibold leading-tight">
               Créé ton entreprise
             </span>
           </span>
-        </button>
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin px-3 pb-3">
-        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.12em] mb-2 px-1">
+        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.12em] mb-2 px-1">
           PROJETS
         </p>
         <button
@@ -332,7 +345,7 @@ function SidebarContent({
             setCreatingFolder((v) => !v);
             setNewFolderName("Nouveau projet");
           }}
-          className="flex w-full items-center gap-2 rounded-lg border border-dashed border-white/[0.12] bg-white/[0.02] px-3 py-2.5 text-sm text-gray-300 hover:bg-white/[0.05] hover:border-white/[0.18] transition-colors min-h-[44px] mb-2"
+          className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border bg-white/[0.02] px-3 py-2.5 text-sm text-muted-foreground hover:bg-white/[0.05] hover:border-border transition-colors min-h-[44px] mb-2"
         >
           <FolderPlus size={17} strokeWidth={2.25} className="shrink-0 text-teal-300/85" />
           <span className="font-medium">Nouveau projet</span>
@@ -341,15 +354,15 @@ function SidebarContent({
         {creatingFolder && (
           <form
             onSubmit={handleCreateSubmit}
-            className="mb-3 rounded-lg border border-white/[0.08] bg-white/[0.03] p-2 space-y-2"
+            className="mb-3 rounded-lg border border-border bg-white/[0.03] p-2 space-y-2"
           >
-            <label className="block text-[10px] font-medium uppercase tracking-wide text-gray-500">
+            <label className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Nom du projet
             </label>
             <input
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
-              className="w-full rounded-md border border-white/[0.08] bg-surface-0 px-2.5 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500/40"
+              className="w-full rounded-md border border-border bg-background px-2.5 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-teal-500/40"
               placeholder="Ex. Rachat hôtel, Prospection Q2…"
               maxLength={160}
               autoFocus
@@ -359,7 +372,7 @@ function SidebarContent({
               <button
                 type="button"
                 onClick={() => setCreatingFolder(false)}
-                className="px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-300"
+                className="px-2.5 py-1.5 text-xs text-muted-foreground hover:text-muted-foreground"
                 disabled={savingFolder}
               >
                 Annuler
@@ -387,7 +400,7 @@ function SidebarContent({
         ) : (
           <div className="space-y-0.5 mb-4">
             {projectFolders.length === 0 && !creatingFolder ? (
-              <p className="text-xs text-gray-600 px-1 py-2">
+              <p className="text-xs text-muted-foreground px-1 py-2">
                 Aucun projet — crée-en un pour regrouper tes recherches.
               </p>
             ) : (
@@ -402,11 +415,11 @@ function SidebarContent({
                     onDrop={handleDropOnFolder(f.id)}
                     className={`flex items-stretch rounded-lg min-h-[44px] border transition-shadow ${
                       selected
-                        ? "border-white/[0.12] bg-white/[0.08]"
-                        : "border-transparent hover:bg-white/[0.04]"
+                        ? "border-border bg-white/[0.08]"
+                        : "border-transparent hover:bg-muted/50"
                     } ${
                       dropTarget === f.id
-                        ? "ring-2 ring-teal-400/50 ring-offset-2 ring-offset-surface-1"
+                        ? "ring-2 ring-teal-400/50 ring-offset-2 ring-offset-background"
                         : ""
                     }`}
                   >
@@ -417,7 +430,7 @@ function SidebarContent({
                           onSelectProjectFolder(f.id);
                         })
                       }
-                      className="flex flex-1 min-w-0 items-center gap-2 px-2.5 py-2 text-left text-sm text-gray-200"
+                      className="flex flex-1 min-w-0 items-center gap-2 px-2.5 py-2 text-left text-sm text-foreground"
                     >
                       <Folder
                         size={16}
@@ -432,7 +445,7 @@ function SidebarContent({
                             if (e.key === "Enter") void commitRename();
                             if (e.key === "Escape") setRenamingFolderId(null);
                           }}
-                          className="min-w-0 flex-1 rounded border border-teal-500/30 bg-surface-0 px-1.5 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-teal-400/50"
+                          className="min-w-0 flex-1 rounded border border-teal-500/30 bg-background px-1.5 py-0.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-teal-400/50"
                           maxLength={160}
                           autoFocus
                           onClick={(e) => e.stopPropagation()}
@@ -441,47 +454,36 @@ function SidebarContent({
                         <span className="truncate font-medium">{f.name}</span>
                       )}
                     </button>
-                    <details className="relative flex items-center shrink-0 border-l border-white/[0.06]">
-                      <summary
-                        className="list-none flex h-full items-center px-2 text-gray-500 hover:text-gray-300 cursor-pointer [&::-webkit-details-marker]:hidden outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400/40"
-                        aria-label={`Actions projet ${f.name}`}
-                      >
-                        <MoreHorizontal size={15} />
-                      </summary>
-                      <div className="absolute right-0 top-full z-40 mt-0.5 w-44 rounded-lg border border-white/[0.08] bg-surface-0 py-1 shadow-xl">
-                        <button
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
                           type="button"
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-200 hover:bg-white/[0.06]"
-                          onClick={(e) => {
-                            (
-                              e.currentTarget.closest(
-                                "details"
-                              ) as HTMLDetailsElement | null
-                            )?.removeAttribute("open");
-                            startRenameFolder(f);
-                          }}
+                          variant="ghost"
+                          size="icon"
+                          className="h-auto shrink-0 rounded-l-none rounded-r-lg border-l border-sidebar-border text-sidebar-foreground/65 hover:text-sidebar-foreground"
+                          aria-label={`Actions projet ${f.name}`}
                         >
-                          <Pencil size={14} />
+                          <MoreHorizontal className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem
+                          onSelect={() => startRenameFolder(f)}
+                          className="gap-2"
+                        >
+                          <Pencil className="size-3.5" />
                           Renommer
-                        </button>
-                        <button
-                          type="button"
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           disabled={busy}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-400/90 hover:bg-red-500/10 disabled:opacity-40"
-                          onClick={(e) => {
-                            (
-                              e.currentTarget.closest(
-                                "details"
-                              ) as HTMLDetailsElement | null
-                            )?.removeAttribute("open");
-                            void askDeleteFolder(f.id, f.name);
-                          }}
+                          className="gap-2 text-destructive focus:text-destructive"
+                          onSelect={() => void askDeleteFolder(f.id, f.name)}
                         >
-                          <Trash2 size={14} />
+                          <Trash2 className="size-3.5" />
                           Supprimer
-                        </button>
-                      </div>
-                    </details>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 );
               })
@@ -499,7 +501,7 @@ function SidebarContent({
             ))}
           </div>
         ) : inboxConversations.length === 0 ? (
-          <p className="text-xs text-gray-600 px-1 py-1 mt-3">
+          <p className="text-xs text-muted-foreground px-1 py-1 mt-3">
             Aucune conversation dans Récents.
           </p>
         ) : showTree ? (
@@ -507,17 +509,17 @@ function SidebarContent({
             <button
               type="button"
               onClick={() => setRecentsOpen((o) => !o)}
-              className="flex w-full items-center gap-1.5 rounded-lg px-1 py-1.5 text-left text-xs font-semibold text-gray-400 hover:bg-white/[0.04] hover:text-gray-200 transition-colors mb-0.5"
+              className="flex w-full items-center gap-1.5 rounded-lg px-1 py-1.5 text-left text-xs font-semibold text-gray-400 hover:bg-muted/50 hover:text-foreground transition-colors mb-0.5"
             >
               <ChevronDown
                 size={14}
                 className={`shrink-0 transition-transform ${recentsOpen ? "" : "-rotate-90"}`}
               />
               <span className="truncate">
-                <span className="font-semibold text-gray-300 tracking-wide">
+                <span className="font-semibold text-muted-foreground tracking-wide">
                   Récents
                 </span>
-                <span className="ml-1.5 tabular-nums text-gray-500 font-normal">
+                <span className="ml-1.5 tabular-nums text-muted-foreground font-normal">
                   ({inboxConversations.length})
                 </span>
               </span>
@@ -529,7 +531,7 @@ function SidebarContent({
                 onDrop={handleDropOnRecents}
                 className={`space-y-0.5 pl-0.5 rounded-lg min-h-[44px] py-0.5 ${
                   dropTarget === "recents"
-                    ? "ring-2 ring-white/25 ring-offset-2 ring-offset-surface-1"
+                    ? "ring-2 ring-white/25 ring-offset-2 ring-offset-background"
                     : ""
                 }`}
               >
@@ -550,33 +552,39 @@ function SidebarContent({
         ) : null}
       </div>
 
-      <div className="border-t border-white/[0.06] p-3 space-y-0.5">
-        <button
+      <div className="space-y-0.5 border-t border-sidebar-border p-3">
+        <Button
+          type="button"
+          variant="ghost"
           onClick={() => nav(() => onNavigate("dashboard"))}
-          className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-white/[0.04] hover:text-gray-300 active:bg-white/[0.06] transition-colors min-h-[44px]"
+          className="h-11 w-full justify-start gap-2 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
         >
-          <History size={15} />
+          <History className="size-4 shrink-0" />
           Historique
-        </button>
-        <button
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
           onClick={() => nav(() => onNavigate("credits"))}
-          className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-white/[0.04] hover:text-gray-300 active:bg-white/[0.06] transition-colors min-h-[44px]"
+          className="h-11 w-full justify-start gap-2 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
         >
-          <CreditCard size={15} />
+          <CreditCard className="size-4 shrink-0" />
           Crédits
           {user && (
-            <span className="ml-auto text-[11px] tabular-nums text-gray-500 bg-white/[0.06] px-1.5 py-0.5 rounded">
+            <span className="ml-auto rounded bg-sidebar-accent px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-sidebar-foreground/80">
               {user.credits_unlimited ? "∞" : user.credits}
             </span>
           )}
-        </button>
-        <button
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
           onClick={() => nav(onLogout)}
-          className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-white/[0.04] hover:text-red-400 active:bg-red-500/10 transition-colors min-h-[44px]"
+          className="h-11 w-full justify-start gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
         >
-          <LogOut size={15} />
+          <LogOut className="size-4 shrink-0" />
           Déconnexion
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -630,67 +638,112 @@ export default function Sidebar({
   };
 
   return (
-    <>
+    <TooltipProvider delayDuration={300}>
       {collapsed ? (
-        <div className="hidden md:flex flex-col items-center w-14 bg-surface-1 border-r border-white/[0.06] py-4 gap-2">
-          <button
-            onClick={onToggle}
-            className="p-2 rounded-lg hover:bg-white/[0.06] text-gray-500 transition-colors"
-          >
-            <ChevronRight size={18} />
-          </button>
-          <button
-            type="button"
-            onClick={onNewChat}
-            className="p-2 rounded-lg bg-white/[0.08] text-white hover:bg-white/[0.12] transition-colors"
-            title="Nouvelle recherche"
-          >
-            <MessageSquarePlus size={18} />
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate("atelier")}
-            className="p-2 rounded-lg bg-teal-600/25 text-teal-200 hover:bg-teal-600/40 transition-colors"
-            title="Agent Atelier"
-          >
-            <Compass size={18} strokeWidth={2.25} />
-          </button>
-          <button
-            onClick={() => onNavigate("dashboard")}
-            className="p-2 rounded-lg hover:bg-white/[0.06] text-gray-500 transition-colors"
-            title="Historique"
-          >
-            <History size={18} />
-          </button>
-          <button
-            onClick={() => onNavigate("credits")}
-            className="p-2 rounded-lg hover:bg-white/[0.06] text-gray-500 transition-colors"
-            title="Crédits"
-          >
-            <CreditCard size={18} />
-          </button>
+        <div className="hidden w-14 shrink-0 flex-col items-center gap-2 border-r border-sidebar-border bg-sidebar py-4 text-sidebar-foreground md:flex">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={onToggle}
+                aria-label="Déplier la barre latérale"
+              >
+                <ChevronRight className="size-[18px]" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Déplier</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                onClick={onNewChat}
+                aria-label="Nouvelle recherche"
+              >
+                <MessageSquarePlus className="size-[18px]" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Nouvelle recherche</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="border-primary/30 text-primary"
+                onClick={() => onNavigate("atelier")}
+                aria-label="Agent Atelier"
+              >
+                <Compass className="size-[18px]" strokeWidth={2.25} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Atelier</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => onNavigate("dashboard")}
+                aria-label="Historique"
+              >
+                <History className="size-[18px]" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Historique</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => onNavigate("credits")}
+                aria-label="Crédits"
+              >
+                <CreditCard className="size-[18px]" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Crédits</TooltipContent>
+          </Tooltip>
           <div className="mt-auto">
-            <button
-              onClick={onLogout}
-              className="p-2 rounded-lg hover:bg-white/[0.06] text-gray-500 transition-colors"
-              title="Déconnexion"
-            >
-              <LogOut size={18} />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onLogout}
+                  aria-label="Déconnexion"
+                >
+                  <LogOut className="size-[18px]" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Déconnexion</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       ) : (
-        <div className="hidden md:flex flex-col w-64 bg-surface-1 border-r border-white/[0.06] h-full">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-            <span className="text-base font-bold tracking-tight text-white">
+        <div className="hidden h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+          <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
+            <span className="text-base font-bold tracking-tight">
               MONV
             </span>
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
               onClick={onToggle}
-              className="p-1 rounded-md hover:bg-white/[0.06] text-gray-500 transition-colors"
+              aria-label="Replier la barre latérale"
             >
-              <ChevronLeft size={16} />
-            </button>
+              <ChevronLeft className="size-4" />
+            </Button>
           </div>
           <SidebarContent {...sharedProps} />
         </div>
@@ -701,23 +754,25 @@ export default function Sidebar({
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm backdrop-enter"
             onClick={onMobileClose}
+            aria-hidden
           />
-          <div className="relative flex flex-col w-[280px] max-w-[85vw] h-full bg-surface-1 drawer-enter">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-              <span className="text-base font-bold tracking-tight text-white">
-                MONV
-              </span>
-              <button
+          <div className="relative flex h-full w-[280px] max-w-[85vw] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground drawer-enter">
+            <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
+              <span className="text-base font-bold tracking-tight">MONV</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
                 onClick={onMobileClose}
-                className="p-2 -mr-1 rounded-lg hover:bg-white/[0.06] text-gray-500 transition-colors"
+                aria-label="Fermer le menu"
               >
-                <X size={18} />
-              </button>
+                <X className="size-[18px]" />
+              </Button>
             </div>
             <SidebarContent {...sharedProps} onItemClick={onMobileClose} />
           </div>
         </div>
       )}
-    </>
+    </TooltipProvider>
   );
 }

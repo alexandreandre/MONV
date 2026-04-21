@@ -56,15 +56,15 @@ export default function Dashboard({ onBack }: Props) {
     <div className="max-w-3xl mx-auto py-6 sm:py-10 px-4 sm:px-6">
       <button
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 active:text-white transition-colors mb-6 min-h-[44px]"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-muted-foreground active:text-foreground transition-colors mb-6 min-h-[44px]"
       >
         <ArrowLeft size={14} />
         Nouvelle recherche
       </button>
 
       <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-white">Historique</h1>
-        <p className="text-gray-500 text-sm mt-1">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Historique</h1>
+        <p className="text-muted-foreground text-sm mt-1">
           Vos recherches passées et exports
         </p>
       </div>
@@ -74,7 +74,7 @@ export default function Dashboard({ onBack }: Props) {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="rounded-xl border border-white/[0.06] bg-surface-1 p-4 animate-pulse"
+              className="rounded-xl border border-border bg-card p-4 animate-pulse"
             >
               <div className="h-4 bg-white/[0.04] rounded w-3/4 mb-3" />
               <div className="h-3 bg-white/[0.03] rounded w-1/2" />
@@ -84,15 +84,15 @@ export default function Dashboard({ onBack }: Props) {
       ) : history.length === 0 ? (
         <div className="text-center py-16">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-white/[0.04] mb-4">
-            <Building size={28} className="text-gray-600" />
+            <Building size={28} className="text-muted-foreground" />
           </div>
           <p className="text-gray-400 mb-1">Aucune recherche pour l&apos;instant</p>
-          <p className="text-gray-600 text-sm mb-4">
+          <p className="text-muted-foreground text-sm mb-4">
             Vos recherches apparaîtront ici
           </p>
           <button
             onClick={onBack}
-            className="text-white hover:underline underline-offset-2 text-sm transition-colors"
+            className="text-foreground hover:underline underline-offset-2 text-sm transition-colors"
           >
             Faire votre première recherche
           </button>
@@ -102,14 +102,14 @@ export default function Dashboard({ onBack }: Props) {
           {history.map((item) => (
             <div
               key={item.id}
-              className="rounded-xl border border-white/[0.06] bg-surface-1 p-4 hover:border-white/[0.12] transition-colors"
+              className="rounded-xl border border-border bg-card p-4 hover:border-border transition-colors"
             >
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white font-medium truncate">
+                  <p className="text-sm text-foreground font-medium truncate">
                     {item.query}
                   </p>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-gray-600">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
                       <Calendar size={11} />
                       {new Date(item.created_at).toLocaleDateString("fr-FR", {
@@ -119,13 +119,13 @@ export default function Dashboard({ onBack }: Props) {
                         minute: "2-digit",
                       })}
                     </span>
-                    <span className="text-gray-500">
+                    <span className="text-muted-foreground">
                       {item.results_count} résultat{item.results_count > 1 ? "s" : ""}
                     </span>
                     <span>
                       {item.credits_used} crédit{item.credits_used > 1 ? "s" : ""}
                     </span>
-                    <span className="text-gray-600 bg-white/[0.04] px-1.5 py-0.5 rounded text-[11px]">
+                    <span className="text-muted-foreground bg-white/[0.04] px-1.5 py-0.5 rounded text-[11px]">
                       {INTENT_LABELS[item.intent] || item.intent.replace(/_/g, " ")}
                     </span>
                   </div>

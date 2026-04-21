@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Building, Phone, Globe, ExternalLink } from "lucide-react";
+import { useTheme } from "next-themes";
 
 interface Props {
   data: Record<string, any>[];
@@ -38,6 +39,27 @@ function FitBounds({ positions }: { positions: [number, number][] }) {
 
 const DEFAULT_MAP_BOX = "h-[420px] sm:h-[480px]";
 
+function ThemedTileLayer() {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const dark = !mounted || resolvedTheme !== "light";
+  return (
+    <TileLayer
+      attribution={
+        dark
+          ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      }
+      url={
+        dark
+          ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      }
+    />
+  );
+}
+
 export default function ResultsMap({ data, className }: Props) {
   const geoData = useMemo(
     () => data.filter((r) => r.latitude != null && r.longitude != null),
@@ -56,15 +78,15 @@ export default function ResultsMap({ data, className }: Props) {
   if (geoData.length === 0) {
     return (
       <div
-        className={`flex min-h-0 w-full flex-col items-center justify-center px-4 text-center rounded-lg border border-white/[0.06] bg-surface-2/40 ${boxClass}`}
+        className={`flex min-h-0 w-full flex-col items-center justify-center rounded-lg border border-border bg-muted/30 px-4 text-center ${boxClass}`}
       >
-        <div className="w-12 h-12 rounded-xl bg-white/[0.04] flex items-center justify-center mb-3">
-          <Building size={20} className="text-gray-600" />
+        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
+          <Building size={20} className="text-muted-foreground" />
         </div>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           Aucune entreprise avec coordonnées géographiques
         </p>
-        <p className="text-xs text-gray-600 mt-1">
+        <p className="text-xs text-muted-foreground mt-1">
           Les adresses n&apos;ont pas pu être géolocalisées
         </p>
       </div>
@@ -80,27 +102,24 @@ export default function ResultsMap({ data, className }: Props) {
         zoomControl={true}
         scrollWheelZoom={true}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        />
+        <ThemedTileLayer />
         <FitBounds positions={positions} />
         {geoData.map((row, i) => (
           <Marker key={i} position={[row.latitude, row.longitude]} icon={markerIcon}>
             <Popup>
               <div className="min-w-[200px] max-w-[280px]">
-                <p className="font-semibold text-sm text-gray-900 leading-tight">
+                <p className="text-sm font-semibold leading-tight text-foreground">
                   {row.nom || "—"}
                 </p>
                 {(row.adresse || row.ville) && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     {[row.adresse, row.code_postal, row.ville].filter(Boolean).join(", ")}
                   </p>
                 )}
                 {row.libelle_activite && (
-                  <p className="text-xs text-gray-600 mt-1 italic">{row.libelle_activite}</p>
+                  <p className="text-xs text-muted-foreground mt-1 italic">{row.libelle_activite}</p>
                 )}
-                <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100">
+                <div className="mt-2 flex items-center gap-3 border-t border-border pt-2">
                   {row.telephone && (
                     <a
                       href={`tel:${row.telephone}`}
@@ -138,12 +157,12 @@ export default function ResultsMap({ data, className }: Props) {
           </Marker>
         ))}
       </MapContainer>
-      <div className="absolute bottom-3 left-3 z-[1000] bg-surface-2/90 backdrop-blur-sm border border-white/[0.08] rounded-lg px-2.5 py-1.5">
-        <p className="text-[11px] text-gray-400">
-          <span className="text-white font-medium tabular-nums">{geoData.length}</span>
+      <div className="absolute bottom-3 left-3 z-[1000] rounded-lg border border-border bg-background/90 px-2.5 py-1.5 backdrop-blur-sm">
+        <p className="text-[11px] text-muted-foreground">
+          <span className="font-mono font-medium tabular-nums text-foreground">{geoData.length}</span>
           {" "}entreprise{geoData.length > 1 ? "s" : ""} sur la carte
           {geoData.length < data.length && (
-            <span className="text-gray-600">
+            <span className="text-muted-foreground">
               {" "}/ {data.length} total
             </span>
           )}

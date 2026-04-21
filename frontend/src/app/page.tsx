@@ -9,6 +9,7 @@ import {
   useCallback,
   Suspense,
 } from "react";
+import { notify } from "@/lib/notify";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   apiPost,
@@ -44,11 +45,15 @@ import ModeSelector from "@/components/ModeSelector";
 import AgentWelcome from "@/components/AgentWelcome";
 import Dashboard from "@/components/Dashboard";
 import CreditsPage from "@/components/CreditsPage";
-import ToastContainer, { type ToastData } from "@/components/Toast";
 import MobileHeader from "@/components/MobileHeader";
+import { AppShell } from "@/components/AppShell";
+import { AppTopbar, type BreadcrumbSegment } from "@/components/AppTopbar";
+import { CommandPalette } from "@/components/CommandPalette";
 import PipelineProgress, { type PipelineStep } from "@/components/PipelineProgress";
 import { CONV_SEARCH_PARAM } from "@/lib/conversationNav";
 import { ArrowRight, Compass } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 type Page = "chat" | "dashboard" | "credits" | "atelier";
 
@@ -130,14 +135,13 @@ function HomeInner() {
   const [sending, setSending] = useState(false);
   const [pipelineStep, setPipelineStep] = useState<PipelineStep>("filtering");
   const [exporting, setExporting] = useState(false);
-  const [toasts, setToasts] = useState<ToastData[]>([]);
+  const [commandOpen, setCommandOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sendAbortRef = useRef<AbortController | null>(null);
 
   const addToast = useCallback(
-    (type: ToastData["type"], message: string, duration?: number) => {
-      const id = "toast-" + Date.now() + "-" + Math.random();
-      setToasts((prev) => [...prev, { id, type, message, duration }]);
+    (type: "error" | "success" | "info", message: string, duration?: number) => {
+      notify(type, message, duration);
     },
     []
   );
@@ -170,10 +174,6 @@ function HomeInner() {
 
   const handleAtelierCreditsRemaining = useCallback((credits: number) => {
     setUser((u) => (u ? { ...u, credits } : u));
-  }, []);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const replaceConversationInUrl = useCallback(
@@ -974,39 +974,125 @@ function HomeInner() {
     onMobileClose: () => setSidebarMobileOpen(false),
   };
 
+  const breadcrumbSegments = useMemo((): BreadcrumbSegment[] => {
+    const root: BreadcrumbSegment[] = [{ label: "MONV", current: false }];
+    if (page === "dashboard")
+      return [...root, { label: "Historique", current: true }];
+    if (page === "credits") return [...root, { label: "Crédits", current: true }];
+    if (page === "atelier") return [...root, { label: "Atelier", current: true }];
+    if (showProjectHub && activeProjectFolder) {
+      return [
+        ...root,
+        { label: activeProjectFolder.name, current: false },
+        { label: "Vue projet", current: true },
+      ];
+    }
+    if (currentConvId) {
+      const conv = conversations.find((c) => c.id === currentConvId);
+      const title = conv?.title?.trim() || "Conversation";
+      return [...root, { label: title, current: true }];
+    }
+    if (activeProjectFolder) {
+      return [...root, { label: activeProjectFolder.name, current: true }];
+    }
+    return [...root, { label: "Recherche", current: true }];
+  }, [
+    page,
+    showProjectHub,
+    activeProjectFolder,
+    currentConvId,
+    conversations,
+  ]);
+
+  const commandPaletteEl = (
+    <CommandPalette
+      open={commandOpen}
+      onOpenChange={setCommandOpen}
+      canLogout={showAuthenticatedChrome}
+      conversations={conversations}
+      projectFolders={projectFolders}
+      onNewChat={() => {
+        handleNewChat();
+        setCommandOpen(false);
+      }}
+      onOpenAtelier={() => {
+        handleOpenAtelier();
+        setCommandOpen(false);
+      }}
+      onNavigateDashboard={() => {
+        if (user) setPage("dashboard");
+        setCommandOpen(false);
+      }}
+      onNavigateCredits={() => {
+        if (user) setPage("credits");
+        setCommandOpen(false);
+      }}
+      onSelectConversation={(id) => {
+        void handleSelectConversation(id);
+        setCommandOpen(false);
+      }}
+      onSelectProjectFolder={(id) => {
+        handleSelectProjectFolder(id);
+        setCommandOpen(false);
+      }}
+      onLogout={() => {
+        handleLogout();
+        setCommandOpen(false);
+      }}
+    />
+  );
+
+  const desktopTopbarEl =
+    showAuthenticatedChrome ? (
+      <AppTopbar
+        user={user}
+        sessionHint={sessionHint}
+        segments={breadcrumbSegments}
+        onOpenCommand={() => setCommandOpen(true)}
+        onNavigateCredits={() => setPage("credits")}
+        onOpenAtelier={handleOpenAtelier}
+        onLogout={handleLogout}
+      />
+    ) : null;
+
+  const mobileHeaderEl = showAuthenticatedChrome ? (
+    <MobileHeader
+      user={user}
+      onMenuOpen={() => setSidebarMobileOpen(true)}
+      onNavigateCredits={() => setPage("credits")}
+      onOpenAtelier={handleOpenAtelier}
+      onOpenCommand={() => setCommandOpen(true)}
+    />
+  ) : null;
+
   if (page === "dashboard" && user) {
     return (
-      <div className="flex h-screen bg-surface-0">
-        <Sidebar {...sidebarProps} />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <MobileHeader
-            user={user}
-            onMenuOpen={() => setSidebarMobileOpen(true)}
-            onNavigateCredits={() => setPage("credits")}
-            onOpenAtelier={handleOpenAtelier}
-          />
-          <div className="flex-1 overflow-y-auto scrollbar-thin">
+      <AppShell
+        sidebar={<Sidebar {...sidebarProps} />}
+        mobileHeader={mobileHeaderEl}
+        desktopTopbar={desktopTopbarEl}
+        commandPalette={commandPaletteEl}
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+          <div className="mx-auto w-full max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8">
             <Dashboard onBack={handleNewChat} />
           </div>
         </div>
-        <ToastContainer toasts={toasts} onRemove={removeToast} />
-      </div>
+      </AppShell>
     );
   }
 
   if (page === "atelier" && (user || sessionHint)) {
     return (
-      <div className="flex h-screen bg-surface-0">
-        {showAuthenticatedChrome && <Sidebar {...sidebarProps} />}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {showAuthenticatedChrome && (
-            <MobileHeader
-              user={user}
-              onMenuOpen={() => setSidebarMobileOpen(true)}
-              onNavigateCredits={() => setPage("credits")}
-              onOpenAtelier={handleOpenAtelier}
-            />
-          )}
+      <AppShell
+        sidebar={
+          showAuthenticatedChrome ? <Sidebar {...sidebarProps} /> : <></>
+        }
+        mobileHeader={mobileHeaderEl}
+        desktopTopbar={desktopTopbarEl}
+        commandPalette={commandPaletteEl}
+      >
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <AgentWelcome
             onBack={handleAtelierBack}
             onSubmit={handleAgentStart}
@@ -1015,50 +1101,51 @@ function HomeInner() {
             loading={sending}
           />
         </div>
-        <ToastContainer toasts={toasts} onRemove={removeToast} />
-      </div>
+      </AppShell>
     );
   }
 
   if (page === "credits" && user) {
     return (
-      <div className="flex h-screen bg-surface-0">
-        <Sidebar {...sidebarProps} />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <MobileHeader
-            user={user}
-            onMenuOpen={() => setSidebarMobileOpen(true)}
-            onNavigateCredits={() => setPage("credits")}
-            onOpenAtelier={handleOpenAtelier}
-          />
-          <div className="flex-1 overflow-y-auto scrollbar-thin">
+      <AppShell
+        sidebar={<Sidebar {...sidebarProps} />}
+        mobileHeader={mobileHeaderEl}
+        desktopTopbar={desktopTopbarEl}
+        commandPalette={commandPaletteEl}
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+          <div className="mx-auto w-full max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8">
             <CreditsPage
               user={user}
               onCreditsUpdated={(n) =>
-                setUser(user ? { ...user, credits: n, credits_unlimited: user.credits_unlimited } : null)
+                setUser(
+                  user
+                    ? {
+                        ...user,
+                        credits: n,
+                        credits_unlimited: user.credits_unlimited,
+                      }
+                    : null
+                )
               }
               onBack={handleNewChat}
             />
           </div>
         </div>
-        <ToastContainer toasts={toasts} onRemove={removeToast} />
-      </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="flex h-screen bg-surface-0">
-      {showAuthenticatedChrome && <Sidebar {...sidebarProps} />}
-
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {showAuthenticatedChrome && (
-          <MobileHeader
-            user={user}
-            onMenuOpen={() => setSidebarMobileOpen(true)}
-            onNavigateCredits={() => setPage("credits")}
-            onOpenAtelier={handleOpenAtelier}
-          />
-        )}
+    <AppShell
+      sidebar={
+        showAuthenticatedChrome ? <Sidebar {...sidebarProps} /> : <></>
+      }
+      mobileHeader={mobileHeaderEl}
+      desktopTopbar={desktopTopbarEl}
+      commandPalette={commandPaletteEl}
+    >
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {showProjectHub && activeProjectFolder ? (
           <ProjectHub
             projectFolderId={activeProjectFolder.id}
@@ -1080,51 +1167,57 @@ function HomeInner() {
             onMoveConversationToFolder={handleMoveConversationToFolder}
           />
         ) : messages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center px-4 sm:px-6 overflow-y-auto">
-            <div className="my-auto w-full flex flex-col items-center py-6 sm:py-10 max-w-3xl mx-auto">
+          <div className="flex-1 overflow-y-auto scrollbar-thin">
+            <div className="mx-auto flex w-full max-w-screen-2xl flex-col items-center px-4 py-6 sm:px-6 lg:px-8">
+            <div className="my-auto flex w-full max-w-3xl flex-col items-center py-6 sm:py-10">
               <div
-                className={`w-full mb-6 sm:mb-8 ${
-                  user || sessionHint ? "text-center" : "text-center max-w-2xl mx-auto"
+                className={`mb-6 w-full sm:mb-8 ${
+                  user || sessionHint
+                    ? "text-center"
+                    : "mx-auto max-w-2xl text-center"
                 }`}
               >
                 <h1
-                  className={`tracking-tight text-white text-balance ${
+                  className={`font-serif text-balance tracking-tight text-foreground ${
                     user
-                      ? "text-2xl sm:text-3xl font-semibold leading-snug"
-                      : "text-3xl sm:text-5xl font-extrabold leading-tight"
+                      ? "text-2xl font-semibold leading-snug sm:text-3xl"
+                      : "text-3xl font-semibold leading-tight sm:text-5xl"
                   }`}
                 >
                   {chatLandingHeadline}
                 </h1>
                 {chatLandingSubline && (
-                  <p className="mt-2 text-sm text-gray-500 max-w-lg mx-auto leading-relaxed">
+                  <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
                     {chatLandingSubline}
                   </p>
                 )}
 
                 {!user && !sessionHint && (
                   <>
-                    <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 px-2 sm:px-0">
-                      <button
+                    <div className="mt-8 flex flex-col items-center justify-center gap-3 px-2 sm:flex-row sm:px-0">
+                      <Button
                         type="button"
+                        size="lg"
+                        className="w-full min-h-[44px] gap-2 sm:w-auto"
                         onClick={() => openAuth("register")}
-                        className="inline-flex items-center justify-center gap-2 bg-white text-gray-950 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 active:bg-gray-300 transition-colors text-sm w-full sm:w-auto min-h-[44px]"
                       >
                         S&apos;inscrire — 5 crédits offerts
-                        <ArrowRight size={15} />
-                      </button>
-                      <button
+                        <ArrowRight className="size-4" />
+                      </Button>
+                      <Button
                         type="button"
+                        size="lg"
+                        variant="outline"
+                        className="w-full min-h-[44px] sm:w-auto"
                         onClick={() => openAuth("login")}
-                        className="inline-flex items-center justify-center px-6 py-3 rounded-lg font-semibold text-sm text-white border border-gray-700 hover:bg-white/[0.06] active:bg-white/[0.1] hover:border-gray-600 transition-colors w-full sm:w-auto min-h-[44px]"
                       >
                         Se connecter
-                      </button>
+                      </Button>
                     </div>
-                    <p className="mt-5 text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
+                    <p className="mx-auto mt-5 max-w-md text-sm leading-relaxed text-muted-foreground">
                       Inscris-toi pour lancer des recherches par mode (prospection,
                       sous-traitants, etc.). Tu pourras aussi ouvrir l&apos;agent{" "}
-                      <span className="text-teal-300/95">Atelier</span> pour un
+                      <span className="font-medium text-primary">Atelier</span> pour un
                       dossier projet guidé (QCM puis tableaux d&apos;entreprises).
                     </p>
                   </>
@@ -1133,18 +1226,17 @@ function HomeInner() {
 
               {(user || sessionHint) && (
                 <>
-                  <section
-                    className="w-full rounded-xl border border-white/[0.08] bg-surface-1/60 p-4 sm:p-6 flex flex-col min-w-0 mb-5"
+                  <Card
+                    className="mb-5 w-full min-w-0 border-border/80 shadow-sm"
                     aria-labelledby="recherche-mode-heading"
                   >
-                    <div className="mb-4">
-                    </div>
+                    <CardContent className="flex flex-col gap-0 px-4 pb-6 pt-4 sm:px-6 sm:pt-6">
                     <ModeSelector
                       value={selectedMode}
                       onChange={setSelectedMode}
                       disabled={sending || !user}
                     />
-                    <div className="mt-5 pt-5 border-t border-white/[0.07] flex flex-col min-h-0">
+                    <div className="mt-5 flex min-h-0 flex-col border-t border-border pt-5">
                       <ChatInput
                         onSend={handleSend}
                         disabled={sending || !user}
@@ -1153,8 +1245,8 @@ function HomeInner() {
                         placeholder={MODE_META[selectedMode].placeholder}
                       />
                     </div>
-                    <div className="mt-6 pt-6 border-t border-white/[0.07]">
-                      <p className="text-xs font-medium text-gray-500 mb-3">
+                    <div className="mt-6 border-t border-border pt-6">
+                      <p className="mb-3 text-xs font-medium text-muted-foreground">
                         Exemples · {MODE_META[selectedMode].label}
                       </p>
                       {templates.length > 0 ? (
@@ -1164,50 +1256,55 @@ function HomeInner() {
                           onSelect={handleTemplateSelect}
                         />
                       ) : (
-                        <p className="text-center text-xs text-gray-600 py-5 border border-dashed border-white/[0.06] rounded-lg">
+                        <p className="rounded-lg border border-dashed border-border py-5 text-center text-xs text-muted-foreground">
                           Aucun exemple pour ce mode — décris ta recherche
                           directement.
                         </p>
                       )}
                     </div>
-                  </section>
+                    </CardContent>
+                  </Card>
 
-                  <div className="w-full mb-10">
+                  <Card className="group mb-10 w-full overflow-hidden border-primary/20 shadow-sm transition-colors hover:border-primary/35">
                     <button
                       type="button"
                       onClick={handleOpenAtelier}
                       disabled={sending || !user}
-                      className="group relative w-full overflow-hidden rounded-xl border border-white/[0.08] bg-surface-1 text-left hover:border-white/[0.14] disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-teal-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
+                      className="relative w-full text-left disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <div
-                        className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-teal-700/90"
+                        className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-primary/80"
                         aria-hidden
                       />
-                      <div className="relative flex flex-col sm:flex-row sm:items-center gap-4 pl-5 pr-4 py-4 sm:py-4">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-teal-950/45 text-teal-200/95">
-                          <Compass size={20} strokeWidth={2} />
+                      <div className="relative flex flex-col gap-4 py-4 pl-5 pr-4 sm:flex-row sm:items-center sm:py-4">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-primary/10 text-primary">
+                          <Compass className="size-5" strokeWidth={2} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-gray-500">Atelier</p>
-                          <p className="text-base sm:text-[17px] font-medium text-white mt-0.5 leading-snug">
+                          <p className="text-xs font-medium text-primary">
+                            Atelier
+                          </p>
+                          <p className="mt-0.5 font-serif text-base font-medium leading-snug text-foreground sm:text-[17px]">
                             Créons ton entreprise ensemble.
                           </p>
                         </div>
-                        <span className="inline-flex shrink-0 items-center justify-center gap-1.5 self-stretch sm:self-center rounded-lg border border-white/[0.1] bg-white/[0.05] px-3.5 py-2 text-sm font-medium text-white group-hover:bg-white/[0.08] sm:min-h-0 min-h-[44px]">
+                        <span className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 self-stretch rounded-lg border border-border bg-muted/50 px-3.5 py-2 text-sm font-medium text-foreground group-hover:bg-muted sm:min-h-0 sm:self-center">
                           Ouvrir
-                          <ArrowRight size={15} aria-hidden />
+                          <ArrowRight className="size-4" aria-hidden />
                         </span>
                       </div>
                     </button>
-                  </div>
+                  </Card>
                 </>
               )}
+            </div>
             </div>
           </div>
         ) : (
           <>
-            <div className="flex-1 overflow-y-auto scrollbar-thin px-4 py-6">
-              <div className="max-w-3xl mx-auto space-y-6">
+            <div className="flex-1 overflow-y-auto scrollbar-thin px-4 py-6 sm:px-6">
+              <div className="mx-auto w-full max-w-screen-2xl">
+              <div className="mx-auto max-w-3xl space-y-6">
                 {messages.map((m) => (
                   <ChatMessage
                     key={m.id}
@@ -1231,12 +1328,13 @@ function HomeInner() {
 
                 <div ref={messagesEndRef} />
               </div>
+              </div>
             </div>
 
             {isAtelierConversation ? (
               messages.some((m) => m.message_type === "business_dossier") ? (
-                <div className="border-t border-gray-800/60 px-4 py-3 bg-surface-0">
-                  <div className="max-w-3xl mx-auto space-y-2">
+                <div className="border-t border-border bg-background px-4 py-3">
+                  <div className="mx-auto max-w-3xl space-y-2">
                     <ChatInput
                       onSend={handleSend}
                       disabled={sending}
@@ -1244,44 +1342,48 @@ function HomeInner() {
                       onStop={handleStopSend}
                       placeholder="Poursuivre : ex. « Trouve des ESN à Toulouse » ou « concurrents secteur X »…"
                     />
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <p className="text-[11px] text-gray-500 text-center sm:text-left">
-                        Session <span className="text-teal-300">Atelier</span> — recherche
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-center text-[11px] text-muted-foreground sm:text-left">
+                        Session <span className="font-medium text-primary">Atelier</span> — recherche
                         suivante en mode prospection (historique conservé).
                       </p>
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="sm"
                         onClick={handleNewChat}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-surface-1 px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:border-white/[0.18] transition-colors shrink-0"
+                        className="shrink-0 text-xs"
                       >
                         Nouveau chat
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="border-t border-gray-800/60 px-4 py-3 bg-surface-0">
-                  <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
-                    <p className="text-[11px] text-gray-500">
-                      Session <span className="text-teal-300">Atelier</span> — réponds au
+                <div className="border-t border-border bg-background px-4 py-3">
+                  <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+                    <p className="text-[11px] text-muted-foreground">
+                      Session <span className="font-medium text-primary">Atelier</span> — réponds au
                       questionnaire puis consulte ton dossier.{" "}
-                      <span className="text-gray-600">
+                      <span className="text-muted-foreground/80">
                         Nouveau chat pour quitter sans dossier.
                       </span>
                     </p>
-                    <button
+                    <Button
                       type="button"
+                      variant="outline"
+                      size="sm"
                       onClick={handleNewChat}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-surface-1 px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:border-white/[0.18] transition-colors"
+                      className="shrink-0 text-xs"
                     >
                       Nouveau chat
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )
             ) : (
-              <div className="border-t border-gray-800/60 px-4 py-3 bg-surface-0">
-                <div className="max-w-3xl mx-auto">
+              <div className="border-t border-border bg-background px-4 py-3">
+                <div className="mx-auto max-w-3xl">
                   <ChatInput
                     onSend={handleSend}
                     disabled={sending}
@@ -1291,10 +1393,10 @@ function HomeInner() {
                       MODE_META[activeConversationMode ?? selectedMode].placeholder
                     }
                   />
-                  <p className="text-center text-[11px] text-gray-600 mt-2">
+                  <p className="mt-2 text-center text-[11px] text-muted-foreground">
                     {activeConversationMode && activeConversationMode !== "prospection" ? (
                       <>
-                        Mode <span className="text-gray-400">{MODE_META[activeConversationMode].label}</span>
+                        Mode <span className="font-medium text-foreground">{MODE_META[activeConversationMode].label}</span>
                         {" "}— données publiques INSEE & RCS, résultats indicatifs
                       </>
                     ) : (
@@ -1315,8 +1417,7 @@ function HomeInner() {
           onClose={() => setShowAuth(false)}
         />
       )}
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </div>
+    </AppShell>
   );
 }
 
@@ -1324,7 +1425,7 @@ export default function Home() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-screen items-center justify-center bg-surface-0 text-gray-500 text-sm">
+        <div className="flex h-screen items-center justify-center bg-background text-muted-foreground text-sm">
           Chargement…
         </div>
       }

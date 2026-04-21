@@ -35,7 +35,7 @@ function bulletList(v: unknown): string[] {
 export default function BusinessModelCanvas({ canvas }: Props) {
   const c = canvas ?? ({} as BusinessCanvas);
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-surface-1 p-3 sm:p-4">
+    <div className="rounded-2xl border border-border bg-card p-3 sm:p-4">
       <div className="grid grid-cols-1 md:grid-cols-5 gap-2 sm:gap-3">
         <Cell
           title="Partenaires clés"
@@ -120,7 +120,7 @@ function Cell({
   title,
   icon: Icon,
   items,
-  accent = "bg-white/[0.02] border-white/[0.06]",
+  accent = "bg-white/[0.02] border-border",
   emphasize = false,
   className = "",
 }: CellProps) {
@@ -132,20 +132,20 @@ function Cell({
       <div className="flex items-center gap-1.5 mb-2">
         <Icon
           size={12}
-          className={emphasize ? "text-teal-300" : "text-gray-400"}
+          className={emphasize ? "text-teal-300" : "text-muted-foreground"}
         />
         <h4
           className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${
-            emphasize ? "text-teal-200" : "text-gray-400"
+            emphasize ? "text-teal-200" : "text-muted-foreground"
           }`}
         >
           {title}
         </h4>
       </div>
       {list.length === 0 ? (
-        <p className="text-[11px] text-gray-600 italic">Non précisé</p>
+        <p className="text-[11px] text-muted-foreground italic">Non précisé</p>
       ) : (
-        <ul className="space-y-1 text-xs text-gray-300 leading-snug">
+        <ul className="space-y-1 text-xs text-muted-foreground leading-snug">
           {list.map((item, i) => (
             <li key={i} className="flex items-start gap-1.5">
               <span className="mt-1 w-1 h-1 rounded-full bg-gray-500 flex-shrink-0" />

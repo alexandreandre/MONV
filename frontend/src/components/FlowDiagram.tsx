@@ -132,7 +132,7 @@ function ActorNode({ data }: NodeProps) {
       className={`relative flex h-[76px] w-[210px] flex-col justify-center rounded-xl border px-3 py-2 text-left shadow-[0_4px_14px_-4px_rgba(0,0,0,0.7)] transition-all ${
         primary
           ? "border-teal-400/60 bg-teal-500/[0.12]"
-          : "border-white/[0.14] bg-[#18181b]"
+          : "border-border bg-[#18181b]"
       } ${
         clickable
           ? "cursor-pointer hover:border-teal-300/80 hover:bg-teal-500/[0.14] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500/50"
@@ -347,7 +347,7 @@ function FlowGraph({
       />
       <Controls
         showInteractive={false}
-        className="!bg-[#0b0b0c]/90 !border !border-white/[0.08] !rounded-lg overflow-hidden [&>button]:!bg-transparent [&>button]:!border-white/[0.08] [&>button]:!text-gray-200 [&>button:hover]:!bg-white/[0.06]"
+        className="!bg-[#0b0b0c]/90 !border !border-border !rounded-lg overflow-hidden [&>button]:!bg-transparent [&>button]:!border-border [&>button]:!text-foreground [&>button:hover]:!bg-white/[0.06]"
       />
     </ReactFlow>
   );
@@ -460,9 +460,9 @@ export default function FlowDiagram({
   ];
 
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-surface-1 p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
       {(title || insight) && (
-        <div className="mb-4 flex flex-col gap-1.5 border-b border-white/[0.06] pb-3">
+        <div className="mb-4 flex flex-col gap-1.5 border-b border-border pb-3">
           {title && (
             <div className="flex items-start gap-2">
               <Sparkles
@@ -470,7 +470,7 @@ export default function FlowDiagram({
                 className="mt-0.5 shrink-0 text-teal-400/90"
                 aria-hidden
               />
-              <h4 className="text-sm font-semibold text-gray-100 leading-snug">
+              <h4 className="text-sm font-semibold text-foreground leading-snug">
                 {title}
               </h4>
             </div>
@@ -484,17 +484,17 @@ export default function FlowDiagram({
       )}
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 uppercase tracking-wider">
-          <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-0.5">
+        <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground uppercase tracking-wider">
+          <span className="inline-flex items-center gap-1 rounded-md border border-border bg-white/[0.03] px-2 py-0.5">
             <Layers size={11} className="text-gray-400" aria-hidden />
             {actorsSorted.length} acteurs
           </span>
-          <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-0.5">
+          <span className="inline-flex items-center gap-1 rounded-md border border-border bg-white/[0.03] px-2 py-0.5">
             {layeredEdges.length} liaisons
           </span>
         </div>
         {segments.length > 0 && linkedActors > 0 && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-gray-500">
+          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
             <MousePointerClick
               size={11}
               className="text-teal-400/90"
@@ -532,14 +532,14 @@ export default function FlowDiagram({
               className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                 isActive
                   ? ""
-                  : "border-white/[0.06] bg-transparent text-gray-500 hover:border-white/[0.1] hover:text-gray-300"
+                  : "border-border bg-transparent text-muted-foreground hover:border-white/[0.1] hover:text-muted-foreground"
               }`}
             >
               <Icon size={12} aria-hidden />
               {t.label}
               <span
                 className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold ${
-                  isActive ? "bg-black/30" : "bg-white/[0.05] text-gray-500"
+                  isActive ? "bg-black/30" : "bg-white/[0.05] text-muted-foreground"
                 }`}
               >
                 {counts[t.id] ?? 0}
@@ -550,7 +550,7 @@ export default function FlowDiagram({
       </div>
 
       {/* ---- Légende ---- */}
-      <div className="mb-2 flex flex-wrap gap-2 text-[10px] text-gray-500">
+      <div className="mb-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
         {(["valeur", "financier", "information"] as const).map((k) => {
           const m = LAYER_META[k];
           return (
@@ -567,12 +567,12 @@ export default function FlowDiagram({
 
       {/* ---- Graphe ---- */}
       {actorsSorted.length === 0 ? (
-        <p className="rounded-lg border border-white/[0.06] bg-surface-2/60 py-8 text-center text-xs italic text-gray-500">
+        <p className="rounded-lg border border-border bg-muted/50/60 py-8 text-center text-xs italic text-muted-foreground">
           Aucun acteur identifié.
         </p>
       ) : (
         <div
-          className={`${graphHeightClassName} w-full overflow-hidden rounded-xl border border-white/[0.06] bg-[#0a0a0b]`}
+          className={`${graphHeightClassName} w-full overflow-hidden rounded-xl border border-border bg-[#0a0a0b]`}
         >
           <ReactFlowProvider>
             <FlowGraph
@@ -586,7 +586,7 @@ export default function FlowDiagram({
         </div>
       )}
 
-      <p className="mt-2 text-[10px] text-gray-600">
+      <p className="mt-2 text-[10px] text-muted-foreground">
         Glisser-déposer pour réorganiser · pincer ou contrôles pour zoomer ·
         {onSegmentActivate
           ? " Acteur relié à un segment : fait défiler vers le tableau correspondant (colonne de droite si visible)."

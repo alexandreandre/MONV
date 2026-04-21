@@ -6,7 +6,13 @@ import QcmCard from "./QcmCard";
 import AtelierDossier from "./AtelierDossier";
 import { AlertCircle, Compass } from "lucide-react";
 import type { Message, QcmPayload, BusinessDossierPayload } from "@/lib/api";
-import { MODE_META, normalizeMode, type Mode } from "@/lib/modes";
+import {
+  DEFAULT_MODE,
+  MODE_META,
+  normalizeMode,
+  type Mode,
+} from "@/lib/modes";
+import { stripEmojis } from "@/lib/stripEmojis";
 import { AGENT_META, ATELIER_MODE_LABEL } from "@/lib/agents";
 
 interface Props {
@@ -93,14 +99,14 @@ export default function ChatMessage({
     return (
       <div className="flex gap-3 animate-fade-in">
         <div
-          className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center mt-1 text-white ${AGENT_META.atelier.badgeBg}`}
+          className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${AGENT_META.atelier.badgeBg} ${AGENT_META.atelier.accentText}`}
         >
           <Compass size={13} className={AGENT_META.atelier.accentText} />
         </div>
         <div className="flex-1 min-w-0 w-full shrink-0">
           {message.content && (
-            <div className="rounded-2xl px-4 py-3 bg-surface-2 text-gray-200 border border-white/[0.06] inline-block max-w-full">
-              <div className="prose prose-invert prose-sm max-w-none [&>p]:leading-relaxed">
+            <div className="inline-block max-w-full rounded-2xl border border-border bg-card px-4 py-3 text-card-foreground">
+              <div className="prose prose-sm prose-neutral max-w-none dark:prose-invert [&>p]:leading-relaxed">
                 <ReactMarkdown>{message.content}</ReactMarkdown>
               </div>
             </div>
@@ -136,7 +142,7 @@ export default function ChatMessage({
               ? "bg-red-500/15 text-red-400"
               : isAtelierMessage
                 ? atelierMeta.badgeBg
-                : "bg-white/[0.08] text-gray-400"
+                : "bg-muted text-muted-foreground"
           }`}
         >
           {isError ? (
@@ -176,14 +182,22 @@ export default function ChatMessage({
         <div
           className={`rounded-2xl px-4 py-3 ${
             isUser
-              ? "bg-brand-600 text-white"
+              ? "bg-primary text-primary-foreground"
               : isError
-                ? "bg-red-500/8 text-red-300 border border-red-500/15"
-                : "bg-surface-2 text-gray-200 border border-white/[0.06]"
+                ? "border border-destructive/30 bg-destructive/10 text-destructive"
+                : "border border-border bg-card text-card-foreground"
           }`}
         >
-          <div className="prose prose-invert prose-sm max-w-none [&>p]:leading-relaxed">
-            <ReactMarkdown>{message.content}</ReactMarkdown>
+          <div
+            className={
+              isUser
+                ? "prose prose-sm prose-invert max-w-none [&>p]:leading-relaxed"
+                : "prose prose-sm prose-neutral max-w-none dark:prose-invert [&>p]:leading-relaxed"
+            }
+          >
+            <ReactMarkdown>
+              {isUser ? message.content : stripEmojis(message.content)}
+            </ReactMarkdown>
           </div>
 
           {showQcmCard && (
@@ -216,14 +230,17 @@ export default function ChatMessage({
             onExport={onExport}
             exporting={exporting}
             mapPoints={meta.map_points || []}
-            suggestions={meta.suggestions || []}
-            onSuggestionClick={onQcmSubmit}
+            resultsMode={
+              typeof meta.mode === "string"
+                ? normalizeMode(meta.mode)
+                : DEFAULT_MODE
+            }
           />
         )}
       </div>
 
       {isUser && (
-        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-white/[0.08] flex items-center justify-center mt-1 text-[11px] font-bold text-gray-400">
+        <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-muted-foreground">
           V
         </div>
       )}
