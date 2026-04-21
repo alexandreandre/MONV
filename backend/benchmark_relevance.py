@@ -9,6 +9,10 @@ de noter chaque résultat. Produit un rapport d'analyse détaillé.
 Usage :
     cd backend
     python benchmark_relevance.py
+
+Panel unitaire (seuil, sans API) — rapide, pour régressions locales :
+    ./venv/bin/python benchmark_relevance_panel.py
+    ./venv/bin/python benchmark_relevance_panel.py --write-report   # JSON
 """
 
 import asyncio
@@ -139,7 +143,12 @@ async def run_one(q: dict) -> dict:
             result["error"] = f"intent={guard.intent}"
             return result
         e = guard.entities
-        if guard.clarification_needed and (e.secteur or e.code_naf or e.mots_cles) and (e.localisation or e.departement or e.region):
+        if (
+            guard.clarification_needed
+            and (e.secteur or e.code_naf or e.mots_cles)
+            and (e.localisation or e.departement or e.region)
+            and not getattr(guard, "sector_ambiguous", False)
+        ):
             guard.clarification_needed = False
         if guard.clarification_needed:
             result["error"] = "clarification_needed"
@@ -153,7 +162,7 @@ async def run_one(q: dict) -> dict:
 
         # API Engine
         patch_sirene_calls_from_guard_entities(plan, guard.entities)
-        search_results = await execute_plan(plan)
+        search_results = await execute_plan(plan, mode=q["mode"])
         result["raw_count"] = search_results.total
         raw_results = list(search_results.results)
 

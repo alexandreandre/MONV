@@ -4,6 +4,9 @@ Couche 1b — Conversationalist (même modèle moyen que le Guard).
 Génère des QCM (questions à choix multiples) structurés pour aider
 l'utilisateur à préciser sa recherche en quelques clics.
 
+Les ``missing_criteria`` pilotent les ids de questions (contrat moteur de recherche).
+Les ``context_hints`` du Guard élargissent le ton et les libellés sans ajouter de critères typés.
+
 Appelé quand le Guard détecte ``clarification_needed=True``.
 """
 
@@ -13,6 +16,7 @@ import json
 from models.schemas import GuardResult, QcmQuestion, QcmOption
 from services.modes import normalize_mode
 from utils.llm import llm_json_call
+from utils.text_sanitize import strip_emojis
 from config import settings
 
 QCM_SYSTEM_PROMPT = """\
@@ -23,6 +27,10 @@ L'utilisateur a posé une question mais il manque des informations pour lancer
 la recherche. Tu dois générer des QUESTIONS À CHOIX MULTIPLES (QCM) pour
 compléter les critères manquants.
 
+Le bloc « Indices conversationnels » dans le message utilisateur (s'il est présent) liste des
+nuances à refléter dans l'intro et les libellés (ton, contraintes). Tu ne dois **pas** inventer de
+questions pour des axes absents de la liste ``Critères manquants`` du même message.
+
 CRITÈRES MANQUANTS POSSIBLES :
 - "secteur" : secteur d'activité / type d'entreprise
 - "zone_geo" : zone géographique (ville, département, région)
@@ -32,12 +40,23 @@ CRITÈRES MANQUANTS POSSIBLES :
 - "date_creation" : ancienneté des entreprises
 
 RÈGLES STRICTES :
-1. Génère UNIQUEMENT les questions pour les critères qui MANQUENT (fournis dans "missing")
+1. Génère UNIQUEMENT les questions pour les critères qui MANQUENT (fournis dans "missing").
+   Si "zone_geo" est présent, tu DOIS inclure une question zone (ville, département, région ou
+   France entière), même s'il y a d'autres critères (secteur, qualification rachat, etc.).
 2. Chaque question a 4-6 options pertinentes + TOUJOURS une option "Autre" avec free_text=true
 3. Les options doivent être concrètes et utiles pour la prospection B2B
 4. Adapte les options au contexte de la requête utilisateur
 5. Maximum 3 questions à la fois
-6. "multiple": true UNIQUEMENT si ça a du sens (ex: plusieurs secteurs)
+6. **Sélection multiple** : mets "multiple": true pour **chaque** question, sauf si c'est
+   strictement impossible d'en choisir plusieurs en même temps (ex. un budget d'acquisition :
+   une seule fourchette à la fois → "multiple": false pour cette question uniquement ;
+   clarification d'ambiguïté « une seule activité visée » → false aussi si tu poses ce cas).
+   Par défaut : true (ex. plusieurs régions, plusieurs secteurs, plusieurs tailles acceptées).
+7. **Option neutre obligatoire** sur chaque question (libellé adapté au critère) :
+   id conseillé "pas_de_preference" ou "peu_importe" ou "non_defini", avec par ex.
+   « Peu importe », « Je ne sais pas encore », « Tout / sans filtre sur ce point », « À préciser plus tard ».
+   Elle doit être free_text=false. Elle complète « Autre » (saisie libre), pas ne le remplace pas.
+8. Aucun emoji ni pictogramme décoratif dans l'intro, les questions ou les libellés d'options (ton sobre, interface pro).
 
 Réponds UNIQUEMENT avec un JSON valide :
 {
@@ -45,13 +64,14 @@ Réponds UNIQUEMENT avec un JSON valide :
     "questions": [
         {
             "id": "secteur",
-            "question": "Quel secteur d'activité ?",
+            "question": "Quels secteurs d'activité ? (plusieurs choix possibles)",
             "options": [
                 {"id": "btp", "label": "BTP / Construction", "free_text": false},
                 {"id": "tech", "label": "Tech / Informatique", "free_text": false},
+                {"id": "pas_de_preference", "label": "Peu importe / je ne sais pas encore", "free_text": false},
                 {"id": "autre", "label": "Autre", "free_text": true}
             ],
-            "multiple": false
+            "multiple": true
         }
     ]
 }
@@ -81,7 +101,7 @@ Chiffre d'affaires :
 - Moins de 500K€, 500K€ - 2M€, 2M€ - 10M€,
   10M€ - 50M€, Plus de 50M€, Peu importe
 
-MODE SOUS-TRAITANT — questions spécifiques à privilégier :
+MODE SOUS-TRAITANT — questions spécifiques à privilégier (si ces ids sont dans les critères manquants) :
 
 Capacité requise (id: "capacite") :
 - 1 à 5 personnes (artisan / micro-structure)
@@ -106,49 +126,129 @@ Ancienneté minimum (id: "anciennete") :
 - +5 ans
 - +10 ans
 - Peu importe
-
-MODE RACHAT — questions spécifiques à privilégier :
-
-Budget d'acquisition (id: "budget_acquisition") :
-- Moins de 500k€
-- 500k€ — 2M€
-- 2M€ — 10M€
-- Plus de 10M€
-- Non défini pour l'instant
-
-Profil de cible (id: "profil_cible") :
-- Entreprise saine et rentable
-- Entreprise en difficulté (retournement)
-- Transmission familiale / départ retraite
-- Peu importe
-
-Type de reprise (id: "type_reprise") :
-- Reprise totale avec les salariés
-- Rachat de fonds de commerce uniquement
-- Prise de participation minoritaire
-- Peu importe
 """
 
 SECTOR_CONFIRMATION_SYSTEM = """\
-Tu génères UNE seule question à choix unique pour lever une ambiguïté sectorielle B2B en France.
-L'utilisateur a utilisé un terme qui peut désigner plusieurs activités d'entreprises différentes.
+Tu génères UNE question à choix MULTIPLES pour lever une ambiguïté sectorielle B2B en France.
+L'utilisateur peut viser **plusieurs** types d'établissements ou d'activités en même temps
+(ex. boutiques de padel ET clubs de padel pour une même offre B2B). Les options « Je ne sais pas encore »
+et « Autre » sont traitées comme exclusives avec les options métier par l'interface (comme sur les autres QCM).
 
 Réponds UNIQUEMENT avec un JSON valide :
 {
     "question": "Phrase courte en français (ex. préciser le type d'activité recherchée)",
+    "multiple": true,
     "options": [
-        {"id": "identifiant_snake_unique", "label": "Libellé concret, émoji optionnel", "free_text": false},
-        ... 3 ou 4 interprétations métier distinctes ...
-        {"id": "autre", "label": "✏️ Autre (précisez)", "free_text": true}
+        {"id": "identifiant_snake_unique", "label": "Libellé concret sans emoji", "free_text": false},
+        ... 3 à 6 interprétations métier distinctes ...
+        {"id": "indetermine", "label": "Je ne sais pas encore — je préciserai au message", "free_text": false},
+        {"id": "autre", "label": "Autre (précisez)", "free_text": true}
     ]
 }
 
 Contraintes :
-- 3 à 4 options métier concrètes + exactement une option "Autre" en dernier avec free_text=true
-- Toutes les autres options : free_text=false
-- Choix unique implicite (pas de champ multiple)
-- Textes en français
+- Le champ "multiple" doit être true
+- 3 à 6 options métier concrètes + « Je ne sais pas encore » (free_text=false) +
+  exactement une option « Autre » en dernier avec free_text=true
+- Toutes les options métier : free_text=false
+- Textes en français, sans aucun emoji ni symbole décoratif
 """
+
+# Choix unique imposé pour certains critères (ex. un seul budget à la fois).
+_SINGLE_CHOICE_QUESTION_IDS = frozenset({"budget_acquisition"})
+
+_NEUTRAL_OPTION_IDS = frozenset({
+    "any",
+    "peu_importe",
+    "pas_de_preference",
+    "non_defini",
+    "indetermine",
+    "incertain",
+    "nsp",
+    "tout",
+    "toutes",
+    "indifferent",
+    "peu_importe_zone",
+})
+
+
+def _option_looks_neutral(opt: QcmOption) -> bool:
+    oid = (opt.id or "").strip().lower()
+    if oid in _NEUTRAL_OPTION_IDS:
+        return True
+    lab = (opt.label or "").lower()
+    return any(
+        p in lab
+        for p in (
+            "peu importe",
+            "je ne sais pas",
+            "non défini",
+            "non defini",
+            "indifférent",
+            "pas de préférence",
+            "sans préférence",
+            "à préciser",
+            "aucune exigence",
+        )
+    )
+
+
+def _has_neutral_option(question_id: str, opts: list[QcmOption]) -> bool:
+    for o in opts:
+        if _option_looks_neutral(o):
+            return True
+        oid = (o.id or "").strip().lower()
+        if question_id == "zone_geo" and oid in ("france", "france_entiere", "national", "tout_territoire"):
+            return True
+    return False
+
+
+def _neutral_option_for_question(question_id: str) -> QcmOption:
+    if question_id == "zone_geo":
+        lab = "Peu importe / je préciserai la zone au besoin"
+    elif question_id in ("taille", "capacite", "ca", "date_creation"):
+        lab = "Peu importe sur ce critère"
+    elif question_id == "secteur":
+        lab = "Peu importe (tous secteurs envisagés)"
+    elif question_id in ("type_mission", "certification", "anciennete"):
+        lab = "Peu importe / flexible"
+    elif question_id == "secteur_confirmation":
+        lab = "Je ne sais pas encore — je préciserai au message"
+    else:
+        lab = "Peu importe / je ne sais pas encore"
+    return QcmOption(id="pas_de_preference", label=lab, free_text=False)
+
+
+def _insert_neutral_before_autre(opts: list[QcmOption], neutral: QcmOption) -> list[QcmOption]:
+    out = list(opts)
+    for i, o in enumerate(out):
+        if o.free_text and (o.id or "").lower() == "autre":
+            out.insert(i, neutral)
+            return out
+    out.append(neutral)
+    return out
+
+
+def _normalize_qcm_question(q: QcmQuestion) -> QcmQuestion:
+    """Sélection multiple par défaut + option neutre, sauf questions à choix unique."""
+    qid = q.id
+    opts = list(q.options)
+    if not _has_neutral_option(qid, opts):
+        opts = _insert_neutral_before_autre(opts, _neutral_option_for_question(qid))
+    if qid in _SINGLE_CHOICE_QUESTION_IDS:
+        multiple = False
+    else:
+        multiple = True
+    return QcmQuestion(
+        id=qid,
+        question=q.question,
+        options=opts,
+        multiple=multiple,
+    )
+
+
+def _normalize_qcm_questions(questions: list[QcmQuestion]) -> list[QcmQuestion]:
+    return [_normalize_qcm_question(q) for q in questions]
 
 
 def _build_context(
@@ -190,7 +290,26 @@ def _build_context(
         missing = _infer_missing(guard_result)
     parts.append(f"Critères manquants : {json.dumps(missing)}")
 
+    hints = [h for h in (guard_result.context_hints or []) if isinstance(h, str) and h.strip()]
+    if hints:
+        parts.append(
+            "Indices conversationnels (ton et libellés ; ne pas ajouter de questions "
+            "hors des ids des critères manquants) :\n"
+            + json.dumps(hints, ensure_ascii=False)
+        )
+
     return "\n".join(parts)
+
+
+def _qcm_intro_from_hints(guard_result: GuardResult) -> str:
+    """Intro QCM ; intègre les indices souples du Guard sans changer le contrat critères."""
+    hints = [str(h).strip() for h in (guard_result.context_hints or []) if str(h).strip()]
+    if not hints:
+        return "Pour affiner ta recherche :"
+    snippet = " — ".join(hints[:3])
+    if len(snippet) > 220:
+        snippet = snippet[:217] + "…"
+    return f"Pour affiner ta recherche ({snippet}) :"
 
 
 def _infer_missing(guard_result: GuardResult) -> list[str]:
@@ -207,7 +326,7 @@ def _infer_missing(guard_result: GuardResult) -> list[str]:
 
 
 def _parse_questions(raw: dict) -> tuple[str, list[QcmQuestion]]:
-    intro = raw.get("intro", "Pour affiner ta recherche :")
+    intro = strip_emojis(str(raw.get("intro", "Pour affiner ta recherche :")))
     questions: list[QcmQuestion] = []
 
     for q in raw.get("questions", []):
@@ -216,7 +335,7 @@ def _parse_questions(raw: dict) -> tuple[str, list[QcmQuestion]]:
         for o in q.get("options", []):
             opt = QcmOption(
                 id=str(o.get("id", "")),
-                label=str(o.get("label", "")),
+                label=strip_emojis(str(o.get("label", ""))),
                 free_text=bool(o.get("free_text", False)),
             )
             if opt.free_text:
@@ -228,7 +347,7 @@ def _parse_questions(raw: dict) -> tuple[str, list[QcmQuestion]]:
 
         questions.append(QcmQuestion(
             id=str(q.get("id", "")),
-            question=str(q.get("question", "")),
+            question=strip_emojis(str(q.get("question", ""))),
             options=options,
             multiple=bool(q.get("multiple", False)),
         ))
@@ -244,15 +363,16 @@ def _fallback_sector_confirmation_question(guard_result: GuardResult) -> QcmQues
     )
     return QcmQuestion(
         id="secteur_confirmation",
-        question=f"« {term} » peut correspondre à plusieurs activités. Laquelle vises-tu ?",
+        question=f"« {term} » peut correspondre à plusieurs activités. Lesquelles vises-tu ? (plusieurs choix possibles)",
         options=[
             QcmOption(id="services_conseil", label="Services aux entreprises / conseil", free_text=False),
             QcmOption(id="commerce_distribution", label="Commerce / distribution / retail", free_text=False),
             QcmOption(id="artisanat_industrie_btp", label="Artisanat / industrie / BTP", free_text=False),
             QcmOption(id="sante_sport_loisirs", label="Santé / sport / loisirs / bien-être", free_text=False),
-            QcmOption(id="autre", label="✏️ Autre (précisez)", free_text=True),
+            QcmOption(id="indetermine", label="Je ne sais pas encore — je préciserai au message", free_text=False),
+            QcmOption(id="autre", label="Autre (précisez)", free_text=True),
         ],
-        multiple=False,
+        multiple=True,
     )
 
 
@@ -291,7 +411,7 @@ async def _generate_sector_confirmation_question(
                     "id": "secteur_confirmation",
                     "question": qtext,
                     "options": opts_raw,
-                    "multiple": False,
+                    "multiple": True,
                 }
             ],
         }
@@ -303,43 +423,45 @@ async def _generate_sector_confirmation_question(
             id="secteur_confirmation",
             question=q0.question,
             options=q0.options,
-            multiple=False,
+            multiple=True,
         )
-        return q0
+        return _normalize_qcm_question(q0)
     except Exception:
-        return _fallback_sector_confirmation_question(guard_result)
+        return _normalize_qcm_question(_fallback_sector_confirmation_question(guard_result))
 
 
 _FALLBACK_QUESTIONS: dict[str, QcmQuestion] = {
     "secteur": QcmQuestion(
         id="secteur",
-        question="Quel secteur d'activité t'intéresse ?",
+        question="Quels secteurs d'activité t'intéressent ? (plusieurs choix possibles)",
         options=[
             QcmOption(id="btp", label="BTP / Construction"),
             QcmOption(id="tech", label="Tech / Informatique"),
             QcmOption(id="commerce", label="Commerce / Distribution"),
             QcmOption(id="industrie", label="Industrie / Manufacture"),
             QcmOption(id="conseil", label="Conseil / Services"),
+            QcmOption(id="pas_de_preference", label="Peu importe (tous secteurs envisagés)", free_text=False),
             QcmOption(id="autre", label="Autre", free_text=True),
         ],
-        multiple=False,
+        multiple=True,
     ),
     "zone_geo": QcmQuestion(
         id="zone_geo",
-        question="Quelle zone géographique ?",
+        question="Quelles zones géographiques ? (plusieurs choix possibles)",
         options=[
             QcmOption(id="idf", label="Paris / Île-de-France"),
             QcmOption(id="aura", label="Lyon / Auvergne-Rhône-Alpes"),
             QcmOption(id="paca", label="Marseille / PACA"),
             QcmOption(id="occitanie", label="Toulouse / Occitanie"),
             QcmOption(id="france", label="France entière"),
+            QcmOption(id="pas_de_preference", label="Peu importe / je préciserai la zone au besoin", free_text=False),
             QcmOption(id="autre", label="Autre", free_text=True),
         ],
-        multiple=False,
+        multiple=True,
     ),
     "taille": QcmQuestion(
         id="taille",
-        question="Quelle taille d'entreprise ?",
+        question="Quelles tailles d'entreprise ? (plusieurs choix possibles)",
         options=[
             QcmOption(id="tpe", label="TPE (1-9 salariés)"),
             QcmOption(id="pme", label="PME (10-249 salariés)"),
@@ -347,18 +469,18 @@ _FALLBACK_QUESTIONS: dict[str, QcmQuestion] = {
             QcmOption(id="ge", label="Grand groupe (5000+)"),
             QcmOption(id="any", label="Peu importe"),
         ],
-        multiple=False,
+        multiple=True,
     ),
     "capacite": QcmQuestion(
         id="capacite",
-        question="Quelle capacité requise ?",
+        question="Quelles tailles d'équipe acceptées ? (plusieurs choix possibles)",
         options=[
             QcmOption(id="micro", label="1 à 5 personnes (artisan / micro-structure)"),
             QcmOption(id="pme_specialisee", label="5 à 20 personnes (PME spécialisée)"),
             QcmOption(id="structure_etablie", label="20 personnes et plus (structure établie)"),
             QcmOption(id="any", label="Peu importe"),
         ],
-        multiple=False,
+        multiple=True,
     ),
     "budget_acquisition": QcmQuestion(
         id="budget_acquisition",
@@ -374,25 +496,25 @@ _FALLBACK_QUESTIONS: dict[str, QcmQuestion] = {
     ),
     "profil_cible": QcmQuestion(
         id="profil_cible",
-        question="Quel profil de cible tu recherches ?",
+        question="Quels profils de cible tu recherches ? (plusieurs choix possibles)",
         options=[
             QcmOption(id="saine", label="Entreprise saine et rentable"),
             QcmOption(id="difficulte", label="Entreprise en difficulté (retournement)"),
             QcmOption(id="transmission", label="Transmission familiale / départ retraite"),
             QcmOption(id="peu_importe", label="Peu importe"),
         ],
-        multiple=False,
+        multiple=True,
     ),
     "type_reprise": QcmQuestion(
         id="type_reprise",
-        question="Quel type de reprise tu envisages ?",
+        question="Quels types de reprise tu envisages ? (plusieurs choix possibles)",
         options=[
             QcmOption(id="totale", label="Reprise totale avec les salariés"),
             QcmOption(id="fonds", label="Rachat de fonds de commerce uniquement"),
             QcmOption(id="participation", label="Prise de participation minoritaire"),
             QcmOption(id="peu_importe", label="Peu importe"),
         ],
-        multiple=False,
+        multiple=True,
     ),
 }
 
@@ -412,29 +534,6 @@ def _swap_taille_for_capacite_sous_traitant(
     return [capacite_q if q.id == "taille" else q for q in questions]
 
 
-def _apply_rachat_qualification_qcm(
-    questions: list[QcmQuestion],
-    mode: str,
-    guard_result: GuardResult,
-) -> list[QcmQuestion]:
-    """Mode rachat : remplace le lot LLM par les 3 questions de qualification si prévues et absentes."""
-    if normalize_mode(mode) != "rachat":
-        return questions
-    missing = guard_result.missing_criteria or []
-    if "budget_acquisition" not in missing:
-        return questions
-    if any(q.id == "budget_acquisition" for q in questions):
-        return questions
-    triple = [
-        _FALLBACK_QUESTIONS["budget_acquisition"],
-        _FALLBACK_QUESTIONS["profil_cible"],
-        _FALLBACK_QUESTIONS["type_reprise"],
-    ]
-    if questions and questions[0].id == "secteur_confirmation":
-        return [questions[0]] + triple
-    return triple
-
-
 async def generate_qcm(
     guard_result: GuardResult,
     conversation_history: list[dict] | None = None,
@@ -446,6 +545,22 @@ async def generate_qcm(
     sector_q: QcmQuestion | None = None
     if "secteur_confirmation" in raw_missing:
         sector_q = await _generate_sector_confirmation_question(guard_result)
+
+    # Qualification rachat : libellés figés + zone en fallback — inutile d'appeler le QCM générique.
+    if normalize_mode(mode) == "rachat" and "budget_acquisition" in raw_missing:
+        rachat_qs: list[QcmQuestion] = []
+        if sector_q:
+            rachat_qs.append(sector_q)
+        if "zone_geo" in raw_missing:
+            rachat_qs.append(_FALLBACK_QUESTIONS["zone_geo"])
+        rachat_qs.extend(
+            [
+                _FALLBACK_QUESTIONS["budget_acquisition"],
+                _FALLBACK_QUESTIONS["profil_cible"],
+                _FALLBACK_QUESTIONS["type_reprise"],
+            ]
+        )
+        return _qcm_intro_from_hints(guard_result), _normalize_qcm_questions(rachat_qs)
 
     missing_main = [m for m in raw_missing if m != "secteur_confirmation"]
     has_sector_confirm = "secteur_confirmation" in raw_missing
@@ -477,9 +592,14 @@ async def generate_qcm(
         if sector_q:
             questions = [sector_q] + questions
         questions = _swap_taille_for_capacite_sous_traitant(questions, mode, guard_result)
-        questions = _apply_rachat_qualification_qcm(questions, mode, guard_result)
         if questions:
-            return intro, questions
+            intro_clean = (intro or "").strip()
+            if guard_result.context_hints and intro_clean in (
+                "Pour affiner ta recherche :",
+                "Pour affiner ta recherche:",
+            ):
+                intro = _qcm_intro_from_hints(guard_result)
+            return intro, _normalize_qcm_questions(questions)
     except Exception:
         pass
 
@@ -494,7 +614,8 @@ async def generate_qcm(
         if fq is not None:
             fallback_qs.append(fq)
     merged = ([sector_q] if sector_q else []) + fallback_qs
-    merged = _apply_rachat_qualification_qcm(merged, mode, guard_result)
     if merged:
-        return "Pour affiner ta recherche :", merged
-    return "Pour affiner ta recherche :", list(_FALLBACK_QUESTIONS.values())[:2]
+        return _qcm_intro_from_hints(guard_result), _normalize_qcm_questions(merged)
+    return _qcm_intro_from_hints(guard_result), _normalize_qcm_questions(
+        list(_FALLBACK_QUESTIONS.values())[:2]
+    )

@@ -14,6 +14,8 @@ import json
 import traceback
 from datetime import datetime, timezone
 
+from utils.text_sanitize import strip_emojis
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from supabase import Client
@@ -61,6 +63,17 @@ from services.sirene import patch_sirene_calls_from_guard_entities
 from routers.auth import get_current_user
 from utils.credits_policy import credits_for_api, user_has_unlimited_credits
 from utils.pipeline_log import plog
+from config import settings
+from services.digital_pitch_enrichment import (
+    DIGITAL_PITCH_RESULT_COLUMNS,
+    enrich_results_for_digital_service_pitch,
+    prioritize_google_maps_discoveries,
+    user_query_suggests_digital_service_pitch,
+)
+from services.plan_google_places import (
+    augment_google_places_boutique_and_club_queries,
+    augment_google_places_regional_variant,
+)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -182,6 +195,7 @@ async def send_message(
         sector_confirmed=guard_result.sector_confirmed,
         entities=guard_result.entities.model_dump(),
         missing=guard_result.missing_criteria,
+        context_hints=guard_result.context_hints,
     )
 
     if guard_result.intent in ("hors_scope", "salutation", "meta_question"):
@@ -223,12 +237,22 @@ async def send_message(
             for m in recent_messages
         )
         if not has_qcm_in_history:
+            base_missing: list[str] = []
+            if not has_zone:
+                base_missing.append("zone_geo")
             if active_mode == "sous_traitant":
-                guard_result.missing_criteria = ["capacite", "type_mission"]
+                guard_result.missing_criteria = base_missing + [
+                    "capacite",
+                    "type_mission",
+                ]
                 plog("sous_traitant_force_clarification",
                      reason="mode sous_traitant force QCM qualification")
             else:  # rachat
-                guard_result.missing_criteria = ["budget_acquisition", "profil_cible", "type_reprise"]
+                guard_result.missing_criteria = base_missing + [
+                    "budget_acquisition",
+                    "profil_cible",
+                    "type_reprise",
+                ]
                 plog("rachat_force_clarification",
                      reason="mode rachat force QCM qualification")
             guard_result.clarification_needed = True
@@ -252,15 +276,16 @@ async def send_message(
     # ── Couche 1b — QCM de clarification (modèle moyen) ────────────
     if guard_result.clarification_needed:
         intro, questions = await generate_qcm(guard_result, history, mode=active_mode)
+        intro_clean = strip_emojis(intro)
         qcm_payload = {
-            "intro": intro,
+            "intro": intro_clean,
             "questions": [q.model_dump() for q in questions],
         }
         msg = Message(
             id=gen_uuid(),
             conversation_id=conv.id,
             role="assistant",
-            content=intro,
+            content=intro_clean,
             message_type="qcm",
             metadata_json=json.dumps(qcm_payload, ensure_ascii=False),
             created_at=datetime.now(timezone.utc),
@@ -285,15 +310,16 @@ async def send_message(
 
     if plan.clarification_needed:
         intro, questions = await generate_qcm(guard_result, history, mode=active_mode)
+        intro_clean = strip_emojis(plan.clarification_question or intro)
         qcm_payload = {
-            "intro": intro,
+            "intro": intro_clean,
             "questions": [q.model_dump() for q in questions],
         }
         msg = Message(
             id=gen_uuid(),
             conversation_id=conv.id,
             role="assistant",
-            content=plan.clarification_question or intro,
+            content=intro_clean,
             message_type="qcm",
             metadata_json=json.dumps(qcm_payload, ensure_ascii=False),
             created_at=datetime.now(timezone.utc),
@@ -315,8 +341,10 @@ async def send_message(
     await message_insert(supabase, status_msg)
     response_messages.append(status_msg)
 
+    augment_google_places_regional_variant(plan, guard_result.entities)
+    augment_google_places_boutique_and_club_queries(plan, req.message)
     patch_sirene_calls_from_guard_entities(plan, guard_result.entities)
-    search_results = await execute_plan(plan)
+    search_results = await execute_plan(plan, mode=active_mode)
 
     relevance_meta: dict = {}
     if search_results.total > 0:
@@ -342,6 +370,24 @@ async def send_message(
             )
             if k in rel_stats
         }
+
+    pitch_enriched = False
+    if (
+        active_mode == "prospection"
+        and search_results.total > 0
+        and user_query_suggests_digital_service_pitch(req.message)
+    ):
+        prioritize_google_maps_discoveries(search_results.results)
+
+    if active_mode == "prospection" and search_results.total > 0:
+        pitch_enriched = await enrich_results_for_digital_service_pitch(
+            search_results.results,
+            user_query=req.message,
+            guard_result=guard_result,
+            mode=active_mode,
+        )
+        if pitch_enriched:
+            search_results.columns = list(DIGITAL_PITCH_RESULT_COLUMNS)
 
     plog(
         "execute_plan_done",
@@ -437,51 +483,22 @@ async def send_message(
             f" J'en ai écarté **{removed}** peu alignées avec ta requête après "
             "vérification automatique."
         )
-    if total > 10:
+    if pitch_enriched:
+        preview_text += (
+            " J'ai ajouté une **vue rapide site / opportunité** (hypothèses à partir des "
+            "fiches publiques, sans crawl réel) pour cadrer ton approche commerciale."
+        )
+    preview_cap = 20 if pitch_enriched else settings.FREE_PREVIEW_ROWS
+    if total > preview_cap:
         solde = (
             "**crédits illimités**"
             if user_has_unlimited_credits(user)
             else str(credits_for_api(user))
         )
         preview_text += (
-            f" Voici les 10 premières. "
+            f" Voici les **{preview_cap}** premières. "
             f"**Exporter tout = {credits_needed} crédits** (tu en as {solde})."
         )
-
-    # ── Suggestions de suivi contextualisées par mode ──────────────
-    suggestions: list[str] = []
-    if active_mode == "prospection":
-        suggestions = [
-            "🔍 Affiner par taille (TPE / PME / ETI)",
-            "👤 Chercher les dirigeants de ces entreprises",
-            "📍 Élargir la zone géographique",
-            "📊 Passer en mode Benchmark pour analyser ce secteur",
-        ]
-    elif active_mode == "sous_traitant":
-        suggestions = [
-            "📏 Filtrer par capacité (effectif minimum)",
-            "📅 Affiner par ancienneté (entreprises établies +5 ans)",
-            "📍 Élargir ou restreindre la zone d'intervention",
-            "👤 Chercher les contacts dirigeants de ces prestataires",
-        ]
-    elif active_mode == "benchmark":
-        suggestions = [
-            "💰 Affiner sur une tranche de CA spécifique",
-            "📏 Comparer uniquement les PME ou les ETI",
-            "📍 Restreindre à une région précise",
-            "📤 Exporter pour analyse Excel (CA, résultats, effectifs)",
-        ]
-    elif active_mode == "rachat":
-        suggestions = [
-            "📅 Filtrer les entreprises créées il y a +15 ans (transmission)",
-            "💰 Affiner sur une tranche de CA",
-            "👤 Identifier les dirigeants (âge, durée de mandat)",
-            "📍 Élargir la zone géographique de recherche",
-        ]
-
-    # Les suggestions restent dans metadata_json, pas dans le texte,
-    # pour être rendues comme boutons cliquables côté frontend.
-    # On ne les ajoute plus à preview_text.
 
     # Cadres d'analyse — sans recommandation personnalisée ni valorisation.
     if active_mode == "rachat":
@@ -511,19 +528,19 @@ async def send_message(
         id=gen_uuid(),
         conversation_id=conv.id,
         role="assistant",
-        content=preview_text,
+        content=strip_emojis(preview_text),
         message_type="results",
         metadata_json=json.dumps({
             "search_id": search_id,
             "total": total,
             "credits_required": credits_needed,
             "columns": search_results.columns,
-            "preview": [r.model_dump() for r in search_results.results[:10]],
+            "preview": [r.model_dump() for r in search_results.results[:preview_cap]],
             "map_points": map_points,
             "mode": active_mode,
             "mode_label": MODE_LABELS.get(active_mode, active_mode),
             "relevance": relevance_meta or None,
-            "suggestions": suggestions,
+            "digital_pitch_enriched": pitch_enriched,
         }, ensure_ascii=False, default=str),
         created_at=datetime.now(timezone.utc),
     )

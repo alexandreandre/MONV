@@ -18,8 +18,10 @@ from models.schemas import ChatRequest, GuardEntity, GuardResult  # noqa: E402
 from services.modes import (  # noqa: E402
     DEFAULT_MODE,
     MODE_LABELS,
+    PROSPECTION_RESULT_COLUMNS,
     VALID_MODES,
     addendum_for_mode,
+    apply_result_columns_for_mode,
     credits_floor_for_mode,
     normalize_mode,
     reorder_columns_for_mode,
@@ -144,6 +146,11 @@ def test_reorder_prospection_keeps_original_order():
     assert cols == BASE_COLUMNS
 
 
+def test_apply_result_columns_prospection_fixed_panel():
+    messy = ["nom", "siren", "signaux", "effectif_label", "ville"]
+    assert apply_result_columns_for_mode(messy, "prospection") == PROSPECTION_RESULT_COLUMNS
+
+
 def test_reorder_sous_traitant_promotes_capacity_columns():
     cols = reorder_columns_for_mode(BASE_COLUMNS, "sous_traitant")
     # Les colonnes capacité doivent apparaître juste après `nom`.
@@ -217,6 +224,8 @@ def test_fallback_plan_works_for_every_mode(mode):
     # `nom` reste en tête, pas de duplication.
     assert plan.columns[0] == "nom"
     assert len(plan.columns) == len(set(plan.columns))
+    if mode == "prospection":
+        assert plan.columns == PROSPECTION_RESULT_COLUMNS
 
 
 def test_fallback_plan_rachat_includes_pappers_when_key_present(monkeypatch):

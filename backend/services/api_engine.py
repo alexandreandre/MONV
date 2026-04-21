@@ -6,9 +6,15 @@ Exécute le plan de l'orchestrateur, agrège et déduplique les résultats.
 from config import settings
 from models.schemas import ExecutionPlan, CompanyResult, SearchResults
 from services.sirene import search_sirene
-from services.pappers import search_pappers, get_company_dirigeants, get_company_finances
+from services.pappers import (
+    enrich_missing_contacts_pappers_fr,
+    get_company_dirigeants,
+    get_company_finances,
+    search_pappers,
+)
 from services.google_places import search_google_places
 from services.orchestrator import extend_columns_for_plan
+from services.modes import apply_result_columns_for_mode, normalize_mode
 from services.signals import detect_signals
 from services.geocoding import geocode_results
 from utils.pipeline_log import plog
@@ -93,7 +99,7 @@ def _dedup_key(r: CompanyResult) -> str:
     return f"name:{(r.nom or '').lower().strip()}|{(r.ville or '').lower().strip()}"
 
 
-async def execute_plan(plan: ExecutionPlan) -> SearchResults:
+async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> SearchResults:
     """Execute all API calls from the plan and merge results."""
     all_results: list[CompanyResult] = []
     seen_keys: set[str] = set()
@@ -178,6 +184,12 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
                     if isinstance(last, dict):
                         _apply_finance_row(result, last, cap_co)
                     _apply_previous_year(result, finances)
+                tel_fd = fin_data.get("telephone")
+                if tel_fd and not (result.telephone and str(result.telephone).strip()):
+                    result.telephone = str(tel_fd).strip()
+                web_fd = fin_data.get("site_web")
+                if web_fd and not (result.site_web and str(result.site_web).strip()):
+                    result.site_web = str(web_fd).strip()
             plog("api_call_end", source=call.source, action=call.action)
 
     if len(all_results) < 5:
@@ -247,12 +259,14 @@ async def execute_plan(plan: ExecutionPlan) -> SearchResults:
     cols = extend_columns_for_plan(plan.columns, plan.api_calls)
     if any(r.signaux for r in all_results) and "signaux" not in cols:
         cols.insert(0, "signaux")
+    cols = apply_result_columns_for_mode(cols, normalize_mode(mode))
 
     plog("signals_detected",
          total_with_signals=sum(1 for r in all_results if r.signaux),
          total_results=len(all_results))
 
     await geocode_results(all_results)
+    await enrich_missing_contacts_pappers_fr(all_results, max_companies=60)
 
     return SearchResults(
         total=len(all_results),

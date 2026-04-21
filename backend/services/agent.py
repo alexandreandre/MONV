@@ -609,7 +609,7 @@ async def run_segment_search(segment: SegmentBrief) -> SegmentResult:
         )
         plan = await run_orchestrator(guard_result, mode=mode)
         patch_sirene_calls_from_guard_entities(plan, guard_result.entities)
-        results = await execute_plan(plan)
+        results = await execute_plan(plan, mode=mode)
         n = len(results.results)
         scores: list[int] = []
         threshold = 5

@@ -1,10 +1,15 @@
 """
 Géocodage batch via api-adresse.data.gouv.fr (gratuit, sans clé API).
 Enrichit les CompanyResult qui n'ont pas encore de latitude/longitude.
+Complète les liens « Localisation » (Google Maps) lorsque l’API Places ne les a pas fournis.
 """
+
+from __future__ import annotations
 
 import asyncio
 import httpx
+from urllib.parse import quote_plus
+
 from models.schemas import CompanyResult
 from utils.pipeline_log import plog
 
@@ -47,14 +52,37 @@ async def _geocode_one(
         pass
 
 
+def fill_fallback_google_maps_urls(results: list[CompanyResult]) -> None:
+    """Ajoute un lien Google Maps (recherche) si absent : coordonnées d’abord, sinon adresse texte."""
+    for r in results:
+        if r.google_maps_url and str(r.google_maps_url).strip():
+            continue
+        if r.latitude is not None and r.longitude is not None:
+            r.google_maps_url = (
+                "https://www.google.com/maps/search/?api=1&query="
+                f"{r.latitude}%2C{r.longitude}"
+            )
+            continue
+        parts = [
+            str(p).strip()
+            for p in (r.adresse, r.code_postal, r.ville)
+            if p is not None and str(p).strip()
+        ]
+        if parts:
+            r.google_maps_url = (
+                "https://www.google.com/maps/search/?api=1&query="
+                + quote_plus(" ".join(parts))
+            )
+
+
 async def geocode_results(results: list[CompanyResult]) -> None:
     """Géocode en batch les résultats sans coordonnées."""
     to_geocode = [r for r in results if r.latitude is None or r.longitude is None]
-    if not to_geocode:
-        return
-    plog("geocoding_start", count=len(to_geocode))
-    sem = asyncio.Semaphore(_CONCURRENCY)
-    async with httpx.AsyncClient() as client:
-        await asyncio.gather(*[_geocode_one(client, r, sem) for r in to_geocode])
-    geocoded = sum(1 for r in to_geocode if r.latitude is not None)
-    plog("geocoding_done", geocoded=geocoded, total=len(to_geocode))
+    if to_geocode:
+        plog("geocoding_start", count=len(to_geocode))
+        sem = asyncio.Semaphore(_CONCURRENCY)
+        async with httpx.AsyncClient() as client:
+            await asyncio.gather(*[_geocode_one(client, r, sem) for r in to_geocode])
+        geocoded = sum(1 for r in to_geocode if r.latitude is not None)
+        plog("geocoding_done", geocoded=geocoded, total=len(to_geocode))
+    fill_fallback_google_maps_urls(results)

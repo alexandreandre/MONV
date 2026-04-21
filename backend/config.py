@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     ORCHESTRATOR_MODEL: str = "anthropic/claude-3.5-sonnet"
     # Post-filtrage des lignes de résultats (rapide, JSON fiable via OpenRouter)
     RELEVANCE_FILTER_MODEL: str = "openai/gpt-4o-mini"
+    # Enrichissement « pitch digital » (prospection) ; si vide → RELEVANCE_FILTER_MODEL
+    DIGITAL_PITCH_ENRICH_MODEL: str = ""
     # Atelier — planification + dossier business (2 appels LLM). Si vide → ORCHESTRATOR_MODEL.
     ATELIER_BUSINESS_MODEL: str = ""
 

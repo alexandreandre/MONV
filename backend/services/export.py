@@ -17,6 +17,20 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from config import settings
 from models.schemas import SearchResults
 
+# En-têtes export mode prospection (alignés produit).
+PROSPECTION_EXPORT_LABELS = {
+    "nom": "Dénomination",
+    "telephone": "Téléphone",
+    "site_web": "Site Web",
+    "adresse": "Adresse",
+    "code_postal": "Code Postal",
+    "ville": "Ville",
+    "google_maps_url": "Localisation",
+    "type_etablissement_prospect": "Type",
+    "synthese_site_web": "Analyse site web",
+    "opportunite_prestation_web": "Opportunité",
+}
+
 COLUMN_LABELS = {
     "nom": "Dénomination / raison sociale",
     "siren": "SIREN (9 chiffres)",
@@ -58,6 +72,9 @@ COLUMN_LABELS = {
     "lien_annuaire": "Lien fiche entreprise (Annuaire des entreprises)",
     "google_maps_url": "Lien Google Maps",
     "signaux": "Signaux business",
+    "type_etablissement_prospect": "Type (prospect)",
+    "synthese_site_web": "Analyse site web (hypothèse)",
+    "opportunite_prestation_web": "Opportunité prestation web",
 }
 
 # Ordre de secours si la liste de colonnes ne recoupe pas le DataFrame (données anciennes / schéma).
@@ -127,7 +144,12 @@ def _flatten_signals(val: object) -> str:
     return ", ".join(labels)
 
 
-def _results_to_dataframe(results: SearchResults, *, rename: bool = True) -> pd.DataFrame:
+def _results_to_dataframe(
+    results: SearchResults,
+    *,
+    rename: bool = True,
+    prospection_export: bool = False,
+) -> pd.DataFrame:
     """Convertit les résultats en DataFrame (colonnes internes, renommage optionnel)."""
     data = [r.model_dump(mode="python") for r in results.results]
     df = pd.DataFrame(data)
@@ -138,10 +160,11 @@ def _results_to_dataframe(results: SearchResults, *, rename: bool = True) -> pd.
         df["signaux"] = df["signaux"].apply(_flatten_signals)
 
     cols_to_keep = [c for c in results.columns if c in df.columns]
-    if "lien_annuaire" in df.columns and "lien_annuaire" not in cols_to_keep:
-        cols_to_keep.append("lien_annuaire")
-    if "effectif_label" in df.columns and "effectif_label" not in cols_to_keep:
-        cols_to_keep.append("effectif_label")
+    if not prospection_export:
+        if "lien_annuaire" in df.columns and "lien_annuaire" not in cols_to_keep:
+            cols_to_keep.append("lien_annuaire")
+        if "effectif_label" in df.columns and "effectif_label" not in cols_to_keep:
+            cols_to_keep.append("effectif_label")
 
     if not cols_to_keep:
         seen: set[str] = set()
@@ -157,7 +180,11 @@ def _results_to_dataframe(results: SearchResults, *, rename: bool = True) -> pd.
 
     df = df[cols_to_keep]
     if rename:
-        df = df.rename(columns={c: COLUMN_LABELS.get(c, c) for c in df.columns})
+        if prospection_export:
+            label_map = {**COLUMN_LABELS, **PROSPECTION_EXPORT_LABELS}
+        else:
+            label_map = COLUMN_LABELS
+        df = df.rename(columns={c: label_map.get(c, c) for c in df.columns})
     return df
 
 
@@ -405,10 +432,15 @@ def generate_excel(
     intent: str = "recherche_entreprise",
     entities: dict[str, Any] | None = None,
     credits_used: int | None = None,
+    prospection_export: bool = False,
 ) -> str:
     """Génère un classeur Excel : onglets dans l'ordre Résultats, Synthèse, Info."""
-    df_display = _results_to_dataframe(results, rename=True)
-    df_raw = _results_to_dataframe(results, rename=False)
+    df_display = _results_to_dataframe(
+        results, rename=True, prospection_export=prospection_export
+    )
+    df_raw = _results_to_dataframe(
+        results, rename=False, prospection_export=prospection_export
+    )
 
     filename = f"monv_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.xlsx"
     filepath = Path(settings.EXPORTS_DIR) / filename
@@ -443,9 +475,13 @@ def generate_excel(
     return str(filepath)
 
 
-def generate_csv(results: SearchResults) -> str:
+def generate_csv(
+    results: SearchResults, *, prospection_export: bool = False
+) -> str:
     """Génère un CSV et renvoie le chemin (mêmes colonnes que l'onglet Résultats)."""
-    df = _results_to_dataframe(results, rename=True)
+    df = _results_to_dataframe(
+        results, rename=True, prospection_export=prospection_export
+    )
     filename = f"monv_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.csv"
     filepath = Path(settings.EXPORTS_DIR) / filename
     df.to_csv(str(filepath), index=False, encoding="utf-8-sig")

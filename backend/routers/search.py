@@ -15,6 +15,8 @@ from models.db import (
 from models.entities import User
 from models.schemas import SearchResults, CompanyResult, ExportRequest, ExportResponse
 from services.export import generate_excel, generate_csv
+from services.modes import normalize_mode
+from services.digital_pitch_enrichment import DIGITAL_PITCH_RESULT_COLUMNS
 from routers.auth import get_current_user
 from utils.credits_policy import user_has_unlimited_credits
 
@@ -59,7 +61,9 @@ async def export_results(
     companies = [CompanyResult(**r) for r in raw_results]
 
     entities = json.loads(search.entities_json) if search.entities_json else {}
-    columns = _infer_columns(search.intent, entities, companies)
+    columns = _infer_columns(
+        search.intent, entities, companies, mode=search.mode
+    )
 
     search_results = SearchResults(
         total=len(companies),
@@ -70,6 +74,7 @@ async def export_results(
 
     credits_needed = search.credits_used
     was_exported = search.exported
+    prospection_export = normalize_mode(search.mode) == "prospection"
 
     if not search.exported:
         if not user_has_unlimited_credits(user):
@@ -84,7 +89,9 @@ async def export_results(
         await search_history_update(supabase, search.id, {"exported": True})
 
     if req.format == "csv":
-        filepath = generate_csv(search_results)
+        filepath = generate_csv(
+            search_results, prospection_export=prospection_export
+        )
     else:
         filepath = generate_excel(
             search_results,
@@ -92,6 +99,7 @@ async def export_results(
             intent=search.intent or "recherche_entreprise",
             entities=entities,
             credits_used=search.credits_used,
+            prospection_export=prospection_export,
         )
 
     await search_history_update(
@@ -125,7 +133,24 @@ def _infer_columns(
     intent: str,
     entities: dict,
     results: list[CompanyResult] | None = None,
+    mode: str | None = None,
 ) -> list[str]:
+    if normalize_mode(mode) == "prospection":
+        if results and any(
+            (getattr(r, "synthese_site_web", None) or "").strip()
+            or (getattr(r, "opportunite_prestation_web", None) or "").strip()
+            for r in results
+        ):
+            return list(DIGITAL_PITCH_RESULT_COLUMNS)
+        return [
+            "nom",
+            "telephone",
+            "site_web",
+            "adresse",
+            "code_postal",
+            "ville",
+            "google_maps_url",
+        ]
     base = [
         "nom",
         "siren",

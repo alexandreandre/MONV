@@ -8,6 +8,7 @@ from models.schemas import GuardResult, ExecutionPlan, APICall
 from services.modes import (
     Mode,
     addendum_for_mode,
+    apply_result_columns_for_mode,
     credits_floor_for_mode,
     normalize_mode,
     reorder_columns_for_mode,
@@ -135,6 +136,10 @@ RÈGLES DE CHOIX DE SOURCE :
   → Mets google_places en priority=1 (découverte) ET sirene en priority=2 (complément structurel).
   Pour google_places, le param "query" doit contenir les mots-clés métier (ex. "boutique padel"),
   et "location" le contexte géo (ex. "PACA", "Marseille").
+- **Ville ET région / département** : si le Guard fournit une ville (ou « Ville / Région » dans
+  localisation) **et** une région ou un département distinct, génère **deux** appels google_places
+  search avec le **même** query métier : l'un avec `location`=ville, l'autre avec `location`=région
+  ou département ou segment large (ex. « PACA »), pour capter les commerces hors centre-ville.
 - **Google Places seul** : si le code NAF est trop large pour être utile et que la spécificité vient
   d'un mot-clé sémantique introuvable dans les raisons sociales INSEE.
 - **Pappers** : seulement si dirigeants ou CA demandés explicitement.
@@ -145,7 +150,7 @@ coiffure, restaurant japonais, etc.), tu DOIS générer PLUSIEURS api_calls :
 
 1. google_places (priority=1) — mot-clé métier + zone géo
 2. Plusieurs appels sirene SANS "q" (priority=2), chacun avec un code activite_principale différent :
-   ⚠️ NE METS JAMAIS le mot-clé niche dans "q" quand tu utilises un code NAF !
+   Attention : NE METS JAMAIS le mot-clé niche dans "q" quand tu utilises un code NAF !
    "q" cherche dans le NOM LÉGAL (raison sociale), PAS dans l'activité réelle.
    Un club de padel s'appelle souvent "Le Smash", "Ace Club", "Sport Plus" — pas "Padel XYZ".
 3. Un appel sirene avec q="<mot-clé>" SANS filtre NAF (priority=3) pour les rares entreprises
@@ -369,7 +374,12 @@ async def run_orchestrator(
 ) -> ExecutionPlan:
     active_mode: Mode = normalize_mode(mode)
     system_prompt = ORCHESTRATOR_SYSTEM_PROMPT + addendum_for_mode(active_mode)
-    guard_json = json.dumps(guard_result.model_dump(), ensure_ascii=False, default=str)
+    # context_hints sert au QCM uniquement ; évite de polluer le plan API.
+    guard_json = json.dumps(
+        guard_result.model_dump(exclude={"context_hints"}),
+        ensure_ascii=False,
+        default=str,
+    )
 
     try:
         result = await llm_json_call(
@@ -421,6 +431,7 @@ async def run_orchestrator(
                 columns.append(col)
     columns = extend_columns_for_plan(columns, api_calls)
     columns = reorder_columns_for_mode(columns, active_mode)
+    columns = apply_result_columns_for_mode(columns, active_mode)
 
     estimated = max(
         int(result.get("estimated_credits", 1) or 1),
@@ -592,6 +603,7 @@ def _build_fallback_plan(
                 columns.append(col)
     columns = extend_columns_for_plan(columns, api_calls)
     columns = reorder_columns_for_mode(columns, mode)
+    columns = apply_result_columns_for_mode(columns, mode)
 
     return ExecutionPlan(
         api_calls=api_calls,

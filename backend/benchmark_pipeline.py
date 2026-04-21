@@ -276,11 +276,16 @@ async def benchmark_one(q: dict) -> BenchmarkResult:
         r.verdict = "PASS" if not q["expect_results"] else "FAIL_GUARD_OOS"
         return r
 
-    # Garde-fou : secteur + zone → skip clarification
+    # Garde-fou : secteur + zone explicites, secteur non ambigu → skip clarification
     e = guard.entities
     has_secteur = bool(e.secteur or e.code_naf or e.mots_cles)
     has_zone = bool(e.localisation or e.departement or e.region)
-    if guard.clarification_needed and has_secteur and has_zone:
+    if (
+        guard.clarification_needed
+        and has_secteur
+        and has_zone
+        and not getattr(guard, "sector_ambiguous", False)
+    ):
         guard.clarification_needed = False
         guard.missing_criteria = []
         r.guard_clarification = False

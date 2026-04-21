@@ -9,6 +9,7 @@ Le Guard se concentre sur :
 """
 
 from models.schemas import GuardResult, GuardEntity
+from services.zone_policy import post_process_guard_geography
 from utils.llm import llm_json_call
 from config import settings
 
@@ -203,8 +204,9 @@ ANIMAUX :
 Quand sector_ambiguous: true :
 - clarification_needed DOIT être true
 - missing_criteria DOIT contenir "secteur_confirmation"
-- Ne mets PAS d'autres critères dans missing_criteria si zone et secteur
-  sont par ailleurs présents
+- Si le message ne fixe aucune zone géographique explicite (voir bloc « ZONE EXPLICITE »),
+  ajoute aussi "zone_geo". Si ville / département / région / France nationale est déjà claire
+  dans le texte, ne mets pas "zone_geo" seulement pour cause d'ambiguïté sectorielle.
 
 Si tu hésites entre ambigu et non-ambigu, TOUJOURS choisir ambigu.
 Il vaut mieux une question de trop qu'un résultat hors cible.
@@ -212,12 +214,22 @@ Il vaut mieux une question de trop qu'un résultat hors cible.
 Quand sector_ambiguous: false (cas normal) :
 - Le terme désigne sans ambiguïté un seul type d'entreprise
 - Ex: "plombier", "cabinet comptable", "boulangerie", "agence immobilière"
+
+**Après clarification QCM — plusieurs types d'établissements visés** :
+Si le dernier message de l'utilisateur énumère explicitement **plusieurs** types d'activité ou
+d'établissements complémentaires (souvent après un QCM « précisez le type d'établissement » avec
+plusieurs choix cochés, ex. boutiques de padel **et** clubs de padel), ce n'est plus une ambiguïté
+à lever par un choix unique : mets **sector_ambiguous: false**, retire **"secteur_confirmation"**
+de missing_criteria, et remplis **mots_cles** avec **tous** les types ciblés (ex. ["boutique padel", "club padel"])
+en gardant le terme générique si pertinent (ex. "padel"). Ne redemande pas de clarification sectorielle
+pour ce cas tant que la zone reste explicite ou manquante selon les règles zone_geo ci-dessous.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Réponds UNIQUEMENT avec un JSON valide :
 {
     "intent": "recherche_entreprise|recherche_dirigeant|enrichissement",
     "confidence": 0.0-1.0,
+    "context_hints": [],
     "entities": {
         "localisation": "ville ou null",
         "departement": "nom département ou null",
@@ -240,12 +252,42 @@ Réponds UNIQUEMENT avec un JSON valide :
     "sector_confirmed": null
 }
 
+Champ **context_hints** (tableau de 0 à 5 courtes chaînes en français) :
+- Nuances utiles pour adapter le **ton** et les **libellés** du QCM de clarification (contrainte budget,
+  urgence, type de décideur, cible B2B précise, etc.).
+- **Interdit** d'y mettre une zone ou un secteur si ce n'est pas déjà dans entities ou le message :
+  pour la géographie et le métier, utilise entities et missing_criteria.
+- Ne remplace **jamais** missing_criteria : ce sont des indices conversationnels, pas des critères structurés.
+
 Les champs sector_ambiguous (bool) et sector_confirmed (string ou null, rempli seulement après clarification utilisateur — laisse null à l'extraction) doivent TOUJOURS être présents dans le JSON.
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ZONE GÉOGRAPHIQUE — EXIGENCE (recherche_entreprise & recherche_dirigeant)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Remplis localisation / departement / region **uniquement** si l'utilisateur les formule
+explicitement dans son message. Aucune inférence géographique (pas de « probablement à Paris »,
+pas de zone déduite du secteur seul).
+
+Considère qu'une zone est **explicite** si le texte contient par exemple :
+- une ou plusieurs communes / villes (« à Lyon », « Paris et petite couronne ») ;
+- un département nommé ou numéroté (« 69 », « Hérault ») ;
+- une région française (« PACA », « Grand Est », « Île-de-France ») ;
+- un périmètre national clair (« France entière », « toute la France », « en France » pour
+  le territoire de recherche, « échelle nationale », « sans limite géographique »).
+
+Si aucune de ces informations n'est présente → laisse localisation, departement et region à
+**null** et inclus **"zone_geo"** dans missing_criteria (même si le secteur est déjà clair,
+même en mode benchmark / rachat / sous-traitant côté intention — le mode ne dispense pas
+de cadrer la géographie).
+
+Intent **enrichissement** (fiche SIREN, contacts d'une société déjà identifiée) : n'ajoute pas
+"zone_geo" sauf si l'utilisateur lance une recherche ouverte d'établissements.
+
 CRITÈRES MANQUANTS possibles pour missing_criteria :
-- "secteur_confirmation" : secteur ambigu (sector_ambiguous true) — l'utilisateur doit préciser l'activité exacte ; si zone + secteur textuel sont déjà là, ne mets QUE ce critère (voir règle critique ci-dessus)
+- "secteur_confirmation" : secteur ambigu (sector_ambiguous true) — précision d'activité
 - "secteur" : pas de secteur / code NAF / mots-clés identifié
-- "zone_geo" : pas de ville / département / région
+- "zone_geo" : pas de ville / département / région / périmètre national explicite dans le message
 - "type_resultat" : ambigu entre entreprise / dirigeant / contact
 Les critères suivants sont OPTIONNELS — ne les ajoute dans missing_criteria que si l'utilisateur les mentionne explicitement sans les préciser :
 - "taille" : tranche d'effectif (optionnel, ne pas demander systématiquement)
@@ -256,7 +298,7 @@ RÈGLES :
 - Si l'utilisateur mentionne "patron", "dirigeant", "gérant", "PDG", "CEO" → intent = "recherche_dirigeant"
 - Si l'utilisateur mentionne "email", "téléphone", "contact" sans autre critère → intent = "enrichissement"
 - Si la requête est TROP vague pour lancer une recherche (ni secteur, ni zone, ni mots-clés) → mets clarification_needed=true et remplis missing_criteria
-- Dès qu'il y a un secteur non ambigu ET une zone, OU des mots-clés précis sans ambiguïté sectorielle → clarification_needed=false (on lance la recherche, pas besoin de demander taille ou CA). Si sector_ambiguous=true, clarification_needed DOIT rester true et missing_criteria=["secteur_confirmation"] tant que l'utilisateur n'a pas précisé (sauf si zone ou secteur manquent vraiment — alors tu peux ajouter zone_geo ou secteur en plus).
+- Dès qu'il y a un secteur non ambigu ET une zone **explicitement** posée dans le message (voir bloc ZONE), OU des mots-clés précis sans ambiguïté sectorielle ET une zone explicite → clarification_needed=false pour les seuls critères optionnels (on ne demande pas taille ni CA). Sans zone explicite → garde ou ajoute "zone_geo" et clarification_needed=true. Si sector_ambiguous=true, clarification_needed reste true ; missing_criteria contient au minimum "secteur_confirmation" et "zone_geo" si la zone n'est pas dans le message.
 - Ne demande JAMAIS la taille ou le CA si le secteur et la zone sont déjà connus — fais preuve de bon sens
 - Sois intelligent sur les secteurs : "BTP" → codes NAF 41-43, "tech" → 62, "SaaS" → 58/62, "commerce" → 45-47 (utilise le range), "industrie" → 10-33 (utilise le range)
 - Pour les grands secteurs couvrant plusieurs codes NAF, utilise le range (ex. "10-33" pour industrie, "45-47" pour commerce, "41-43" pour BTP)
@@ -327,6 +369,19 @@ def _parse_sector_confirmed(value: object) -> str | None:
     return str(value)
 
 
+def sanitize_context_hints(raw: object, *, max_items: int = 5, max_len: int = 200) -> list[str]:
+    """Indices souples pour le QCM — hors contrat orchestrateur."""
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw[:max_items]:
+        if isinstance(item, str):
+            s = " ".join(item.split())
+            if s and len(s) <= max_len:
+                out.append(s)
+    return out
+
+
 async def run_guard(user_message: str, conversation_history: list[dict] | None = None) -> GuardResult:
     messages: list[dict] = []
     if conversation_history:
@@ -351,6 +406,7 @@ async def run_guard(user_message: str, conversation_history: list[dict] | None =
                 "Désolé, une erreur technique est survenue. "
                 f"Peux-tu reformuler ta demande ? (Erreur: {str(e)[:100]})"
             ),
+            context_hints=[],
             original_query=user_message,
         )
 
@@ -390,13 +446,23 @@ async def run_guard(user_message: str, conversation_history: list[dict] | None =
         clarification_needed_final = result.get("clarification_needed", False)
         missing_final = list(result.get("missing_criteria") or [])
 
+    intent_val = result.get("intent", "recherche_entreprise")
+    clarification_needed_final = post_process_guard_geography(
+        user_message,
+        intent_val,
+        entities,
+        missing_final,
+        clarification_needed_final,
+    )
+
     return GuardResult(
-        intent=result.get("intent", "recherche_entreprise"),
+        intent=intent_val,
         entities=entities,
         confidence=result.get("confidence", 0.5),
         clarification_needed=clarification_needed_final,
         clarification_question=result.get("clarification_question"),
         missing_criteria=missing_final,
+        context_hints=sanitize_context_hints(result.get("context_hints")),
         sector_ambiguous=sector_ambiguous,
         sector_confirmed=sector_confirmed,
         original_query=user_message,

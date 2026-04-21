@@ -127,6 +127,8 @@ class GuardResult(BaseModel):
     clarification_needed: bool = False
     clarification_question: str | None = None
     missing_criteria: list[str] = []  # ex: ["secteur", "zone_geo", "taille"]
+    # Nuances libres (ton, contraintes, cible) pour le QCM — non consommées par l'orchestrateur
+    context_hints: list[str] = []
     sector_ambiguous: bool = False
     # True si le secteur détecté peut correspondre à plusieurs activités
     # distinctes (ex: "padel" vs "paddle", "yoga" studio vs produit, etc.)
@@ -221,6 +223,10 @@ class CompanyResult(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     signaux: list[BusinessSignal] = []
+    # Enrichissement optionnel (prospection : proposition de prestation digitale / site web)
+    type_etablissement_prospect: str | None = None  # ex. Club, Boutique, Franchise
+    synthese_site_web: str | None = None
+    opportunite_prestation_web: str | None = None
 
 
 class SearchResults(BaseModel):

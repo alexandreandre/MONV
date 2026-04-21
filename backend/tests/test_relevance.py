@@ -124,6 +124,39 @@ def test_filter_skipped_without_openrouter_key():
     assert stats["relevance_skipped"] is True
 
 
+def test_filter_partial_llm_missing_ids_excluded():
+    """Un id absent du JSON LLM ne doit plus hériter du seuil (faux positif)."""
+    rows = [
+        CompanyResult(siren="111111111", nom="Bon"),
+        CompanyResult(siren="222222222", nom="Bon deux"),
+        CompanyResult(siren="333333333", nom="Sans score"),
+    ]
+
+    async def fake_llm_json_call(*args, **kwargs):
+        return {"scores": [{"id": 0, "s": 8}, {"id": 1, "s": 8}]}
+
+    g = GuardResult(
+        intent="recherche_entreprise",
+        entities=GuardEntity(mots_cles=["test"]),
+        confidence=0.9,
+    )
+
+    async def run():
+        with patch.object(settings, "OPENROUTER_API_KEY", "x"):
+            with patch.object(relevance_mod, "llm_json_call", new_callable=AsyncMock, side_effect=fake_llm_json_call):
+                return await filter_results_by_relevance(
+                    rows,
+                    user_query="x",
+                    guard_result=g,
+                    mode="prospection",
+                )
+
+    out, stats = asyncio.run(run())
+    assert len(out) == 2
+    assert stats.get("relevance_unscored_default_zero") == 1
+    assert {r.nom for r in out} == {"Bon", "Bon deux"}
+
+
 def test_filter_fallback_when_all_rejected():
     rows = [
         CompanyResult(siren="111111111", nom="A"),

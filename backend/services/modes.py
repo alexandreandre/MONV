@@ -57,6 +57,17 @@ MODE_LABELS: dict[Mode, str] = {
 # l'orchestrateur (après `nom`). Les colonnes par défaut historiques restent
 # présentes derrière. Aucune n'est retirée → pas de régression sur l'export.
 
+# Colonnes affichées / exportées en mode prospection (ordre figé).
+PROSPECTION_RESULT_COLUMNS: list[str] = [
+    "nom",
+    "telephone",
+    "site_web",
+    "adresse",
+    "code_postal",
+    "ville",
+    "google_maps_url",
+]
+
 MODE_PRIORITY_COLUMNS: dict[Mode, list[str]] = {
     "prospection": [
         # Comportement actuel : on garde l'ordre par défaut.
@@ -213,6 +224,13 @@ def reorder_columns_for_mode(columns: list[str], mode: Mode) -> list[str]:
         ]
 
     return ordered
+
+
+def apply_result_columns_for_mode(columns: list[str], mode: Mode) -> list[str]:
+    """Réduit l’aperçu / les métadonnées `columns` au panneau attendu par mode."""
+    if mode == "prospection":
+        return list(PROSPECTION_RESULT_COLUMNS)
+    return columns
 
 
 def credits_floor_for_mode(mode: Mode) -> int:

@@ -8,6 +8,7 @@ Deux modes selon ``PAPPERS_BASE_URL`` :
 
 from __future__ import annotations
 
+import asyncio
 import httpx
 from models.schemas import CompanyResult
 from config import settings
@@ -121,6 +122,50 @@ def _normalize_fr_finances(finances: object) -> list[dict]:
     return []
 
 
+def _norm_contact_str(v: object) -> str | None:
+    if v is None:
+        return None
+    if isinstance(v, list):
+        for x in v:
+            s = _norm_contact_str(x)
+            if s:
+                return s
+        return None
+    if isinstance(v, dict):
+        for k in ("url", "site", "valeur", "value", "libelle"):
+            s = _norm_contact_str(v.get(k))
+            if s:
+                return s
+        return None
+    s = str(v).strip()
+    return s or None
+
+
+def _contacts_from_entreprise_payload(data: dict) -> tuple[str | None, str | None]:
+    """Téléphone et site web depuis une fiche `/entreprise` Pappers (FR)."""
+    siege = data.get("siege") if isinstance(data.get("siege"), dict) else {}
+    tel = (
+        data.get("telephone")
+        or data.get("telephone_entreprise")
+        or data.get("telephone_formate")
+        or siege.get("telephone")
+    )
+    web = (
+        data.get("site_internet")
+        or data.get("site_web")
+        or data.get("website")
+        or data.get("sites_internet")
+    )
+    return (_norm_contact_str(tel), _norm_contact_str(web))
+
+
+def _contacts_from_recherche_row(r: dict, siege: dict) -> tuple[str | None, str | None]:
+    """Téléphone / site issus d’une ligne de `/recherche` (souvent partiels)."""
+    tel = r.get("telephone") or r.get("telephone_entreprise") or siege.get("telephone")
+    web = r.get("site_internet") or r.get("site_web") or r.get("sites_internet")
+    return (_norm_contact_str(tel), _norm_contact_str(web))
+
+
 def _capital_from_entreprise_payload(data: dict) -> float | None:
     return _safe_float(
         data.get("capital_social")
@@ -174,6 +219,15 @@ def _company_result_from_intl(r: dict) -> CompanyResult | None:
         dir_prenom = rep.get("prenom") or ""
         dir_fonction = rep.get("qualite") or ""
 
+    web_src = r.get("website") or r.get("web_site") or r.get("site_web")
+    if not web_src and isinstance(r.get("domains"), list) and r["domains"]:
+        d0 = r["domains"][0]
+        if isinstance(d0, str):
+            web_src = d0
+        elif isinstance(d0, dict):
+            web_src = d0.get("domain") or d0.get("url")
+    tel_src = r.get("phone") or r.get("telephone") or ho.get("phone")
+
     ca, rn = None, None
     annee_ca: int | None = None
     fins = r.get("financials")
@@ -204,7 +258,8 @@ def _company_result_from_intl(r: dict) -> CompanyResult | None:
         chiffre_affaires=ca,
         resultat_net=rn,
         annee_dernier_ca=annee_ca,
-        site_web=None,
+        telephone=_norm_contact_str(tel_src),
+        site_web=_norm_contact_str(web_src),
     )
 
 
@@ -361,6 +416,9 @@ async def _search_france(params: dict) -> list[CompanyResult]:
                 if ca is not None and ca_n1 is not None and ca_n1 != 0:
                     variation_ca = round((ca - ca_n1) / abs(ca_n1) * 100, 1)
 
+            tel_row, web_row = _contacts_from_recherche_row(r, siege if isinstance(siege, dict) else {})
+            site_merged = web_row or r.get("site_web")
+
             results.append(
                 CompanyResult(
                     siren=r.get("siren", ""),
@@ -390,7 +448,8 @@ async def _search_france(params: dict) -> list[CompanyResult]:
                     capitaux_propres=cap_prop,
                     effectif_financier=eff_fin,
                     capital_social=cap_soc,
-                    site_web=r.get("site_web"),
+                    telephone=tel_row,
+                    site_web=_norm_contact_str(site_merged),
                 )
             )
 
@@ -489,19 +548,115 @@ async def get_company_finances(siren: str) -> dict:
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
-            resp = await client.get(
-                f"{BASE_URL}/entreprise",
-                params={"api_token": settings.PAPPERS_API_KEY, "siren": siren},
-            )
+            base_params: dict[str, str] = {
+                "api_token": settings.PAPPERS_API_KEY,
+                "siren": siren,
+            }
+            params_full = {
+                **base_params,
+                "champs_supplementaires": "telephone,site_internet",
+            }
+            resp = await client.get(f"{BASE_URL}/entreprise", params=params_full)
+            if resp.status_code == 400:
+                resp = await client.get(
+                    f"{BASE_URL}/entreprise",
+                    params={
+                        **base_params,
+                        "champsSupplementaires": "telephone,site_internet",
+                    },
+                )
+            if resp.status_code == 400:
+                resp = await client.get(f"{BASE_URL}/entreprise", params=base_params)
             resp.raise_for_status()
             data = resp.json()
         except Exception:
             return {}
 
     finances = _normalize_fr_finances(data.get("finances"))
+    tel, web = _contacts_from_entreprise_payload(data)
     return {
         "siren": siren,
         "denomination": data.get("denomination"),
         "finances": finances,
         "capital_social": _capital_from_entreprise_payload(data),
+        "telephone": tel,
+        "site_web": web,
     }
+
+
+async def enrich_missing_contacts_pappers_fr(
+    results: list[CompanyResult],
+    *,
+    max_companies: int = 60,
+    concurrency: int = 8,
+) -> None:
+    """Complète téléphone / site web via fiche Pappers France (SIREN), si clé configurée."""
+    if not _is_available() or _is_international():
+        return
+
+    targets: list[tuple[str, CompanyResult]] = []
+    seen: set[str] = set()
+    for r in results:
+        sid = (r.siren or "").strip().replace(" ", "")
+        if len(sid) != 9 or not sid.isdigit():
+            continue
+        if sid in seen:
+            continue
+        seen.add(sid)
+        need_tel = not (r.telephone and str(r.telephone).strip())
+        need_web = not (r.site_web and str(r.site_web).strip())
+        if need_tel or need_web:
+            targets.append((sid, r))
+        if len(targets) >= max_companies:
+            break
+
+    if not targets:
+        return
+
+    plog("pappers_contact_enrich_start", nb=len(targets))
+    sem = asyncio.Semaphore(concurrency)
+
+    async def _one(client: httpx.AsyncClient, siren: str, row: CompanyResult) -> None:
+        async with sem:
+            try:
+                base_params: dict[str, str] = {
+                    "api_token": settings.PAPPERS_API_KEY,
+                    "siren": siren,
+                }
+                params_full = {
+                    **base_params,
+                    "champs_supplementaires": "telephone,site_internet",
+                }
+                resp = await client.get(
+                    f"{BASE_URL}/entreprise",
+                    params=params_full,
+                    timeout=18.0,
+                )
+                if resp.status_code == 400:
+                    resp = await client.get(
+                        f"{BASE_URL}/entreprise",
+                        params={
+                            **base_params,
+                            "champsSupplementaires": "telephone,site_internet",
+                        },
+                        timeout=18.0,
+                    )
+                if resp.status_code == 400:
+                    resp = await client.get(
+                        f"{BASE_URL}/entreprise",
+                        params=base_params,
+                        timeout=18.0,
+                    )
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception:
+                return
+        tel, web = _contacts_from_entreprise_payload(data)
+        if tel and not (row.telephone and str(row.telephone).strip()):
+            row.telephone = tel
+        if web and not (row.site_web and str(row.site_web).strip()):
+            row.site_web = web
+
+    async with httpx.AsyncClient() as client:
+        await asyncio.gather(*(_one(client, sid, row) for sid, row in targets))
+    plog("pappers_contact_enrich_done", nb=len(targets))
