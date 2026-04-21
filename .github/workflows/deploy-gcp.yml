@@ -193,6 +193,10 @@ jobs:
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
       - name: Déployer Cloud Run (frontend)
+        env:
+          # Next 15 garde `process.env.BACKEND_INTERNAL_URL` au runtime (pas d’inlining) :
+          # sans cette variable, le relais `/api/*` vise 127.0.0.1:8000 → 500 en prod.
+          BACKEND_URL: ${{ needs.deploy-backend.outputs.url }}
         run: |
           gcloud config set project "${{ steps.proj.outputs.project_id }}"
           gcloud run deploy "${{ env.FRONTEND_SERVICE }}" \
@@ -201,7 +205,8 @@ jobs:
             --platform=managed \
             --allow-unauthenticated \
             --port=8080 \
-            --memory=512Mi
+            --memory=512Mi \
+            --set-env-vars="BACKEND_INTERNAL_URL=${BACKEND_URL}"
 
       - name: URL du frontend
         id: frontend-url
