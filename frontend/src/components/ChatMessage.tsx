@@ -2,6 +2,7 @@
 
 import ReactMarkdown from "react-markdown";
 import ResultsTable from "./ResultsTable";
+import BenchmarkDossier from "./BenchmarkDossier";
 import QcmCard from "./QcmCard";
 import AtelierDossier from "./AtelierDossier";
 import { AlertCircle, Compass } from "lucide-react";
@@ -219,23 +220,40 @@ export default function ChatMessage({
         </div>
 
         {meta && meta.preview && !showQcmCard && !isDossier && (
-          <ResultsTable
-            data={meta.preview}
-            columns={meta.columns || []}
-            total={meta.total || 0}
-            searchId={meta.search_id || ""}
-            creditsRequired={meta.credits_required || 0}
-            userCredits={userCredits}
-            creditsUnlimited={creditsUnlimited}
-            onExport={onExport}
-            exporting={exporting}
-            mapPoints={meta.map_points || []}
-            resultsMode={
-              typeof meta.mode === "string"
-                ? normalizeMode(meta.mode)
-                : DEFAULT_MODE
-            }
-          />
+          meta.mode === "benchmark" ? (
+            <BenchmarkDossier
+              data={meta.preview}
+              columns={meta.columns || []}
+              total={meta.total || 0}
+              searchId={meta.search_id || ""}
+              creditsRequired={meta.credits_required || 0}
+              userCredits={userCredits}
+              creditsUnlimited={creditsUnlimited}
+              onExport={onExport}
+              exporting={exporting}
+              mapPoints={meta.map_points || []}
+              query={typeof meta.query === "string" ? meta.query : undefined}
+              guardEntities={meta.guard_entities || undefined}
+            />
+          ) : (
+            <ResultsTable
+              data={meta.preview}
+              columns={meta.columns || []}
+              total={meta.total || 0}
+              searchId={meta.search_id || ""}
+              creditsRequired={meta.credits_required || 0}
+              userCredits={userCredits}
+              creditsUnlimited={creditsUnlimited}
+              onExport={onExport}
+              exporting={exporting}
+              mapPoints={meta.map_points || []}
+              resultsMode={
+                typeof meta.mode === "string"
+                  ? normalizeMode(meta.mode)
+                  : DEFAULT_MODE
+              }
+            />
+          )
         )}
       </div>
 
