@@ -569,6 +569,11 @@ async def get_company_finances(siren: str) -> dict:
                 resp = await client.get(f"{BASE_URL}/entreprise", params=base_params)
             resp.raise_for_status()
             data = resp.json()
+            import logging
+
+            logging.warning(
+                f"[PAPPERS RAW] siren={siren} status={resp.status_code} keys={list(data.keys()) if resp.status_code == 200 else resp.text[:200]}"
+            )
         except Exception:
             return {}
 

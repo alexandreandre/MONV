@@ -18,6 +18,7 @@ def _cors_allow_origins() -> list[str]:
         origins.append(site)
     return origins
 from routers import agent, auth, chat, credits, search
+from routers.benchmark import router as benchmark_router
 from utils.pipeline_log import configure_pipeline_logging
 
 
@@ -47,6 +48,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(benchmark_router)
 app.include_router(agent.router)
 app.include_router(search.router)
 app.include_router(credits.router)

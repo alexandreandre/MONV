@@ -488,7 +488,12 @@ async def send_message(
             " J'ai ajouté une **vue rapide site / opportunité** (hypothèses à partir des "
             "fiches publiques, sans crawl réel) pour cadrer ton approche commerciale."
         )
-    preview_cap = 20 if pitch_enriched else settings.FREE_PREVIEW_ROWS
+    if pitch_enriched:
+        preview_cap = 20
+    elif active_mode == "benchmark":
+        preview_cap = 50
+    else:
+        preview_cap = settings.FREE_PREVIEW_ROWS
     if total > preview_cap:
         solde = (
             "**crédits illimités**"
@@ -541,6 +546,14 @@ async def send_message(
             "mode_label": MODE_LABELS.get(active_mode, active_mode),
             "relevance": relevance_meta or None,
             "digital_pitch_enriched": pitch_enriched,
+            "query": req.message,
+            "guard_entities": {
+                "secteur": guard_result.entities.secteur,
+                "code_naf": guard_result.entities.code_naf,
+                "localisation": guard_result.entities.localisation,
+                "departement": guard_result.entities.departement,
+                "region": guard_result.entities.region,
+            },
         }, ensure_ascii=False, default=str),
         created_at=datetime.now(timezone.utc),
     )
