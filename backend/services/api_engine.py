@@ -174,6 +174,14 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
             plog("api_call_start", source=call.source, action=call.action, nb_targets=min(50, len(all_results)))
             for result in all_results[:50]:
                 fin_data = await get_company_finances(result.siren)
+                finances_list = fin_data.get("finances", [])
+                ca_value = finances_list[0].get("chiffre_affaires") if finances_list else None
+                plog(
+                    "pappers_finance_debug",
+                    siren=result.siren,
+                    nb_finances=len(finances_list),
+                    ca=ca_value,
+                )
                 finances = fin_data.get("finances", [])
                 cap_co = fin_data.get("capital_social")
                 if cap_co is not None:
