@@ -458,6 +458,22 @@ async def run_orchestrator(
             if col not in columns:
                 columns.append(col)
 
+    # Forcer BODACC en mode rachat / benchmark
+    if active_mode in ("benchmark", "rachat"):
+        if not any(c.source == "bodacc" for c in api_calls):
+            api_calls.append(APICall(
+                source="bodacc", action="get_signals",
+                params={}, priority=5,
+            ))
+
+    # Marchés publics : signal d'activité B2B réelle
+    if active_mode in ("prospection", "benchmark", "sous_traitant"):
+        if not any(c.source == "marches_publics" for c in api_calls):
+            api_calls.append(APICall(
+                source="marches_publics", action="get_marches",
+                params={}, priority=6,
+            ))
+
     estimated = max(
         int(result.get("estimated_credits", 1) or 1),
         credits_floor_for_mode(active_mode),
@@ -610,6 +626,22 @@ def _build_fallback_plan(
         if not any(c.source == "pappers" and c.action == "get_dirigeants" for c in api_calls):
             api_calls.append(APICall(
                 source="pappers", action="get_dirigeants", params={}, priority=3,
+            ))
+
+    # BODACC : signaux business pour rachat et benchmark
+    if mode in ("rachat", "benchmark"):
+        if not any(c.source == "bodacc" for c in api_calls):
+            api_calls.append(APICall(
+                source="bodacc", action="get_signals",
+                params={}, priority=5,
+            ))
+
+    # Marchés publics
+    if mode in ("prospection", "benchmark", "sous_traitant"):
+        if not any(c.source == "marches_publics" for c in api_calls):
+            api_calls.append(APICall(
+                source="marches_publics", action="get_marches",
+                params={}, priority=6,
             ))
 
     credits = 1

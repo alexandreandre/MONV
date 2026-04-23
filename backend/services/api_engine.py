@@ -3,8 +3,10 @@ Couche 3 — Moteur d'exécution API
 Exécute le plan de l'orchestrateur, agrège et déduplique les résultats.
 """
 
+import asyncio
+
 from config import settings
-from models.schemas import ExecutionPlan, CompanyResult, SearchResults
+from models.schemas import BusinessSignal, ExecutionPlan, CompanyResult, SearchResults
 from services.sirene import search_sirene
 from services.pappers import (
     enrich_missing_contacts_pappers_fr,
@@ -15,6 +17,8 @@ from services.pappers import (
 from services.google_places import search_google_places
 from services.orchestrator import extend_columns_for_plan
 from services.modes import apply_result_columns_for_mode, normalize_mode
+from services.bodacc import get_bodacc_signals_for_siren
+from services.marches_publics import get_marches_for_siren
 from services.signals import detect_signals
 from services.geocoding import geocode_results
 from utils.pipeline_log import plog
@@ -106,6 +110,8 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
 
     _finances_by_siren: dict[str, list[dict]] = {}
     _dirigeants_by_siren: dict[str, list[dict]] = {}
+    _bodacc_by_siren: dict[str, list[BusinessSignal]] = {}
+    _marches_publics_by_siren: dict[str, BusinessSignal] = {}
 
     sorted_calls = sorted(plan.api_calls, key=lambda c: c.priority)
 
@@ -170,18 +176,54 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
                         result.dirigeant_2_fonction = second.get("qualite", "")
             plog("api_call_end", source=call.source, action=call.action)
 
+        elif call.source == "bodacc" and call.action == "get_signals":
+            plog("api_call_start", source="bodacc", action="get_signals",
+                 nb_targets=min(20, len(all_results)))
+            for result in all_results[:20]:
+                bodacc_signals = await get_bodacc_signals_for_siren(result.siren)
+                bucket = _bodacc_by_siren.setdefault(result.siren, [])
+                existing_types = {s.type for s in bucket}
+                for sig in bodacc_signals:
+                    if sig["type"] not in existing_types:
+                        bucket.append(BusinessSignal(
+                            type=sig["type"],
+                            label=sig["label"],
+                            detail=sig.get("detail"),
+                            severity=sig["severity"],
+                        ))
+                        existing_types.add(sig["type"])
+            plog("api_call_end", source="bodacc", action="get_signals")
+
+        elif call.source == "marches_publics" and call.action == "get_marches":
+            plog("api_call_start", source="marches_publics",
+                 action="get_marches", nb_targets=min(20, len(all_results)))
+            targets = all_results[:20]
+            marches_list = await asyncio.gather(
+                *[get_marches_for_siren(r.siren) for r in targets],
+                return_exceptions=True,
+            )
+            for result, marches in zip(targets, marches_list):
+                if isinstance(marches, Exception) or not marches:
+                    continue
+                nb = len(marches)
+                montant_total = sum(
+                    (_safe_float(m.get("montant")) or 0)
+                    for m in marches
+                    if m.get("montant") is not None
+                )
+                _marches_publics_by_siren[result.siren] = BusinessSignal(
+                    type="marche_public",
+                    label=f"Marchés publics ({nb})",
+                    detail=f"{nb} marché(s) — {montant_total / 1000:.0f} k€ cumulés",
+                    severity="positive",
+                )
+            plog("api_call_end", source="marches_publics",
+                 action="get_marches")
+
         elif call.source == "pappers" and call.action == "get_finances":
             plog("api_call_start", source=call.source, action=call.action, nb_targets=min(50, len(all_results)))
             for result in all_results[:50]:
                 fin_data = await get_company_finances(result.siren)
-                finances_list = fin_data.get("finances", [])
-                ca_value = finances_list[0].get("chiffre_affaires") if finances_list else None
-                plog(
-                    "pappers_finance_debug",
-                    siren=result.siren,
-                    nb_finances=len(finances_list),
-                    ca=ca_value,
-                )
                 finances = fin_data.get("finances", [])
                 cap_co = fin_data.get("capital_social")
                 if cap_co is not None:
@@ -263,6 +305,15 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
             finances=_finances_by_siren.get(result.siren, []),
             representants=_dirigeants_by_siren.get(result.siren, []),
         )
+        for sig in _bodacc_by_siren.get(result.siren, []):
+            existing_types = {s.type for s in result.signaux}
+            if sig.type not in existing_types:
+                result.signaux.append(sig)
+        sig_mp = _marches_publics_by_siren.get(result.siren)
+        if sig_mp is not None:
+            existing_types_mp = {s.type for s in result.signaux}
+            if sig_mp.type not in existing_types_mp:
+                result.signaux.append(sig_mp)
 
     cols = extend_columns_for_plan(plan.columns, plan.api_calls)
     if any(r.signaux for r in all_results) and "signaux" not in cols:
