@@ -10,7 +10,7 @@ import pytest
 os.environ.setdefault("SKIP_DB_VERIFY_ON_STARTUP", "true")
 os.environ.setdefault("SUPABASE_URL", "https://placeholder.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_KEY", "placeholder-service-key")
-# Pas de clé Pappers : permet de vérifier le fallback gracieux du mode rachat.
+# Clé Pappers vide par défaut (tests orchestrateur / modes sans appel réel).
 os.environ.setdefault("PAPPERS_API_KEY", "")
 
 
@@ -98,6 +98,7 @@ def test_rachat_addendum_includes_safety_clause():
     addendum = addendum_for_mode("rachat")
     assert "valorisation" in addendum.lower()
     assert "conseil" in addendum.lower()
+    assert "ne pas appeler pappers" in addendum.lower()
 
 
 def test_benchmark_addendum_includes_safety_clause():
@@ -163,11 +164,27 @@ def test_reorder_sous_traitant_promotes_capacity_columns():
     assert set(cols) == set(BASE_COLUMNS)
 
 
-def test_reorder_rachat_promotes_financial_columns():
+def test_reorder_rachat_promotes_sirene_panel_columns():
     cols = reorder_columns_for_mode(BASE_COLUMNS, "rachat")
-    head = cols[:10]
-    for c in ("chiffre_affaires", "resultat_net", "ebe", "capitaux_propres"):
-        assert c in head, f"{c} attendu dans le top 10 du mode rachat"
+    # nom + 14 colonnes prio rachat → au moins 15 entrées avant le « reste »
+    head = cols[:16]
+    for c in (
+        "categorie_entreprise",
+        "date_creation",
+        "effectif_label",
+        "chiffre_affaires",
+        "variation_ca_pct",
+        "resultat_net",
+        "ca_n_minus_1",
+        "annee_dernier_ca",
+        "dirigeant_nom",
+        "dirigeant_fonction",
+        "forme_juridique",
+        "siren",
+        "ville",
+        "region",
+    ):
+        assert c in head, f"{c} attendu dans le haut du mode rachat"
     assert set(cols) == set(BASE_COLUMNS)
 
 
@@ -199,7 +216,7 @@ def test_credits_floor_per_mode():
     assert credits_floor_for_mode("prospection") == 1
     assert credits_floor_for_mode("sous_traitant") == 1
     assert credits_floor_for_mode("benchmark") == 1
-    assert credits_floor_for_mode("rachat") == 3
+    assert credits_floor_for_mode("rachat") == 1
 
 
 # ── Plan fallback (sans LLM) ──────────────────────────────────────────────────
@@ -231,12 +248,12 @@ def test_fallback_plan_works_for_every_mode(mode):
         assert plan.columns == PROSPECTION_RESULT_COLUMNS
 
 
-def test_fallback_plan_rachat_includes_pappers_when_key_present(monkeypatch):
+def test_fallback_plan_rachat_excludes_pappers_when_key_present(monkeypatch):
+    """Rachat n'injecte plus Pappers même si la clé est configurée."""
     monkeypatch.setattr("services.orchestrator.settings.PAPPERS_API_KEY", "fake-key")
     plan = _build_fallback_plan(_make_guard_result(), "rachat")
-    sources = {(c.source, c.action) for c in plan.api_calls}
-    assert ("pappers", "get_finances") in sources
-    assert ("pappers", "get_dirigeants") in sources
+    pappers_calls = [c for c in plan.api_calls if c.source == "pappers"]
+    assert pappers_calls == []
 
 
 def test_fallback_plan_benchmark_excludes_pappers_when_key_present(monkeypatch):
@@ -247,14 +264,13 @@ def test_fallback_plan_benchmark_excludes_pappers_when_key_present(monkeypatch):
     assert pappers_calls == []
 
 
-def test_fallback_plan_rachat_degrades_without_pappers_key(monkeypatch):
-    """Sans clé Pappers, le mode rachat reste utilisable (pas de blocage)."""
+def test_fallback_plan_rachat_has_sirene_without_pappers(monkeypatch):
+    """Mode rachat : plan SIRENE (+ BODACC), jamais Pappers."""
     monkeypatch.setattr("services.orchestrator.settings.PAPPERS_API_KEY", "")
     plan = _build_fallback_plan(_make_guard_result(), "rachat")
-    pappers_calls = [c for c in plan.api_calls if c.source == "pappers"]
-    assert pappers_calls == []
-    # On a tout de même des appels SIRENE.
+    assert [c for c in plan.api_calls if c.source == "pappers"] == []
     assert any(c.source == "sirene" for c in plan.api_calls)
+    assert any(c.source == "bodacc" for c in plan.api_calls)
 
 
 def test_fallback_plan_default_mode_matches_prospection():

@@ -433,30 +433,6 @@ async def run_orchestrator(
     columns = reorder_columns_for_mode(columns, active_mode)
     columns = apply_result_columns_for_mode(columns, active_mode)
 
-    # ── Forcer Pappers en mode rachat uniquement ──────────────
-    # Benchmark : Pappers retiré (remplacé par INPI bilans à venir)
-    if active_mode == "rachat" and settings.PAPPERS_API_KEY:
-        if not any(c.source == "pappers" and c.action == "get_finances"
-                   for c in api_calls):
-            api_calls.append(APICall(
-                source="pappers", action="get_finances",
-                params={}, priority=3,
-            ))
-        if not any(c.source == "pappers" and c.action == "get_dirigeants"
-                   for c in api_calls):
-            api_calls.append(APICall(
-                source="pappers", action="get_dirigeants",
-                params={}, priority=4,
-            ))
-        # Ajouter les colonnes financières si absentes
-        finance_cols = [
-            "chiffre_affaires", "resultat_net", "variation_ca_pct",
-            "ca_n_minus_1", "ebe", "dirigeant_nom", "dirigeant_fonction",
-        ]
-        for col in finance_cols:
-            if col not in columns:
-                columns.append(col)
-
     # Forcer BODACC en mode rachat / benchmark
     if active_mode in ("benchmark", "rachat"):
         if not any(c.source == "bodacc" for c in api_calls):
@@ -614,17 +590,6 @@ def _build_fallback_plan(
         api_calls.append(APICall(
             source="pappers", action="get_finances", params={}, priority=3,
         ))
-
-    # Rachat uniquement — Benchmark n'utilise plus Pappers
-    if mode == "rachat" and settings.PAPPERS_API_KEY:
-        if not any(c.source == "pappers" and c.action == "get_finances" for c in api_calls):
-            api_calls.append(APICall(
-                source="pappers", action="get_finances", params={}, priority=3,
-            ))
-        if not any(c.source == "pappers" and c.action == "get_dirigeants" for c in api_calls):
-            api_calls.append(APICall(
-                source="pappers", action="get_dirigeants", params={}, priority=3,
-            ))
 
     # BODACC : signaux business pour rachat et benchmark
     if mode in ("rachat", "benchmark"):

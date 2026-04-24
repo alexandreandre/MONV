@@ -304,6 +304,7 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
             result,
             finances=_finances_by_siren.get(result.siren, []),
             representants=_dirigeants_by_siren.get(result.siren, []),
+            mode=normalize_mode(mode),
         )
         for sig in _bodacc_by_siren.get(result.siren, []):
             existing_types = {s.type for s in result.signaux}
@@ -325,7 +326,7 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
          total_results=len(all_results))
 
     await geocode_results(all_results)
-    if normalize_mode(mode) != "benchmark":
+    if normalize_mode(mode) not in ("benchmark", "rachat"):
         await enrich_missing_contacts_pappers_fr(all_results, max_companies=60)
 
     return SearchResults(

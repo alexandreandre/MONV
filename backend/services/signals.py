@@ -67,6 +67,60 @@ def _basic_signals(result: CompanyResult) -> list[BusinessSignal]:
     return signals
 
 
+def _transmission_signals(result: CompanyResult) -> list[BusinessSignal]:
+    """Signaux spécifiques rachat : ancienneté société, signal transmission."""
+    signals: list[BusinessSignal] = []
+    today = date.today()
+
+    # Signal ancienneté — société créée il y a plus de 20 ans
+    created = _parse_date(result.date_creation)
+    if created:
+        age_years = (today - created).days // 365
+        if age_years >= 30:
+            signals.append(BusinessSignal(
+                type="societe_ancienne",
+                label="Société ancienne",
+                detail=f"Créée en {created.year} ({age_years} ans)",
+                severity="positive",
+            ))
+        elif age_years >= 20:
+            signals.append(BusinessSignal(
+                type="societe_mature",
+                label="Société mature",
+                detail=f"Créée en {created.year} ({age_years} ans)",
+                severity="info",
+            ))
+
+    # Signal croissance CA — données SIRENE natives (variation_ca_pct)
+    if result.variation_ca_pct is not None:
+        if result.variation_ca_pct >= 20:
+            signals.append(BusinessSignal(
+                type="forte_croissance",
+                label="Forte croissance",
+                detail=f"CA +{result.variation_ca_pct:.1f}% sur 1 an",
+                severity="positive",
+            ))
+        elif result.variation_ca_pct <= -15:
+            signals.append(BusinessSignal(
+                type="ca_en_baisse",
+                label="CA en baisse",
+                detail=f"CA {result.variation_ca_pct:+.1f}% sur 1 an",
+                severity="warning",
+            ))
+
+    # Signal résultat négatif — via SIRENE natif
+    if result.resultat_net is not None and result.resultat_net < 0:
+        formatted = f"{result.resultat_net:,.0f} €".replace(",", "\u202f")
+        signals.append(BusinessSignal(
+            type="resultat_negatif",
+            label="Résultat négatif",
+            detail=formatted,
+            severity="warning",
+        ))
+
+    return signals
+
+
 # ── Signaux financiers (données multi-années Pappers) ────────────────
 
 def _ca_from_row(row: dict) -> float | None:
@@ -166,10 +220,19 @@ def detect_signals(
     *,
     finances: list[dict] | None = None,
     representants: list[dict] | None = None,
+    mode: str | None = None,
 ) -> list[BusinessSignal]:
     """Produit la liste des signaux business pour une entreprise."""
     out: list[BusinessSignal] = []
     out.extend(_basic_signals(result))
+    # Signaux transmission pour le mode rachat
+    if mode == "rachat":
+        # Évite les doublons avec _basic_signals (résultat_negatif déjà là)
+        transmission = _transmission_signals(result)
+        existing_types = {s.type for s in out}
+        for s in transmission:
+            if s.type not in existing_types:
+                out.append(s)
     if finances:
         out.extend(_finance_signals(finances))
     if representants:

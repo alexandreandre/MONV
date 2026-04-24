@@ -48,7 +48,7 @@ from models.schemas import (
     ProjectFolderPatch,
     SearchResults,
 )
-from services.filter import run_filter
+from services.filter import FilterResult, run_filter
 from services.guard import run_guard
 from services.conversationalist import generate_qcm
 from services.orchestrator import run_orchestrator
@@ -168,7 +168,14 @@ async def send_message(
     response_messages: list[Message] = []
 
     # ── Couche 0 — Filtre scope (modèle cheap) ─────────────────────
-    filter_result = await run_filter(req.message)
+    # Skip si la conversation a déjà un QCM (réponse de qualification rachat / sous-traitant)
+    _recent = await messages_recent_for_llm(supabase, conv.id, 10)
+    _skip_filter = any(m.message_type == "qcm" for m in _recent)
+
+    if _skip_filter:
+        filter_result = FilterResult(in_scope=True)
+    else:
+        filter_result = await run_filter(req.message)
 
     if not filter_result.in_scope:
         msg = Message(

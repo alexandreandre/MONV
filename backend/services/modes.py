@@ -95,18 +95,20 @@ MODE_PRIORITY_COLUMNS: dict[Mode, list[str]] = {
         "region",
     ],
     "rachat": [
-        # Repreneur : focus financier + transmission.
         "categorie_entreprise",
         "date_creation",
         "effectif_label",
         "chiffre_affaires",
         "variation_ca_pct",
         "resultat_net",
-        "ebe",
-        "capitaux_propres",
-        "capital_social",
+        "ca_n_minus_1",
+        "annee_dernier_ca",
         "dirigeant_nom",
         "dirigeant_fonction",
+        "forme_juridique",
+        "siren",
+        "ville",
+        "region",
     ],
 }
 
@@ -157,15 +159,14 @@ MODE_ORCHESTRATOR_ADDENDUM: dict[Mode, str] = {
     "rachat": (
         "\n\nMODE ACTIF : RACHAT (cadre d'analyse business).\n"
         "L'utilisateur identifie des cibles potentielles d'acquisition.\n"
-        "- Si la clé Pappers est disponible, ajoute SYSTÉMATIQUEMENT un appel "
-        "`pappers` action `get_finances` ET `get_dirigeants` après la recherche "
-        "principale (filtre rentabilité + âge dirigeant = signaux transmission).\n"
+        "- Ne pas appeler Pappers (source remplacée par SIRENE natif).\n"
         "- Privilégie les entreprises créées il y a 15 ans ou plus quand la "
         "requête évoque transmission / cession / reprise.\n"
         "- Inclure dans `columns` : categorie_entreprise, date_creation, "
-        "effectif_label, chiffre_affaires, variation_ca_pct, resultat_net, ebe, "
-        "capitaux_propres, capital_social, dirigeant_nom, dirigeant_fonction.\n"
-        "- Coût plancher : 3 crédits (Pappers requis pour analyse).\n"
+        "effectif_label, chiffre_affaires, variation_ca_pct, resultat_net, "
+        "ca_n_minus_1, annee_dernier_ca, dirigeant_nom, dirigeant_fonction, "
+        "forme_juridique, siren, ville, region.\n"
+        "- Coût plancher : 1 crédit (panneau SIRENE / signaux sans enrichissement Pappers).\n"
         "- IMPORTANT : tu ne fournis aucune valorisation, aucun conseil "
         "d'investissement, aucune recommandation juridique ou comptable. "
         "Tu produis un cadre d'analyse factuel à partir des données publiques."
@@ -178,7 +179,7 @@ MODE_CREDITS_FLOOR: dict[Mode, int] = {
     "prospection": 1,
     "sous_traitant": 1,
     "benchmark": 1,
-    "rachat": 3,
+    "rachat": 1,
 }
 
 
