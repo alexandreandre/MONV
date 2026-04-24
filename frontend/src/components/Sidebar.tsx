@@ -40,6 +40,24 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { normalizeMode, MODE_META, type Mode } from "@/lib/modes";
+import { ATELIER_MODE_LABEL } from "@/lib/agents";
+
+const MODE_ORDER: (Mode | "atelier")[] = [
+  "prospection",
+  "benchmark",
+  "rachat",
+  "sous_traitant",
+  "atelier",
+];
+
+const MODE_DISPLAY: Record<string, { label: string; color: string }> = {
+  prospection: { label: "Prospection", color: "text-emerald-400" },
+  benchmark: { label: "Benchmark", color: "text-amber-400" },
+  rachat: { label: "Rachat", color: "text-violet-400" },
+  sous_traitant: { label: "Sous-traitant", color: "text-sky-400" },
+  atelier: { label: "Atelier", color: "text-primary" },
+};
 
 interface Props {
   user: User | null;
@@ -213,6 +231,18 @@ function SidebarContent({
   const [renameDraft, setRenameDraft] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | "recents" | null>(null);
+  const [openGroups, setOpenGroups] = useState<Set<string>>(
+    () => new Set(MODE_ORDER)
+  );
+
+  const toggleGroup = (modeKey: string) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(modeKey)) next.delete(modeKey);
+      else next.add(modeKey);
+      return next;
+    });
+  };
 
   const inboxConversations = conversations.filter((c) => !c.folder_id);
 
@@ -529,23 +559,91 @@ function SidebarContent({
                 onDragOver={handleDragOverRecents}
                 onDragLeave={handleDragLeaveZone}
                 onDrop={handleDropOnRecents}
-                className={`space-y-0.5 pl-0.5 rounded-lg min-h-[44px] py-0.5 ${
+                className={`space-y-1 pl-0.5 rounded-lg min-h-[44px] py-0.5 ${
                   dropTarget === "recents"
                     ? "ring-2 ring-white/25 ring-offset-2 ring-offset-background"
                     : ""
                 }`}
               >
-                {inboxConversations.map((c) => (
-                  <ConversationRow
-                    key={c.id}
-                    conv={c}
-                    currentConvId={currentConvId}
-                    projectFolders={projectFolders}
-                    onSelect={() => nav(() => onSelectConversation(c.id))}
-                    onMove={onMoveConversationToFolder}
-                    onItemClick={onItemClick}
-                  />
-                ))}
+                {(() => {
+                  const recentConvs = inboxConversations;
+                  const groups: Record<string, Conversation[]> = {};
+                  for (const conv of recentConvs) {
+                    const raw = conv.mode ?? "";
+                    const key =
+                      raw === ATELIER_MODE_LABEL
+                        ? "atelier"
+                        : normalizeMode(raw);
+                    if (!groups[key]) groups[key] = [];
+                    groups[key].push(conv);
+                  }
+
+                  return MODE_ORDER.filter(
+                    (modeKey) => (groups[modeKey]?.length ?? 0) > 0
+                  ).map((modeKey) => {
+                    const convs = groups[modeKey] || [];
+                    const display = MODE_DISPLAY[modeKey];
+                    const isOpen = openGroups.has(modeKey);
+                    const GroupIcon =
+                      modeKey === "atelier"
+                        ? Compass
+                        : MODE_META[modeKey as Mode].icon;
+
+                    return (
+                      <div key={modeKey}>
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(modeKey)}
+                          className="flex items-center justify-between w-full px-2 py-1 rounded-md hover:bg-muted/50 transition-colors group"
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <GroupIcon
+                              size={12}
+                              className={cn(
+                                "shrink-0",
+                                modeKey === "atelier"
+                                  ? "text-primary"
+                                  : display.color
+                              )}
+                            />
+                            <span
+                              className={`text-[10px] font-semibold uppercase tracking-wider ${display.color}`}
+                            >
+                              {display.label}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground shrink-0">
+                              ({convs.length})
+                            </span>
+                          </div>
+                          <ChevronRight
+                            size={12}
+                            className={`text-muted-foreground shrink-0 transition-transform duration-200 ${
+                              isOpen ? "rotate-90" : ""
+                            }`}
+                          />
+                        </button>
+
+                        {isOpen && (
+                          <div className="ml-2 mt-0.5 space-y-0.5">
+                            {convs.map((conv) => (
+                              <ConversationRow
+                                key={conv.id}
+                                conv={conv}
+                                currentConvId={currentConvId}
+                                projectFolders={projectFolders}
+                                onSelect={() =>
+                                  nav(() => onSelectConversation(conv.id))
+                                }
+                                onMove={onMoveConversationToFolder}
+                                onItemClick={onItemClick}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>

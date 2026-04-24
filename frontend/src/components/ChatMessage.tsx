@@ -3,6 +3,7 @@
 import ReactMarkdown from "react-markdown";
 import ResultsTable from "./ResultsTable";
 import BenchmarkDossier from "./BenchmarkDossier";
+import RachatDossier from "@/components/RachatDossier";
 import QcmCard from "./QcmCard";
 import AtelierDossier from "./AtelierDossier";
 import { AlertCircle, Compass } from "lucide-react";
@@ -222,6 +223,21 @@ export default function ChatMessage({
         {meta && meta.preview && !showQcmCard && !isDossier && (
           meta.mode === "benchmark" ? (
             <BenchmarkDossier
+              data={meta.preview}
+              columns={meta.columns || []}
+              total={meta.total || 0}
+              searchId={meta.search_id || ""}
+              creditsRequired={meta.credits_required || 0}
+              userCredits={userCredits}
+              creditsUnlimited={creditsUnlimited}
+              onExport={onExport}
+              exporting={exporting}
+              mapPoints={meta.map_points || []}
+              query={typeof meta.query === "string" ? meta.query : undefined}
+              guardEntities={meta.guard_entities || undefined}
+            />
+          ) : meta.mode === "rachat" ? (
+            <RachatDossier
               data={meta.preview}
               columns={meta.columns || []}
               total={meta.total || 0}
