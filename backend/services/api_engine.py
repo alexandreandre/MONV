@@ -325,7 +325,8 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
          total_results=len(all_results))
 
     await geocode_results(all_results)
-    await enrich_missing_contacts_pappers_fr(all_results, max_companies=60)
+    if normalize_mode(mode) != "benchmark":
+        await enrich_missing_contacts_pappers_fr(all_results, max_companies=60)
 
     return SearchResults(
         total=len(all_results),

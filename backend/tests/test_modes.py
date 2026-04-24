@@ -104,6 +104,7 @@ def test_benchmark_addendum_includes_safety_clause():
     addendum = addendum_for_mode("benchmark")
     assert "valorisation" in addendum.lower()
     assert "secteur" in addendum.lower() or "marché" in addendum.lower()
+    assert "ne pas appeler pappers" in addendum.lower()
 
 
 # ── Réordonnancement des colonnes ────────────────────────────────────────────
@@ -170,15 +171,17 @@ def test_reorder_rachat_promotes_financial_columns():
     assert set(cols) == set(BASE_COLUMNS)
 
 
-def test_reorder_benchmark_promotes_sector_financial_columns():
+def test_reorder_benchmark_promotes_sirene_panel_columns():
     cols = reorder_columns_for_mode(BASE_COLUMNS, "benchmark")
     head = cols[:12]
     for c in (
         "libelle_activite",
+        "activite_principale",
+        "categorie_entreprise",
         "effectif_label",
-        "chiffre_affaires",
-        "ca_n_minus_1",
-        "variation_ca_pct",
+        "date_creation",
+        "forme_juridique",
+        "dirigeant_nom",
     ):
         assert c in head, f"{c} attendu dans le top 12 du mode benchmark"
 
@@ -195,7 +198,7 @@ def test_reorder_is_stable_when_priority_columns_absent():
 def test_credits_floor_per_mode():
     assert credits_floor_for_mode("prospection") == 1
     assert credits_floor_for_mode("sous_traitant") == 1
-    assert credits_floor_for_mode("benchmark") == 3
+    assert credits_floor_for_mode("benchmark") == 1
     assert credits_floor_for_mode("rachat") == 3
 
 
@@ -234,6 +237,14 @@ def test_fallback_plan_rachat_includes_pappers_when_key_present(monkeypatch):
     sources = {(c.source, c.action) for c in plan.api_calls}
     assert ("pappers", "get_finances") in sources
     assert ("pappers", "get_dirigeants") in sources
+
+
+def test_fallback_plan_benchmark_excludes_pappers_when_key_present(monkeypatch):
+    """Benchmark n'injecte plus Pappers même si la clé est configurée."""
+    monkeypatch.setattr("services.orchestrator.settings.PAPPERS_API_KEY", "fake-key")
+    plan = _build_fallback_plan(_make_guard_result(), "benchmark")
+    pappers_calls = [c for c in plan.api_calls if c.source == "pappers"]
+    assert pappers_calls == []
 
 
 def test_fallback_plan_rachat_degrades_without_pappers_key(monkeypatch):

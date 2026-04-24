@@ -521,6 +521,34 @@ def _parse_company(raw: dict) -> CompanyResult:
         dirigeant_nom = d.get("nom") or ""
         dirigeant_fonction = d.get("qualite") or d.get("fonction") or ""
 
+    # ── Finances (champ natif API Recherche Entreprises) ──
+    ca: float | None = None
+    resultat_net: float | None = None
+    annee_ca: int | None = None
+    ca_n1: float | None = None
+    annee_n1: int | None = None
+    variation_ca: float | None = None
+
+    finances_raw = raw.get("finances")
+    if isinstance(finances_raw, dict) and finances_raw:
+        # Trier les années disponibles par ordre décroissant
+        years_sorted = sorted(
+            [(int(y), v) for y, v in finances_raw.items()
+             if str(y).isdigit() and isinstance(v, dict)],
+            reverse=True,
+        )
+        if years_sorted:
+            year_n, data_n = years_sorted[0]
+            ca = float(data_n["ca"]) if data_n.get("ca") is not None else None
+            resultat_net = float(data_n["resultat_net"]) if data_n.get("resultat_net") is not None else None
+            annee_ca = year_n
+        if len(years_sorted) >= 2:
+            year_n1, data_n1 = years_sorted[1]
+            ca_n1 = float(data_n1["ca"]) if data_n1.get("ca") is not None else None
+            annee_n1 = year_n1
+            if ca is not None and ca_n1 is not None and ca_n1 != 0:
+                variation_ca = round((ca - ca_n1) / abs(ca_n1) * 100, 1)
+
     addr_parts = []
     for field in ["numero_voie", "type_voie", "libelle_voie"]:
         val = siege.get(field)
@@ -548,6 +576,12 @@ def _parse_company(raw: dict) -> CompanyResult:
         dirigeant_nom=dirigeant_nom or None,
         dirigeant_prenom=dirigeant_prenom or None,
         dirigeant_fonction=dirigeant_fonction or None,
+        chiffre_affaires=ca,
+        resultat_net=resultat_net,
+        annee_dernier_ca=annee_ca,
+        ca_n_minus_1=ca_n1,
+        annee_n_minus_1=annee_n1,
+        variation_ca_pct=variation_ca,
         lien_annuaire=f"https://annuaire-entreprises.data.gouv.fr/entreprise/{raw.get('siren', '')}",
     )
 

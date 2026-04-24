@@ -92,6 +92,10 @@ const COL_LABELS: Record<string, string> = {
   type_etablissement_prospect: "Type",
   synthese_site_web: "Analyse site web",
   opportunite_prestation_web: "Opportunité",
+  benchmark_ca_position: "Position CA",
+  benchmark_effectif_position: "Position effectif",
+  benchmark_productivite_position: "Position productivité",
+  benchmark_productivite: "Productivité (CA / effectif)",
 };
 
 const CURRENCY_COLS = new Set([
@@ -145,7 +149,33 @@ function SignalBadges({ signals }: { signals: Signal[] }) {
   );
 }
 
-const PRIMARY_COLS = new Set(["nom", "ville", "libelle_activite", "effectif_label", "chiffre_affaires"]);
+function BenchmarkPositionBadge({ position }: { position: string | null | undefined }) {
+  if (!position) return null;
+  const config: Record<string, { label: string; className: string }> = {
+    top_10: { label: "Top 10%", className: "bg-emerald-500/15 text-emerald-300 border-emerald-500/25" },
+    top_25: { label: "Top 25%", className: "bg-sky-500/15 text-sky-300 border-sky-500/25" },
+    median: { label: "Médiane", className: "bg-white/[0.06] text-gray-400 border-white/[0.08]" },
+    bottom_25: { label: "Bottom 25%", className: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
+  };
+  const c = config[position];
+  if (!c) return null;
+  return (
+    <span
+      className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${c.className}`}
+    >
+      {c.label}
+    </span>
+  );
+}
+
+const PRIMARY_COLS = new Set([
+  "nom",
+  "ville",
+  "libelle_activite",
+  "effectif_label",
+  "chiffre_affaires",
+  "benchmark_ca_position",
+]);
 
 const META_COLS_HIDE = new Set([
   "relevance_score",
@@ -199,6 +229,15 @@ const COMPACT_COLS = [
   "nom",
   "telephone",
   "site_web",
+  "ville",
+  "effectif_label",
+];
+
+const BENCHMARK_TABLE_COLS = [
+  "signaux",
+  "nom",
+  "chiffre_affaires",
+  "benchmark_ca_position",
   "ville",
   "effectif_label",
 ];
@@ -646,7 +685,17 @@ function MobileCard({
                   {labelForCol(col)}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {formatValue(col, row[col])}
+                  {col === "benchmark_ca_position" ||
+                  col === "benchmark_effectif_position" ||
+                  col === "benchmark_productivite_position" ? (
+                    row[col] ? (
+                      <BenchmarkPositionBadge position={row[col]} />
+                    ) : (
+                      "—"
+                    )
+                  ) : (
+                    formatValue(col, row[col])
+                  )}
                 </span>
               </div>
             ))}
@@ -658,7 +707,15 @@ function MobileCard({
           {expanded && (
             <div className="mt-3 pt-3 border-t border-border space-y-2">
               {secondaryCols.map((col) => {
-                const val = formatValue(col, row[col]);
+                const isBenchPos =
+                  col === "benchmark_ca_position" ||
+                  col === "benchmark_effectif_position" ||
+                  col === "benchmark_productivite_position";
+                const val = isBenchPos
+                  ? row[col]
+                    ? "ok"
+                    : "—"
+                  : formatValue(col, row[col]);
                 if (val === "—") return null;
                 return (
                   <div key={col} className="flex justify-between items-baseline gap-2">
@@ -666,7 +723,9 @@ function MobileCard({
                       {labelForCol(col)}
                     </span>
                     <span className="text-xs text-muted-foreground text-right truncate">
-                      {col === "site_web" && row[col] ? (
+                      {isBenchPos && row[col] ? (
+                        <BenchmarkPositionBadge position={row[col]} />
+                      ) : col === "site_web" && row[col] ? (
                         <a
                           href={
                             String(row[col]).startsWith("http")
@@ -738,8 +797,9 @@ export default function ResultsTable({
   const rowData = Array.isArray(data) ? data : [];
   const colData = Array.isArray(columns) ? columns : [];
   const geoPoints = Array.isArray(mapPoints) ? mapPoints : [];
-  const isProspectionView =
-    normalizeMode(resultsMode ?? DEFAULT_MODE) === "prospection";
+  const resolvedMode = normalizeMode(resultsMode ?? DEFAULT_MODE);
+  const isProspectionView = resolvedMode === "prospection";
+  const isBenchmarkView = resolvedMode === "benchmark";
 
   const canExport = creditsUnlimited || userCredits >= creditsRequired;
   const [sortCol, setSortCol] = useState<string | null>(null);
@@ -811,7 +871,11 @@ export default function ResultsTable({
     );
   }, [isProspectionView, colData]);
 
-  const tableCols = isProspectionView ? [...PROSPECTION_TABLE_COLS] : COMPACT_COLS;
+  const tableCols = isProspectionView
+    ? [...PROSPECTION_TABLE_COLS]
+    : isBenchmarkView
+      ? BENCHMARK_TABLE_COLS
+      : COMPACT_COLS;
   const showLinksColumn = !isProspectionView;
   const labelForCol = (col: string) => tableHeaderLabel(isProspectionView, col);
 
@@ -1170,6 +1234,10 @@ export default function ResultsTable({
                                     >
                                       Carte
                                     </a>
+                                  ) : col === "benchmark_ca_position" ||
+                                    col === "benchmark_effectif_position" ||
+                                    col === "benchmark_productivite_position" ? (
+                                    <BenchmarkPositionBadge position={row[col]} />
                                   ) : (
                                     formatValue(col, row[col])
                                   )}

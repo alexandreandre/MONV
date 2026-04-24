@@ -433,10 +433,9 @@ async def run_orchestrator(
     columns = reorder_columns_for_mode(columns, active_mode)
     columns = apply_result_columns_for_mode(columns, active_mode)
 
-    # ── Forcer Pappers en mode benchmark / rachat ──────────────
-    # Le LLM omet parfois get_finances même quand la clé est dispo.
-    # On aligne le chemin succès sur le comportement du fallback.
-    if active_mode in ("benchmark", "rachat") and settings.PAPPERS_API_KEY:
+    # ── Forcer Pappers en mode rachat uniquement ──────────────
+    # Benchmark : Pappers retiré (remplacé par INPI bilans à venir)
+    if active_mode == "rachat" and settings.PAPPERS_API_KEY:
         if not any(c.source == "pappers" and c.action == "get_finances"
                    for c in api_calls):
             api_calls.append(APICall(
@@ -616,9 +615,8 @@ def _build_fallback_plan(
             source="pappers", action="get_finances", params={}, priority=3,
         ))
 
-    # Mode rachat ou client : ajouter automatiquement l'enrichissement Pappers
-    # si une clé est configurée. Sans clé, l'API engine ignore l'appel.
-    if mode in ("rachat", "benchmark") and settings.PAPPERS_API_KEY:
+    # Rachat uniquement — Benchmark n'utilise plus Pappers
+    if mode == "rachat" and settings.PAPPERS_API_KEY:
         if not any(c.source == "pappers" and c.action == "get_finances" for c in api_calls):
             api_calls.append(APICall(
                 source="pappers", action="get_finances", params={}, priority=3,

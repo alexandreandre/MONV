@@ -54,6 +54,7 @@ from services.conversationalist import generate_qcm
 from services.orchestrator import run_orchestrator
 from services.api_engine import execute_plan
 from services.relevance import filter_results_by_relevance
+from services.benchmark_stats import enrich_with_benchmark_positions
 from services.modes import (
     MODE_LABELS,
     Mode,
@@ -371,6 +372,21 @@ async def send_message(
             if k in rel_stats
         }
 
+    # ── Enrichissement benchmark (positionnement relatif au panel) ──
+    panel_stats: dict = {}
+    if active_mode == "benchmark" and search_results.total > 0:
+        panel_stats = enrich_with_benchmark_positions(search_results.results)
+        for c in (
+            "benchmark_ca_position",
+            "benchmark_effectif_position",
+            "benchmark_productivite_position",
+            "benchmark_productivite",
+            "benchmark_anciennete",
+            "benchmark_anciennete_position",
+        ):
+            if c not in search_results.columns:
+                search_results.columns.append(c)
+
     pitch_enriched = False
     if (
         active_mode == "prospection"
@@ -554,6 +570,7 @@ async def send_message(
                 "departement": guard_result.entities.departement,
                 "region": guard_result.entities.region,
             },
+            "panel_stats": panel_stats if active_mode == "benchmark" else None,
         }, ensure_ascii=False, default=str),
         created_at=datetime.now(timezone.utc),
     )
@@ -879,8 +896,8 @@ def _build_benchmark_framing(results: list) -> str:
         "zone pour calibrer taille et dynamique, sans inférer une « taille de marché » "
         "non sourcée.",
         "",
-        "**Export** : les colonnes incluent CA, exercices, variation, effectifs et "
-        "rentabilité lorsque Pappers a pu enrichir — prêt pour slide ou annexe Excel.",
+        "**Export** : les colonnes reflètent le panneau SIRENE et les enrichissements "
+        "effectivement exécutés (BODACC, marchés publics, etc.) — prêt pour slide ou annexe Excel.",
         "",
         "_Les chiffres sont issus de sources publiques et peuvent être incomplets. "
         "Ce bloc ne remplace pas une étude de marché commandée, une due diligence ni "

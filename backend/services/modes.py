@@ -82,20 +82,14 @@ MODE_PRIORITY_COLUMNS: dict[Mode, list[str]] = {
         "forme_juridique",
     ],
     "benchmark": [
-        # Panneau représentatif : lecture secteur / marché (CA N et N-1, effectifs, rentabilité).
         "libelle_activite",
         "activite_principale",
         "categorie_entreprise",
         "effectif_label",
-        "chiffre_affaires",
-        "ca_n_minus_1",
-        "annee_dernier_ca",
-        "annee_n_minus_1",
-        "variation_ca_pct",
-        "resultat_net",
-        "ebe",
         "date_creation",
         "forme_juridique",
+        "dirigeant_nom",
+        "dirigeant_fonction",
         "siren",
         "ville",
         "region",
@@ -152,17 +146,13 @@ MODE_ORCHESTRATOR_ADDENDUM: dict[Mode, str] = {
         "conseil personnalisé ni de valorisation).\n"
         "- Construire un panneau d'entreprises représentatif (tailles et zones variées "
         "si la requête est large ; sinon respecter strictement les filtres).\n"
-        "- Si la clé Pappers est disponible : après la recherche principale, ajouter "
-        "`pappers` `get_finances` (et `get_dirigeants` si la requête évoque gouvernance "
-        "ou transmission) pour obtenir CA sur au moins deux exercices, résultat, EBE.\n"
-        "- Inclure dans `columns` (dans cet esprit) : libelle_activite, "
-        "activite_principale, categorie_entreprise, effectif_label, chiffre_affaires, "
-        "ca_n_minus_1, annee_dernier_ca, annee_n_minus_1, variation_ca_pct, "
-        "resultat_net, ebe, date_creation, forme_juridique, siren, ville, region, "
-        "dirigeant_nom.\n"
+        "- Ne pas appeler Pappers en mode benchmark (source remplacée).\n"
+        "- Inclure dans `columns` : libelle_activite, activite_principale, "
+        "categorie_entreprise, effectif_label, date_creation, forme_juridique, "
+        "dirigeant_nom, dirigeant_fonction, siren, ville, region.\n"
         "- Ne pas inventer de tendance de marché non vérifiable ; les agrégats "
         "éventuels se déduisent des lignes exportées.\n"
-        "- Coût plancher : 3 crédits (enrichissement financier attendu)."
+        "- Coût plancher : 1 crédit (panneau SIRENE / signaux sans enrichissement Pappers)."
     ),
     "rachat": (
         "\n\nMODE ACTIF : RACHAT (cadre d'analyse business).\n"
@@ -187,7 +177,7 @@ MODE_ORCHESTRATOR_ADDENDUM: dict[Mode, str] = {
 MODE_CREDITS_FLOOR: dict[Mode, int] = {
     "prospection": 1,
     "sous_traitant": 1,
-    "benchmark": 3,
+    "benchmark": 1,
     "rachat": 3,
 }
 

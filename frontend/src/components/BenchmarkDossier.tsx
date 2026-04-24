@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { apiPost } from "@/lib/api";
+import { normalizeMode } from "@/lib/modes";
 import {
   BarChart3, RefreshCw, Share2, Download, X,
   MapPin, Building2, TrendingUp, Database,
@@ -309,6 +310,36 @@ function ChartTooltip({ active, payload, label, formatter }: TooltipProps) {
       })}
     </div>
   );
+}
+
+function BenchmarkPositionBadge({ position }: { position: string | null | undefined }) {
+  if (!position) return null;
+  const config: Record<string, { label: string; className: string }> = {
+    top_10: { label: "Top 10%", className: "bg-emerald-500/15 text-emerald-300 border-emerald-500/25" },
+    top_25: { label: "Top 25%", className: "bg-sky-500/15 text-sky-300 border-sky-500/25" },
+    median: { label: "Médiane", className: "bg-white/[0.06] text-gray-400 border-white/[0.08]" },
+    bottom_25: { label: "Bottom 25%", className: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
+  };
+  const c = config[position];
+  if (!c) return null;
+  return (
+    <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${c.className}`}>
+      {c.label}
+    </span>
+  );
+}
+
+function trancheToMidpoint(label: string | null | undefined): number {
+  if (!label) return -1;
+  if (label.includes("+")) return parseInt(label, 10) * 2;
+  const parts = label.split("-");
+  if (parts.length === 2) {
+    const a = parseInt(parts[0], 10);
+    const b = parseInt(parts[1], 10);
+    if (!isNaN(a) && !isNaN(b)) return (a + b) / 2;
+  }
+  const n = parseInt(label, 10);
+  return isNaN(n) ? -1 : n;
 }
 
 // ── Composant principal ────────────────────────────────────────
@@ -1285,17 +1316,15 @@ export default function BenchmarkDossier({
         {activeTab === "classements" && (
           <div className="p-4 space-y-4">
             {/* Top 10 CA */}
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
-              <h3 className="text-sm font-medium text-white mb-3">Top 10 — CA</h3>
-              {(() => {
-                const ranked = [...filteredData]
-                  .filter((r) => r.chiffre_affaires != null)
-                  .sort((a, b) => Number(b.chiffre_affaires) - Number(a.chiffre_affaires))
-                  .slice(0, 10);
-                if (ranked.length === 0) return (
-                  <p className="text-sm text-gray-600">Données CA non disponibles.</p>
-                );
-                return (
+            {(() => {
+              const ranked = [...filteredData]
+                .filter((r) => r.chiffre_affaires != null)
+                .sort((a, b) => Number(b.chiffre_affaires) - Number(a.chiffre_affaires))
+                .slice(0, 10);
+              if (ranked.length === 0) return null;
+              return (
+                <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
+                  <h3 className="text-sm font-medium text-white mb-3">Top 10 — CA</h3>
                   <div className="space-y-2">
                     {ranked.map((r, i) => (
                       <div key={r.siren || String(i)} className="flex items-center justify-between gap-2">
@@ -1305,28 +1334,27 @@ export default function BenchmarkDossier({
                           </span>
                           <span className="text-sm text-gray-300 truncate">{r.nom}</span>
                         </div>
-                        <span className="text-sm font-medium text-white tabular-nums flex-shrink-0">
+                        <span className="flex items-center gap-2 text-sm font-medium text-white tabular-nums flex-shrink-0">
                           {fmtEur(Number(r.chiffre_affaires))}
+                          <BenchmarkPositionBadge position={r.benchmark_ca_position} />
                         </span>
                       </div>
                     ))}
                   </div>
-                );
-              })()}
-            </div>
+                </div>
+              );
+            })()}
 
             {/* Top 10 Croissance */}
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
-              <h3 className="text-sm font-medium text-white mb-3">Top 10 — Croissance CA</h3>
-              {(() => {
-                const ranked = [...filteredData]
-                  .filter((r) => r.variation_ca_pct != null)
-                  .sort((a, b) => Number(b.variation_ca_pct) - Number(a.variation_ca_pct))
-                  .slice(0, 10);
-                if (ranked.length === 0) return (
-                  <p className="text-sm text-gray-600">Données de variation CA non disponibles.</p>
-                );
-                return (
+            {(() => {
+              const ranked = [...filteredData]
+                .filter((r) => r.variation_ca_pct != null)
+                .sort((a, b) => Number(b.variation_ca_pct) - Number(a.variation_ca_pct))
+                .slice(0, 10);
+              if (ranked.length === 0) return null;
+              return (
+                <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
+                  <h3 className="text-sm font-medium text-white mb-3">Top 10 — Croissance CA</h3>
                   <div className="space-y-2">
                     {ranked.map((r, i) => (
                       <div key={r.siren || String(i)} className="flex items-center justify-between gap-2">
@@ -1343,6 +1371,80 @@ export default function BenchmarkDossier({
                         </span>
                       </div>
                     ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Top 10 Effectif */}
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
+              <h3 className="text-sm font-medium text-white mb-3">Top 10 — Effectif</h3>
+              {(() => {
+                const ranked = [...filteredData]
+                  .filter((r) => trancheToMidpoint(r.effectif_label) > 0)
+                  .sort((a, b) => trancheToMidpoint(b.effectif_label) - trancheToMidpoint(a.effectif_label))
+                  .slice(0, 10);
+                if (ranked.length === 0) return (
+                  <p className="text-sm text-gray-600">Données d&apos;effectif non disponibles.</p>
+                );
+                return (
+                  <div className="space-y-2">
+                    {ranked.map((r, i) => (
+                      <div key={r.siren || String(i)} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[11px] text-gray-600 w-5 flex-shrink-0 tabular-nums">{i + 1}.</span>
+                          <span className="text-sm text-gray-300 truncate">{r.nom}</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-sm font-medium text-white tabular-nums">
+                            {r.effectif_label} sal.
+                          </span>
+                          <BenchmarkPositionBadge position={r.benchmark_effectif_position} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Top 10 Ancienneté */}
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
+              <h3 className="text-sm font-medium text-white mb-3">Top 10 — Ancienneté</h3>
+              {(() => {
+                const ranked = [...filteredData]
+                  .filter((r) => r.date_creation != null)
+                  .sort((a, b) => {
+                    const ya = new Date(a.date_creation).getFullYear();
+                    const yb = new Date(b.date_creation).getFullYear();
+                    return ya - yb;
+                  })
+                  .slice(0, 10);
+                if (ranked.length === 0) return (
+                  <p className="text-sm text-gray-600">Dates de création non disponibles.</p>
+                );
+                const currentYear = new Date().getFullYear();
+                return (
+                  <div className="space-y-2">
+                    {ranked.map((r, i) => {
+                      const year = new Date(r.date_creation).getFullYear();
+                      const age = currentYear - year;
+                      return (
+                        <div key={r.siren || String(i)} className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[11px] text-gray-600 w-5 flex-shrink-0 tabular-nums">{i + 1}.</span>
+                            <span className="text-sm text-gray-300 truncate">{r.nom}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-sm font-medium text-white tabular-nums">
+                              {age} ans
+                            </span>
+                            <span className="text-[11px] text-gray-500">({year})</span>
+                            <BenchmarkPositionBadge position={r.benchmark_anciennete_position} />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })()}
@@ -1368,6 +1470,7 @@ export default function BenchmarkDossier({
                   onExport={onExport}
                   exporting={exporting}
                   mapPoints={mapPoints || []}
+                  resultsMode={normalizeMode("benchmark")}
                 />
               );
             })()}
