@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     DIGITAL_PITCH_ENRICH_MODEL: str = ""
     # Atelier — planification + dossier business (2 appels LLM). Si vide → ORCHESTRATOR_MODEL.
     ATELIER_BUSINESS_MODEL: str = ""
+    # Atelier fake (dev UI) : aucun appel LLM/API, réponses déterministes.
+    ATELIER_FAKE_MODE: bool = False
 
     # ── APIs externes ─────────────────────────────────────────────
     PAPPERS_API_KEY: str = ""

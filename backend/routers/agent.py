@@ -62,11 +62,13 @@ from models.schemas import (
 from routers.auth import get_current_user
 from services.agent import (
     ATELIER_MODE_LABEL,
+    build_fake_segment_results,
     build_brief_metadata,
     coerce_dossier,
     dossier_metadata_json,
     generate_atelier_qcm,
     generate_dossier_skeleton,
+    is_atelier_fake_mode_enabled,
     regenerate_atelier_canvas_llm,
     regenerate_atelier_flows_llm,
     run_segment_search,
@@ -204,7 +206,7 @@ async def atelier_regenerate_segment(
         raise HTTPException(400, "Ce segment est hors périmètre MONV et ne peut pas être relancé.")
 
     debited = 0
-    if not user_has_unlimited_credits(user):
+    if not is_atelier_fake_mode_enabled() and not user_has_unlimited_credits(user):
         if user.credits < ATELIER_REGEN_SEGMENT_CREDITS:
             raise HTTPException(
                 400,
@@ -224,7 +226,11 @@ async def atelier_regenerate_segment(
             brief = brief.model_copy(
                 update={"mode": str(normalize_mode(body.mode_override))}
             )
-        new_seg = await run_segment_search(brief)
+        if is_atelier_fake_mode_enabled():
+            new_seg = build_fake_segment_results([brief])[0]
+            stats.api_calls = 0
+        else:
+            new_seg = await run_segment_search(brief)
         await _persist_atelier_segment_search(supabase, user.id, body.conversation_id, new_seg)
         d2 = dossier_with_replaced_segment(dossier, sk, new_seg)
         d3 = dossier_after_segment_list_refresh(d2)
@@ -346,8 +352,11 @@ async def atelier_brief_update(
             stats.llm_calls += 1
         if "segments" in body.impacts:
             brs = [segment_result_to_brief(s) for s in d.segments]
-            new_segs = await run_segment_searches(brs)
-            stats.api_calls += len(brs)
+            if is_atelier_fake_mode_enabled():
+                new_segs = build_fake_segment_results(brs)
+            else:
+                new_segs = await run_segment_searches(brs)
+                stats.api_calls += len(brs)
             for seg in new_segs:
                 await _persist_atelier_segment_search(supabase, user.id, body.conversation_id, seg)
             d = d.model_copy(update={"segments": new_segs})
@@ -533,7 +542,10 @@ async def agent_send(
             modes=[s.mode for s in segments_brief],
         )
 
-        segment_results = await run_segment_searches(segments_brief)
+        if is_atelier_fake_mode_enabled():
+            segment_results = build_fake_segment_results(segments_brief)
+        else:
+            segment_results = await run_segment_searches(segments_brief)
         merge_atelier_cross_segment_tags(segment_results)
         roll = atelier_dossier_rollup_fields(segment_results)
 

@@ -70,6 +70,213 @@ def _atelier_business_model() -> str:
     return m or settings.ORCHESTRATOR_MODEL
 
 
+def is_atelier_fake_mode_enabled() -> bool:
+    """Active un mode Atelier déterministe pour itérations UI (sans IA)."""
+    return bool(settings.ATELIER_FAKE_MODE)
+
+
+def _fake_dossier_payload() -> dict[str, Any]:
+    """Payload stable pour l'UI Atelier en mode fake."""
+    return {
+        "brief": {
+            "nom": "Atelier Demo",
+            "tagline": "Mode fake pour travailler l'interface sans credits IA",
+            "secteur": "Conseil et accompagnement de projets entrepreneuriaux",
+            "localisation": "France",
+            "cible": "Les deux",
+            "budget": "60 kEUR - 120 kEUR selon le rythme de lancement",
+            "budget_min_eur": 60000,
+            "budget_max_eur": 120000,
+            "budget_hypotheses": [
+                "Structure legere les 3 premiers mois",
+                "Sous-traitance partielle sur les taches techniques",
+            ],
+            "modele_revenus": "Abonnement mensuel + prestations ponctuelles",
+            "ambition": "Atteindre 150 clients actifs la deuxieme annee",
+        },
+        "canvas": {
+            "proposition_valeur": [
+                "Methodologie Atelier en etapes actionnables",
+                "Vision produit et execution dans un seul espace",
+                "Rendu clair pour arbitrer rapidement",
+            ],
+            "segments_clients": [
+                "Createurs de PME en pre-lancement",
+                "TPE voulant structurer leur offre",
+                "Consultants independants en repositionnement",
+            ],
+            "canaux": ["Acquisition organique", "Partenariats locaux", "Demonstrations produit"],
+            "relation_client": ["Onboarding guide", "Suivi hebdomadaire", "Support asynchrone"],
+            "sources_revenus": ["Abonnement", "Ateliers premium", "Audit express"],
+            "ressources_cles": ["Framework Atelier", "Playbooks metier", "Base de contenus"],
+            "activites_cles": ["Diagnostic", "Priorisation", "Execution assistee"],
+            "partenaires_cles": ["Experts sectoriels", "Réseau local", "Integrateurs no-code"],
+            "structure_couts": ["Produit", "Accompagnement", "Acquisition"],
+        },
+        "flows": {
+            "diagram_title": "Boucle Atelier mode fake",
+            "layout": "horizontal",
+            "flow_insight": "Le flux montre un cycle simple de cadrage puis delivery.",
+            "acteurs": [
+                {
+                    "label": "Client",
+                    "segment_key": "clients_cibles",
+                    "role": "Demandeur",
+                    "hint": "Exprime le besoin et valide",
+                    "emphasis": "primary",
+                },
+                {
+                    "label": "Atelier MONV",
+                    "segment_key": None,
+                    "role": "Orchestrateur",
+                    "hint": "Structure et priorise",
+                    "emphasis": "primary",
+                },
+                {
+                    "label": "Partenaire execution",
+                    "segment_key": "partenaires",
+                    "role": "Execution",
+                    "hint": "Livre des actions terrain",
+                    "emphasis": "secondary",
+                },
+            ],
+            "flux_valeur": [
+                {
+                    "origine": "Client",
+                    "destination": "Atelier MONV",
+                    "label": "Contexte projet",
+                    "detail": "Objectifs, contraintes et priorites initiales.",
+                    "pattern": "solid",
+                },
+                {
+                    "origine": "Atelier MONV",
+                    "destination": "Partenaire execution",
+                    "label": "Plan d'action",
+                    "detail": "Roadmap operationnelle et ordonnancement.",
+                    "pattern": "solid",
+                },
+            ],
+            "flux_financiers": [
+                {
+                    "origine": "Client",
+                    "destination": "Atelier MONV",
+                    "label": "Abonnement",
+                    "detail": "Facturation mensuelle de l'accompagnement.",
+                    "pattern": "solid",
+                }
+            ],
+            "flux_information": [
+                {
+                    "origine": "Partenaire execution",
+                    "destination": "Atelier MONV",
+                    "label": "Retours terrain",
+                    "detail": "Bloquants, risques et avancement reel.",
+                    "pattern": "dashed",
+                }
+            ],
+        },
+        "segments": [
+            {
+                "key": "clients_cibles",
+                "label": "Clients cibles",
+                "description": "Panel de cibles pour tests UX et proposition de valeur",
+                "mode": "prospection",
+                "query": "mode fake",
+                "icon": "target",
+            },
+            {
+                "key": "partenaires",
+                "label": "Partenaires execution",
+                "description": "Acteurs operationnels potentiels pour delivrer vite",
+                "mode": "sous_traitant",
+                "query": "mode fake",
+                "icon": "briefcase",
+            },
+        ],
+        "synthesis": {
+            "forces": [
+                "Structure stable pour iterer rapidement l'UI",
+                "Aucun appel IA requis en mode fake",
+                "Donnees deterministes pour snapshots frontend",
+            ],
+            "risques": [
+                "Le rendu fake ne reflete pas toute la variabilite reelle",
+                "Ne pas utiliser pour valider la qualite metier IA",
+            ],
+            "prochaines_etapes": [
+                "Ajuster les composants UI sur ce dossier fixe",
+                "Ajouter des cas fake alternatifs si besoin",
+                "Repasser en mode reel pour la validation metier",
+            ],
+            "kpis": ["Temps de rendu ecran", "Stabilite visuelle", "Absence de regressions UX"],
+            "budget_estimatif": "En mode fake, aucun credit IA n'est consomme.",
+            "ordres_grandeur": ["0 appel LLM", "0 appel API recherche", "Payload deterministe"],
+            "conseil_semaine": "Utilise ce mode pour finaliser les ecrans avant les tests metier.",
+            "checklist": {
+                "headline": "Finaliser l'UI Atelier avec mode fake",
+                "lede": "Semaine de stabilisation interface",
+                "sections": [
+                    {
+                        "title": "Cadre de travail",
+                        "subtitle": "Jour 1",
+                        "items": [
+                            {
+                                "label": "Activer ATELIER_FAKE_MODE dans .env",
+                                "guide": "Active le flag et redemarre le backend pour prendre la nouvelle configuration."
+                            },
+                            {
+                                "label": "Valider le parcours Atelier de bout en bout",
+                                "guide": "Cree une conversation Atelier et verifie QCM, dossier, canvas et flux."
+                            },
+                            {
+                                "label": "Verifier les etats de chargement",
+                                "guide": "Confirme que les loaders et transitions restent coherents sans latence IA."
+                            },
+                            {
+                                "label": "Capturer des references visuelles",
+                                "guide": "Prends des captures pour comparer avant/apres chaque ajustement UI."
+                            },
+                        ],
+                    },
+                    {
+                        "title": "Iterer les composants",
+                        "subtitle": "Jours 2-4",
+                        "items": [
+                            {
+                                "label": "Peaufiner la lisibilite du canvas",
+                                "guide": "Ajuste espacements et hierarchie typographique pour les 9 blocs."
+                            },
+                            {
+                                "label": "Ajuster la carte des flux",
+                                "guide": "Teste les interactions acteurs et liens pour un parcours compréhensible."
+                            },
+                            {
+                                "label": "Verrouiller le responsive mobile",
+                                "guide": "Controle le rendu sur ecrans etroits et corrige les ruptures de mise en page."
+                            },
+                            {
+                                "label": "Stabiliser les micro-etats",
+                                "guide": "Uniformise placeholders, messages vides, erreurs et succes."
+                            },
+                        ],
+                    },
+                ],
+                "pitfalls_title": "Pieges frequents en mode fake",
+                "pitfalls": [
+                    {
+                        "label": "Oublier le redemarrage backend",
+                        "guide": "Le changement .env ne s'applique pas sans redemarrage du serveur."
+                    },
+                    {
+                        "label": "Conclure trop tot sur le mode reel",
+                        "guide": "Le mode fake sert l'UI; valide ensuite le comportement metier avec IA active."
+                    },
+                ],
+            },
+        },
+    }
+
+
 # ─── Couche 1 : QCM de clarification ─────────────────────────────────────────
 #
 # On REUTILISE volontairement le type `QcmQuestion` / `QcmOption` déjà utilisé
@@ -286,6 +493,35 @@ async def generate_atelier_qcm(pitch: str) -> tuple[str, list[QcmQuestion]]:
     """Génère un QCM adapté au pitch (0 à 8 questions selon le manque réel).
 
     Fallback silencieux sur un QCM standard si le LLM est indisponible."""
+    if is_atelier_fake_mode_enabled():
+        return (
+            "[Mode fake] Lecture de ton projet enregistrée.\n\n"
+            "[Mode fake] Je pose un mini-QCM fixe pour te laisser itérer l'UI sans IA.",
+            [
+                QcmQuestion(
+                    id="cible",
+                    question="Qui est la cible principale de ton projet ?",
+                    options=[
+                        QcmOption(id="b2b", label="Entreprises (B2B)"),
+                        QcmOption(id="b2c", label="Particuliers (B2C)"),
+                        QcmOption(id="mixte", label="Les deux"),
+                        QcmOption(id="autre", label="Autre", free_text=True),
+                    ],
+                    multiple=False,
+                ),
+                QcmQuestion(
+                    id="modele_revenus",
+                    question="Quel modele de revenus veux-tu prioriser ?",
+                    options=[
+                        QcmOption(id="abonnement", label="Abonnement"),
+                        QcmOption(id="mission", label="Prestations a la mission"),
+                        QcmOption(id="mixte", label="Mixte"),
+                        QcmOption(id="autre", label="Autre", free_text=True),
+                    ],
+                    multiple=False,
+                ),
+            ],
+        )
     try:
         pitch_clean = (pitch or "").strip()
         n_words = len(pitch_clean.split())
@@ -517,6 +753,8 @@ async def generate_dossier_skeleton(
     answers: str,
 ) -> dict[str, Any]:
     """Plan stratégique (LLM 1) puis squelette dossier (LLM 2), modèle `ATELIER_BUSINESS_MODEL`."""
+    if is_atelier_fake_mode_enabled():
+        return _fake_dossier_payload()
     model = _atelier_business_model()
     user_base = (
         "Pitch initial :\n"
@@ -723,6 +961,54 @@ async def run_segment_searches(
     return await asyncio.gather(*coros)
 
 
+def build_fake_segment_results(segments: list[SegmentBrief]) -> list[SegmentResult]:
+    """Résultats segment fixes pour itérations UI sans appels externes."""
+    out: list[SegmentResult] = []
+    for i, seg in enumerate(segments):
+        preview = [
+            {
+                "siren": f"00000000{i + 1}",
+                "nom": f"Demo Entreprise {i + 1}",
+                "ville": "Paris",
+                "libelle_activite": "Activite de demonstration",
+                "_dedup_key": f"siren:00000000{i + 1}",
+                "relevance_score": 0.9,
+                "relevance_flag": "ok",
+                "reason_excluded": None,
+                "segments": [seg.key],
+            },
+            {
+                "siren": f"00000001{i + 1}",
+                "nom": f"Demo Partenaire {i + 1}",
+                "ville": "Lyon",
+                "libelle_activite": "Service de test UI",
+                "_dedup_key": f"siren:00000001{i + 1}",
+                "relevance_score": 0.7,
+                "relevance_flag": "warning",
+                "reason_excluded": None,
+                "segments": [seg.key],
+            },
+        ]
+        out.append(
+            SegmentResult(
+                key=seg.key,
+                label=seg.label,
+                description=seg.description,
+                mode=normalize_mode(seg.mode),
+                icon=seg.icon,
+                query=seg.query,
+                total=len(preview),
+                credits_required=0,
+                columns=["nom", "ville", "libelle_activite", "relevance_flag"],
+                preview=preview,
+                map_points=[],
+                total_relevant=2,
+                relevance_threshold=5,
+            )
+        )
+    return out
+
+
 # ─── Helpers d'assemblage ─────────────────────────────────────────────────────
 
 def dossier_metadata_json(dossier: BusinessDossier) -> str:
@@ -772,6 +1058,9 @@ async def regenerate_atelier_canvas_llm(
 ) -> BusinessCanvas:
     from services.atelier_coerce import coerce_canvas_from_llm_dict
 
+    if is_atelier_fake_mode_enabled():
+        return coerce_canvas_from_llm_dict(_fake_dossier_payload())
+
     model = _atelier_business_model()
     payload = {
         "pitch": pitch.strip(),
@@ -802,6 +1091,10 @@ async def regenerate_atelier_flows_llm(
     current_flows: FlowMap,
 ) -> FlowMap:
     from services.atelier_coerce import coerce_flows_from_llm_dict
+
+    if is_atelier_fake_mode_enabled():
+        keys = [str(k).strip().lower()[:40] for k in segment_keys if str(k).strip()]
+        return coerce_flows_from_llm_dict(_fake_dossier_payload(), set(keys))
 
     model = _atelier_business_model()
     keys = [str(k).strip().lower()[:40] for k in segment_keys if str(k).strip()]
@@ -834,6 +1127,8 @@ __all__ = [
     "dossier_metadata_json",
     "generate_atelier_qcm",
     "generate_dossier_skeleton",
+    "build_fake_segment_results",
+    "is_atelier_fake_mode_enabled",
     "regenerate_atelier_canvas_llm",
     "regenerate_atelier_flows_llm",
     "run_segment_search",
