@@ -31,6 +31,7 @@ from models.schemas import (
     FlowMap,
     GuardResult,
     ProjectBrief,
+    QcmOption,
     QcmQuestion,
     SegmentBrief,
     SegmentResult,
