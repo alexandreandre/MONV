@@ -1,4 +1,4 @@
-# MONV — Prospection B2B conversationnelle
+# MONV — Prospection B2B conversationnelle :
 
 > Décris ton prospect idéal, obtiens une liste exploitable.  
 > Assistant de prospection B2B ciblant les entreprises françaises (données publiques et enrichissement optionnel).
