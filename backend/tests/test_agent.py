@@ -18,11 +18,15 @@ from services.agent import (  # noqa: E402
     _FALLBACK_ATELIER_QUESTIONS,
     _finalize_atelier_qcm,
     _parse_qcm_raw,
+    build_fake_segment_results,
     build_brief_metadata,
     coerce_dossier,
     dossier_metadata_json,
+    generate_atelier_qcm,
+    generate_dossier_skeleton,
     heuristic_atelier_conversation_title,
     heuristic_atelier_project_folder_name,
+    is_atelier_fake_mode_enabled,
     run_segment_search,
 )
 from services.atelier_mutations import (  # noqa: E402
@@ -601,3 +605,37 @@ def test_run_segment_search_out_of_scope_no_pipeline():
     assert seg.total == 0
     assert seg.preview == []
     assert "SIRENE" in (seg.out_of_scope_note or "")
+
+
+def test_atelier_fake_mode_qcm_and_dossier(monkeypatch):
+    from config import settings
+
+    monkeypatch.setattr(settings, "ATELIER_FAKE_MODE", True)
+    assert is_atelier_fake_mode_enabled() is True
+
+    intro, questions = asyncio.run(generate_atelier_qcm("Je lance un projet"))
+    assert "[Mode fake]" in intro
+    assert len(questions) >= 1
+
+    raw = asyncio.run(generate_dossier_skeleton("Pitch", "Reponses"))
+    assert raw["brief"]["nom"] == "Atelier Demo"
+    assert raw["segments"][0]["query"] == "mode fake"
+
+
+def test_build_fake_segment_results_from_briefs():
+    segs = build_fake_segment_results(
+        [
+            SegmentBrief(
+                key="demo",
+                label="Demo",
+                description="Test",
+                mode="prospection",
+                query="mode fake",
+                icon="target",
+            )
+        ]
+    )
+    assert len(segs) == 1
+    assert segs[0].credits_required == 0
+    assert segs[0].total == 2
+    assert segs[0].preview[0]["nom"].startswith("Demo")

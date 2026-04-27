@@ -223,6 +223,13 @@ class CompanyResult(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     signaux: list[BusinessSignal] = []
+    # Benchmark — positionnement relatif au panel
+    benchmark_ca_position: str | None = None  # top_10 | top_25 | median | bottom_25
+    benchmark_effectif_position: str | None = None
+    benchmark_productivite_position: str | None = None
+    benchmark_productivite: float | None = None  # CA / effectif calculé
+    benchmark_anciennete: int | None = None
+    benchmark_anciennete_position: str | None = None
     # Enrichissement optionnel (prospection : proposition de prestation digitale / site web)
     type_etablissement_prospect: str | None = None  # ex. Club, Boutique, Franchise
     synthese_site_web: str | None = None

@@ -82,37 +82,33 @@ MODE_PRIORITY_COLUMNS: dict[Mode, list[str]] = {
         "forme_juridique",
     ],
     "benchmark": [
-        # Panneau représentatif : lecture secteur / marché (CA N et N-1, effectifs, rentabilité).
         "libelle_activite",
         "activite_principale",
         "categorie_entreprise",
         "effectif_label",
-        "chiffre_affaires",
-        "ca_n_minus_1",
-        "annee_dernier_ca",
-        "annee_n_minus_1",
-        "variation_ca_pct",
-        "resultat_net",
-        "ebe",
         "date_creation",
         "forme_juridique",
+        "dirigeant_nom",
+        "dirigeant_fonction",
         "siren",
         "ville",
         "region",
     ],
     "rachat": [
-        # Repreneur : focus financier + transmission.
         "categorie_entreprise",
         "date_creation",
         "effectif_label",
         "chiffre_affaires",
         "variation_ca_pct",
         "resultat_net",
-        "ebe",
-        "capitaux_propres",
-        "capital_social",
+        "ca_n_minus_1",
+        "annee_dernier_ca",
         "dirigeant_nom",
         "dirigeant_fonction",
+        "forme_juridique",
+        "siren",
+        "ville",
+        "region",
     ],
 }
 
@@ -152,30 +148,25 @@ MODE_ORCHESTRATOR_ADDENDUM: dict[Mode, str] = {
         "conseil personnalisé ni de valorisation).\n"
         "- Construire un panneau d'entreprises représentatif (tailles et zones variées "
         "si la requête est large ; sinon respecter strictement les filtres).\n"
-        "- Si la clé Pappers est disponible : après la recherche principale, ajouter "
-        "`pappers` `get_finances` (et `get_dirigeants` si la requête évoque gouvernance "
-        "ou transmission) pour obtenir CA sur au moins deux exercices, résultat, EBE.\n"
-        "- Inclure dans `columns` (dans cet esprit) : libelle_activite, "
-        "activite_principale, categorie_entreprise, effectif_label, chiffre_affaires, "
-        "ca_n_minus_1, annee_dernier_ca, annee_n_minus_1, variation_ca_pct, "
-        "resultat_net, ebe, date_creation, forme_juridique, siren, ville, region, "
-        "dirigeant_nom.\n"
+        "- Ne pas appeler Pappers en mode benchmark (source remplacée).\n"
+        "- Inclure dans `columns` : libelle_activite, activite_principale, "
+        "categorie_entreprise, effectif_label, date_creation, forme_juridique, "
+        "dirigeant_nom, dirigeant_fonction, siren, ville, region.\n"
         "- Ne pas inventer de tendance de marché non vérifiable ; les agrégats "
         "éventuels se déduisent des lignes exportées.\n"
-        "- Coût plancher : 3 crédits (enrichissement financier attendu)."
+        "- Coût plancher : 1 crédit (panneau SIRENE / signaux sans enrichissement Pappers)."
     ),
     "rachat": (
         "\n\nMODE ACTIF : RACHAT (cadre d'analyse business).\n"
         "L'utilisateur identifie des cibles potentielles d'acquisition.\n"
-        "- Si la clé Pappers est disponible, ajoute SYSTÉMATIQUEMENT un appel "
-        "`pappers` action `get_finances` ET `get_dirigeants` après la recherche "
-        "principale (filtre rentabilité + âge dirigeant = signaux transmission).\n"
+        "- Ne pas appeler Pappers (source remplacée par SIRENE natif).\n"
         "- Privilégie les entreprises créées il y a 15 ans ou plus quand la "
         "requête évoque transmission / cession / reprise.\n"
         "- Inclure dans `columns` : categorie_entreprise, date_creation, "
-        "effectif_label, chiffre_affaires, variation_ca_pct, resultat_net, ebe, "
-        "capitaux_propres, capital_social, dirigeant_nom, dirigeant_fonction.\n"
-        "- Coût plancher : 3 crédits (Pappers requis pour analyse).\n"
+        "effectif_label, chiffre_affaires, variation_ca_pct, resultat_net, "
+        "ca_n_minus_1, annee_dernier_ca, dirigeant_nom, dirigeant_fonction, "
+        "forme_juridique, siren, ville, region.\n"
+        "- Coût plancher : 1 crédit (panneau SIRENE / signaux sans enrichissement Pappers).\n"
         "- IMPORTANT : tu ne fournis aucune valorisation, aucun conseil "
         "d'investissement, aucune recommandation juridique ou comptable. "
         "Tu produis un cadre d'analyse factuel à partir des données publiques."
@@ -187,8 +178,8 @@ MODE_ORCHESTRATOR_ADDENDUM: dict[Mode, str] = {
 MODE_CREDITS_FLOOR: dict[Mode, int] = {
     "prospection": 1,
     "sous_traitant": 1,
-    "benchmark": 3,
-    "rachat": 3,
+    "benchmark": 1,
+    "rachat": 1,
 }
 
 

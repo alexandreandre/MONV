@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { apiPost } from "@/lib/api";
+import { normalizeMode } from "@/lib/modes";
 import {
   BarChart3, RefreshCw, Share2, Download, X,
   MapPin, Building2, TrendingUp, Database,
@@ -311,6 +312,36 @@ function ChartTooltip({ active, payload, label, formatter }: TooltipProps) {
   );
 }
 
+function BenchmarkPositionBadge({ position }: { position: string | null | undefined }) {
+  if (!position) return null;
+  const config: Record<string, { label: string; className: string }> = {
+    top_10: { label: "Top 10%", className: "bg-emerald-500/15 text-emerald-300 border-emerald-500/25" },
+    top_25: { label: "Top 25%", className: "bg-sky-500/15 text-sky-300 border-sky-500/25" },
+    median: { label: "Médiane", className: "bg-white/[0.06] text-gray-400 border-white/[0.08]" },
+    bottom_25: { label: "Bottom 25%", className: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
+  };
+  const c = config[position];
+  if (!c) return null;
+  return (
+    <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${c.className}`}>
+      {c.label}
+    </span>
+  );
+}
+
+function trancheToMidpoint(label: string | null | undefined): number {
+  if (!label) return -1;
+  if (label.includes("+")) return parseInt(label, 10) * 2;
+  const parts = label.split("-");
+  if (parts.length === 2) {
+    const a = parseInt(parts[0], 10);
+    const b = parseInt(parts[1], 10);
+    if (!isNaN(a) && !isNaN(b)) return (a + b) / 2;
+  }
+  const n = parseInt(label, 10);
+  return isNaN(n) ? -1 : n;
+}
+
 // ── Composant principal ────────────────────────────────────────
 
 export default function BenchmarkDossier({
@@ -338,6 +369,22 @@ export default function BenchmarkDossier({
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const [insightsGenerated, setInsightsGenerated] = useState(false);
+
+  const [bodaccStats, setBodaccStats] = useState<{
+    total_immatriculations: number;
+    total_radiations: number;
+    total_procol: number;
+    total_ventes: number;
+    timeline: Array<{
+      month: string;
+      immatriculations: number;
+      radiations: number;
+      procol: number;
+      ventes: number;
+    }>;
+    region?: string | null;
+  } | null>(null);
+  const [bodaccLoading, setBodaccLoading] = useState(false);
 
   const filteredData = useMemo(() => {
     let rows = data;
@@ -455,6 +502,36 @@ export default function BenchmarkDossier({
     kpis.transmissionPct,
     query,
   ]);
+
+  const loadBodaccStats = useCallback(async () => {
+    if (bodaccStats || bodaccLoading) return;
+    setBodaccLoading(true);
+    try {
+      const data = await apiPost<{
+        total_immatriculations: number;
+        total_radiations: number;
+        total_procol: number;
+        total_ventes: number;
+        timeline: Array<{
+          month: string;
+          immatriculations: number;
+          radiations: number;
+          procol: number;
+          ventes: number;
+        }>;
+        region?: string | null;
+      }>("/chat/benchmark-bodacc-stats", {
+        region: guardEntities?.region || null,
+        departement: null,
+        days_back: 365,
+      });
+      setBodaccStats(data);
+    } catch {
+      /* silencieux */
+    } finally {
+      setBodaccLoading(false);
+    }
+  }, [bodaccStats, bodaccLoading, guardEntities?.region]);
 
   const canExport = creditsUnlimited || userCredits >= creditsRequired;
 
@@ -1091,50 +1168,128 @@ export default function BenchmarkDossier({
 
         {/* DYNAMIQUE */}
         {activeTab === "dynamique" && (
-          <div className="p-4">
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
-              <h3 className="text-sm font-medium text-white mb-2">
-                Dynamique du panel
-              </h3>
-              <p className="text-xs text-gray-500 mb-4">
-                Basé sur les dates de création des entreprises du panel.
-                Les données BODACC (créations/cessations nationales) seront ajoutées en V2.
-              </p>
-              {(() => {
-                const byDecade: Record<string, number> = {};
-                filteredData.forEach((r) => {
-                  if (!r.date_creation) return;
-                  const year = new Date(r.date_creation).getFullYear();
-                  const decade = `${Math.floor(year / 10) * 10}s`;
-                  byDecade[decade] = (byDecade[decade] || 0) + 1;
-                });
-                const entries = Object.entries(byDecade).sort((a, b) => a[0].localeCompare(b[0]));
-                const max = Math.max(...entries.map((e) => e[1]), 1);
-                if (entries.length === 0) return (
-                  <p className="text-sm text-gray-600">
-                    Dates de création non disponibles pour ce panel.
-                  </p>
-                );
-                return (
-                  <div className="space-y-2">
-                    {entries.map(([decade, count]) => (
-                      <div key={decade} className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500 w-12 flex-shrink-0">{decade}</span>
-                        <div className="flex-1 bg-white/[0.04] rounded-full h-2">
-                          <div
-                            className="bg-amber-500 h-2 rounded-full transition-all"
-                            style={{ width: `${(count / max) * 100}%` }}
-                          />
-                        </div>
-                        <span className="text-xs text-gray-400 w-6 text-right tabular-nums">
-                          {count}
-                        </span>
+          <div className="p-4 space-y-4">
+            {/* Chargement auto des stats BODACC */}
+            {!bodaccStats && !bodaccLoading && (
+              <div className="rounded-lg bg-white/[0.02] p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    Dynamique du marché
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={loadBodaccStats}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-medium hover:bg-amber-500/25 transition-colors"
+                  >
+                    ✦ Charger les données BODACC
+                  </button>
+                </div>
+                <p className="text-xs text-gray-600">
+                  Créations, cessations et procédures collectives
+                  sur les 12 derniers mois — source officielle BODACC.
+                </p>
+              </div>
+            )}
+
+            {bodaccLoading && (
+              <div className="rounded-lg bg-white/[0.02] p-4">
+                <p className="text-sm text-gray-500 animate-pulse">
+                  Chargement des données BODACC...
+                </p>
+              </div>
+            )}
+
+            {bodaccStats && (
+              <>
+                {/* KPI BODACC */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: "Immatriculations", value: bodaccStats.total_immatriculations, color: "text-emerald-400" },
+                    { label: "Radiations", value: bodaccStats.total_radiations, color: "text-red-400" },
+                    { label: "Procédures", value: bodaccStats.total_procol, color: "text-amber-400" },
+                    { label: "Cessions", value: bodaccStats.total_ventes, color: "text-sky-400" },
+                  ].map((kpi) => (
+                    <div key={kpi.label} className="rounded-lg bg-white/[0.02] p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+                        {kpi.label}
+                      </p>
+                      <p className={`text-2xl font-bold tabular-nums ${kpi.color}`}>
+                        {kpi.value}
+                      </p>
+                      <p className="text-[11px] text-gray-600">12 derniers mois</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Timeline créations vs radiations */}
+                {bodaccStats.timeline.length > 0 && (
+                  <div className="rounded-lg bg-white/[0.02] p-4">
+                    <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
+                      Évolution mensuelle
+                    </h3>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart
+                        data={bodaccStats.timeline}
+                        margin={{ top: 8, right: 8, left: -16, bottom: 8 }}
+                        barCategoryGap="20%"
+                      >
+                        <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
+                        <XAxis
+                          dataKey="month"
+                          tick={{ fill: "#4b5563", fontSize: 10 }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fill: "#4b5563", fontSize: 11 }}
+                          axisLine={false}
+                          tickLine={false}
+                          allowDecimals={false}
+                        />
+                        <Tooltip
+                          content={(props) => (
+                            <ChartTooltip
+                              active={props.active}
+                              payload={props.payload as TooltipProps["payload"]}
+                              label={props.label}
+                              formatter={(v, name) => `${v} ${name}`}
+                            />
+                          )}
+                          cursor={{ fill: "rgba(255,255,255,0.03)" }}
+                        />
+                        <Bar dataKey="immatriculations" name="Immatriculations"
+                          fill="#34d399" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="radiations" name="Radiations"
+                          fill="#f87171" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="procol" name="Procédures"
+                          fill="#fbbf24" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    {/* Légende manuelle */}
+                    <div className="flex items-center gap-4 mt-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                        <span className="text-[11px] text-gray-500">Immatriculations</span>
                       </div>
-                    ))}
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-red-400" />
+                        <span className="text-[11px] text-gray-500">Radiations</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-amber-400" />
+                        <span className="text-[11px] text-gray-500">Procédures</span>
+                      </div>
+                    </div>
                   </div>
-                );
-              })()}
-            </div>
+                )}
+
+                <p className="text-[10px] text-gray-600">
+                  Source : BODACC — données officielles, périmètre
+                  {bodaccStats.region ? ` ${bodaccStats.region}` : " France entière"},
+                  12 derniers mois.
+                </p>
+              </>
+            )}
           </div>
         )}
 
@@ -1161,17 +1316,15 @@ export default function BenchmarkDossier({
         {activeTab === "classements" && (
           <div className="p-4 space-y-4">
             {/* Top 10 CA */}
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
-              <h3 className="text-sm font-medium text-white mb-3">Top 10 — CA</h3>
-              {(() => {
-                const ranked = [...filteredData]
-                  .filter((r) => r.chiffre_affaires != null)
-                  .sort((a, b) => Number(b.chiffre_affaires) - Number(a.chiffre_affaires))
-                  .slice(0, 10);
-                if (ranked.length === 0) return (
-                  <p className="text-sm text-gray-600">Données CA non disponibles.</p>
-                );
-                return (
+            {(() => {
+              const ranked = [...filteredData]
+                .filter((r) => r.chiffre_affaires != null)
+                .sort((a, b) => Number(b.chiffre_affaires) - Number(a.chiffre_affaires))
+                .slice(0, 10);
+              if (ranked.length === 0) return null;
+              return (
+                <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
+                  <h3 className="text-sm font-medium text-white mb-3">Top 10 — CA</h3>
                   <div className="space-y-2">
                     {ranked.map((r, i) => (
                       <div key={r.siren || String(i)} className="flex items-center justify-between gap-2">
@@ -1181,28 +1334,27 @@ export default function BenchmarkDossier({
                           </span>
                           <span className="text-sm text-gray-300 truncate">{r.nom}</span>
                         </div>
-                        <span className="text-sm font-medium text-white tabular-nums flex-shrink-0">
+                        <span className="flex items-center gap-2 text-sm font-medium text-white tabular-nums flex-shrink-0">
                           {fmtEur(Number(r.chiffre_affaires))}
+                          <BenchmarkPositionBadge position={r.benchmark_ca_position} />
                         </span>
                       </div>
                     ))}
                   </div>
-                );
-              })()}
-            </div>
+                </div>
+              );
+            })()}
 
             {/* Top 10 Croissance */}
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
-              <h3 className="text-sm font-medium text-white mb-3">Top 10 — Croissance CA</h3>
-              {(() => {
-                const ranked = [...filteredData]
-                  .filter((r) => r.variation_ca_pct != null)
-                  .sort((a, b) => Number(b.variation_ca_pct) - Number(a.variation_ca_pct))
-                  .slice(0, 10);
-                if (ranked.length === 0) return (
-                  <p className="text-sm text-gray-600">Données de variation CA non disponibles.</p>
-                );
-                return (
+            {(() => {
+              const ranked = [...filteredData]
+                .filter((r) => r.variation_ca_pct != null)
+                .sort((a, b) => Number(b.variation_ca_pct) - Number(a.variation_ca_pct))
+                .slice(0, 10);
+              if (ranked.length === 0) return null;
+              return (
+                <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
+                  <h3 className="text-sm font-medium text-white mb-3">Top 10 — Croissance CA</h3>
                   <div className="space-y-2">
                     {ranked.map((r, i) => (
                       <div key={r.siren || String(i)} className="flex items-center justify-between gap-2">
@@ -1219,6 +1371,80 @@ export default function BenchmarkDossier({
                         </span>
                       </div>
                     ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Top 10 Effectif */}
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
+              <h3 className="text-sm font-medium text-white mb-3">Top 10 — Effectif</h3>
+              {(() => {
+                const ranked = [...filteredData]
+                  .filter((r) => trancheToMidpoint(r.effectif_label) > 0)
+                  .sort((a, b) => trancheToMidpoint(b.effectif_label) - trancheToMidpoint(a.effectif_label))
+                  .slice(0, 10);
+                if (ranked.length === 0) return (
+                  <p className="text-sm text-gray-600">Données d&apos;effectif non disponibles.</p>
+                );
+                return (
+                  <div className="space-y-2">
+                    {ranked.map((r, i) => (
+                      <div key={r.siren || String(i)} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[11px] text-gray-600 w-5 flex-shrink-0 tabular-nums">{i + 1}.</span>
+                          <span className="text-sm text-gray-300 truncate">{r.nom}</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-sm font-medium text-white tabular-nums">
+                            {r.effectif_label} sal.
+                          </span>
+                          <BenchmarkPositionBadge position={r.benchmark_effectif_position} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Top 10 Ancienneté */}
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
+              <h3 className="text-sm font-medium text-white mb-3">Top 10 — Ancienneté</h3>
+              {(() => {
+                const ranked = [...filteredData]
+                  .filter((r) => r.date_creation != null)
+                  .sort((a, b) => {
+                    const ya = new Date(a.date_creation).getFullYear();
+                    const yb = new Date(b.date_creation).getFullYear();
+                    return ya - yb;
+                  })
+                  .slice(0, 10);
+                if (ranked.length === 0) return (
+                  <p className="text-sm text-gray-600">Dates de création non disponibles.</p>
+                );
+                const currentYear = new Date().getFullYear();
+                return (
+                  <div className="space-y-2">
+                    {ranked.map((r, i) => {
+                      const year = new Date(r.date_creation).getFullYear();
+                      const age = currentYear - year;
+                      return (
+                        <div key={r.siren || String(i)} className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[11px] text-gray-600 w-5 flex-shrink-0 tabular-nums">{i + 1}.</span>
+                            <span className="text-sm text-gray-300 truncate">{r.nom}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-sm font-medium text-white tabular-nums">
+                              {age} ans
+                            </span>
+                            <span className="text-[11px] text-gray-500">({year})</span>
+                            <BenchmarkPositionBadge position={r.benchmark_anciennete_position} />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })()}
@@ -1244,6 +1470,7 @@ export default function BenchmarkDossier({
                   onExport={onExport}
                   exporting={exporting}
                   mapPoints={mapPoints || []}
+                  resultsMode={normalizeMode("benchmark")}
                 />
               );
             })()}

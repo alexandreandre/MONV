@@ -3,6 +3,7 @@
 import ReactMarkdown from "react-markdown";
 import ResultsTable from "./ResultsTable";
 import BenchmarkDossier from "./BenchmarkDossier";
+import RachatDossier from "@/components/RachatDossier";
 import QcmCard from "./QcmCard";
 import AtelierDossier from "./AtelierDossier";
 import { AlertCircle, Compass } from "lucide-react";
@@ -28,7 +29,7 @@ interface Props {
   ) => void;
   exporting: boolean;
   onQcmSubmit?: (answers: string) => void;
-  /** Mode de la conversation — affiché en badge sur les messages utilisateur. */
+  /** Mode courant de la conversation (UI) — non utilisé pour le badge message (voir metadata_json). */
   conversationMode?: Mode | null;
   /** True si la conversation appartient à l'agent Atelier (mode="atelier"). */
   isAtelierConversation?: boolean;
@@ -46,7 +47,7 @@ export default function ChatMessage({
   onExportAllAtelier,
   exporting,
   onQcmSubmit,
-  conversationMode = null,
+  conversationMode: _conversationMode = null,
   isAtelierConversation = false,
   conversationId = null,
   onAtelierDossierReplaced,
@@ -80,15 +81,15 @@ export default function ChatMessage({
     (hasAtelierQcmPayload || hasClassicQcmPayload) && onQcmSubmit
   );
 
-  // Badge affiché sur les messages utilisateur — priorité à Atelier s'il s'agit
-  // d'une conversation Atelier, sinon badge de mode classique.
+  // Badge sur message user : uniquement si metadata_json du message porte un mode
+  // (évite le badge sur message optimiste temp-... sans meta, ou conversationMode global).
   const metaMode = typeof meta?.mode === "string" ? meta.mode : null;
-  const isAtelierMessage =
-    metaMode === ATELIER_MODE_LABEL || isAtelierConversation;
+  const isAtelierFromMeta = metaMode === ATELIER_MODE_LABEL;
+  const isAtelierMessage = isAtelierFromMeta || isAtelierConversation;
 
   const messageMode: Mode | null = (() => {
-    if (isAtelierMessage) return null;
-    const raw = metaMode ?? conversationMode;
+    if (isAtelierFromMeta) return null;
+    const raw = metaMode;
     if (raw == null || raw === "") return null;
     const m = normalizeMode(raw);
     return m === "prospection" ? null : m;
@@ -129,7 +130,7 @@ export default function ChatMessage({
     );
   }
 
-  const showUserBadge = isUser && (messageMode != null || isAtelierMessage);
+  const showUserBadge = isUser && (messageMode != null || isAtelierFromMeta);
   const atelierMeta = AGENT_META.atelier;
 
   return (
@@ -159,7 +160,7 @@ export default function ChatMessage({
       <div className={`max-w-[92%] sm:max-w-[80%] ${isUser ? "order-first" : ""}`}>
         {showUserBadge && (
           <div className="flex justify-end mb-1">
-            {isAtelierMessage ? (
+            {isAtelierFromMeta ? (
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${atelierMeta.badgeBg} ${atelierMeta.badgeText}`}
               >
@@ -183,7 +184,7 @@ export default function ChatMessage({
         <div
           className={`rounded-2xl px-4 py-3 ${
             isUser
-              ? "bg-primary text-primary-foreground"
+              ? "bg-amber-500/20 text-amber-50 border border-amber-500/30"
               : isError
                 ? "border border-destructive/30 bg-destructive/10 text-destructive"
                 : "border border-border bg-card text-card-foreground"
@@ -192,7 +193,7 @@ export default function ChatMessage({
           <div
             className={
               isUser
-                ? "prose prose-sm prose-invert max-w-none [&>p]:leading-relaxed"
+                ? "prose prose-sm prose-invert max-w-none [&>p]:leading-relaxed [&>p]:text-amber-50"
                 : "prose prose-sm prose-neutral max-w-none dark:prose-invert [&>p]:leading-relaxed"
             }
           >
@@ -222,6 +223,21 @@ export default function ChatMessage({
         {meta && meta.preview && !showQcmCard && !isDossier && (
           meta.mode === "benchmark" ? (
             <BenchmarkDossier
+              data={meta.preview}
+              columns={meta.columns || []}
+              total={meta.total || 0}
+              searchId={meta.search_id || ""}
+              creditsRequired={meta.credits_required || 0}
+              userCredits={userCredits}
+              creditsUnlimited={creditsUnlimited}
+              onExport={onExport}
+              exporting={exporting}
+              mapPoints={meta.map_points || []}
+              query={typeof meta.query === "string" ? meta.query : undefined}
+              guardEntities={meta.guard_entities || undefined}
+            />
+          ) : meta.mode === "rachat" ? (
+            <RachatDossier
               data={meta.preview}
               columns={meta.columns || []}
               total={meta.total || 0}
