@@ -2,8 +2,15 @@
 Enrichissement des lignes de résultats lorsque l'utilisateur exprime une intention
 de prospection « offre digitale / site web » à destination des établissements listés.
 
-Déclenché par des formulations génériques (refonte site, création web, proposition
-aux cibles…), sans lien avec un secteur ou une zone précis.
+Exécuté **après** la pertinence (relevance) : la liste est déjà filtrée ; ce module
+**n'en retire aucune ligne**, il ajoute des champs sur les premières lignes uniquement
+(voir ``DIGITAL_PITCH_ENRICH_MAX_ROWS``, aligné sur le cap d'aperçu chat).
+
+Déclenché par des formulations variées (refonte site / site vitrine, création web,
+proposition commerciale web…), via ``user_query_suggests_digital_service_pitch``.
+
+Plafond LLM ``max_tokens`` par défaut : 1536 (JSON court par lot ; limite le coût
+vs 4096 historique — si troncature, relever légèrement ou réduire la verbosité du prompt).
 """
 
 from __future__ import annotations
@@ -15,6 +22,7 @@ from typing import Any
 
 from config import settings
 from models.schemas import CompanyResult, GuardResult
+from services.agent_config import resolve_llm_for_block
 from services.modes import Mode
 from utils.llm import llm_json_call
 from utils.pipeline_log import plog
@@ -27,10 +35,13 @@ DIGITAL_PITCH_RESULT_COLUMNS: list[str] = [
     "site_web",
     "synthese_site_web",
     "opportunite_prestation_web",
+    "signaux",
 ]
 
-_MAX_ROWS = 30
+# Lignes max enrichies par LLM (lots) — même ordre de grandeur que l'aperçu JSON chat.
+DIGITAL_PITCH_ENRICH_MAX_ROWS = 20
 _BATCH = 12
+
 
 def prioritize_google_maps_discoveries(results: list[CompanyResult]) -> None:
     """Met en tête les fiches issues de Google Maps (URL Maps), sans perdre le reste."""
@@ -43,10 +54,20 @@ def prioritize_google_maps_discoveries(results: list[CompanyResult]) -> None:
 
 _DIGITAL_SERVICE_PITCH_RE = re.compile(
     r"(?:"
-    r"propos(?:er|ition).{0,140}(?:site|web|internet|refonte|réfonte|cr[ée]ation|digit)"
-    r"|(?:site\s*web|refonte|réfonte|cr[ée]ation|cr[ée]er).{0,120}propos"
-    r"|(?:refonte|réfonte|cr[ée]ation).{0,50}(?:site|web|internet|pr[ée]sence)"
-    r"|(?:d[ée]veloppement|d[ée]velopper).{0,60}(?:site|web|application)"
+    # Proposition / offre → cible web ou digitale
+    r"propos(?:er|ition).{0,140}(?:site|web|internet|refonte|réfonte|cr[ée]ation|digit|vitrine)"
+    # Site / refonte … puis « propos » (ordre inverse courant)
+    r"|(?:site\s*web|site\s*vitrine|vitrine\s*web|vitrine\s*en\s*ligne|refonte|réfonte|"
+    r"cr[ée]ation|cr[ée]er).{0,120}propos"
+    # Refonte / modernisation … → site, vitrine, présence web (ex. « refonte site vitrine »)
+    r"|(?:refonte|réfonte|modernis(?:er|ation)|refaire|relancer|"
+    r"r[ée]nov(?:er|ation)|nouveau|nouvelle).{0,65}"
+    r"(?:site|web|internet|pr[ée]sence|vitrine|page\s*web|e-?commerce|boutique\s*en\s*ligne)"
+    # Développement / mise en ligne
+    r"|(?:d[ée]veloppement|d[ée]velopper|mise\s*en\s*ligne).{0,65}(?:site|web|application|vitrine)"
+    # Prestation / besoin orienté site (évite « vitrine » seule hors contexte web)
+    r"|(?:pr[ée]station|offre|besoin|accompagnement).{0,45}"
+    r"(?:site\s*web|site\s*vitrine|refonte|cr[ée]ation|web|digit|internet)"
     r")",
     re.IGNORECASE | re.DOTALL,
 )
@@ -105,6 +126,7 @@ async def _call_batch(
     user_query: str,
     guard: GuardResult,
     rows: list[dict[str, Any]],
+    agent_id: str = "prospection",
 ) -> dict[int, dict[str, str]]:
     payload = {
         "requete_utilisateur": user_query[:800],
@@ -112,12 +134,21 @@ async def _call_batch(
         "fiches": rows,
     }
     model = (settings.DIGITAL_PITCH_ENRICH_MODEL or "").strip() or settings.RELEVANCE_FILTER_MODEL
+    cfg = await resolve_llm_for_block(
+        agent_id,
+        "digital_pitch",
+        default_model=model,
+        default_system=SYSTEM,
+        default_max_tokens=1536,
+        default_temperature=0.2,
+    )
     raw = await llm_json_call(
-        model=model,
-        system=SYSTEM,
+        model=cfg.model,
+        system=cfg.system_prompt,
         messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
-        max_tokens=4096,
-        temperature=0.2,
+        max_tokens=cfg.max_tokens,
+        temperature=cfg.temperature,
+        usage_stage="digital_pitch",
     )
     out: dict[int, dict[str, str]] = {}
     for item in raw.get("lignes") or []:
@@ -141,6 +172,7 @@ async def enrich_results_for_digital_service_pitch(
     user_query: str,
     guard_result: GuardResult,
     mode: Mode,
+    agent_id: str = "prospection",
 ) -> bool:
     """
     Remplit type / synthèse / opportunité sur les premières lignes.
@@ -152,7 +184,7 @@ async def enrich_results_for_digital_service_pitch(
         return False
     if not user_query_suggests_digital_service_pitch(user_query):
         return False
-    n = min(len(results), _MAX_ROWS)
+    n = min(len(results), DIGITAL_PITCH_ENRICH_MAX_ROWS)
     if n <= 0:
         return False
 
@@ -163,7 +195,7 @@ async def enrich_results_for_digital_service_pitch(
     async def _one_batch(indices: list[int]) -> dict[int, dict[str, str]]:
         payload = [_row_payload(i, results[i]) for i in indices]
         try:
-            return await _call_batch(user_query=user_query, guard=guard_result, rows=payload)
+            return await _call_batch(user_query=user_query, guard=guard_result, rows=payload, agent_id=agent_id)
         except Exception as e:
             plog("digital_pitch_batch_error", error=repr(e))
             return {}

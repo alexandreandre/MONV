@@ -18,6 +18,7 @@ from services.digital_pitch_enrichment import (  # noqa: E402
     enrich_results_for_digital_service_pitch,
     user_query_suggests_digital_service_pitch,
 )
+from services.modes import PROSPECTION_RESULT_COLUMNS  # noqa: E402
 
 
 def test_user_query_detects_web_pitch_phrases():
@@ -28,6 +29,29 @@ def test_user_query_detects_web_pitch_phrases():
     assert user_query_suggests_digital_service_pitch(q) is True
     assert user_query_suggests_digital_service_pitch("PME BTP Lyon") is False
     assert user_query_suggests_digital_service_pitch("x") is False
+
+
+def test_user_query_detects_site_vitrine_reformulations():
+    assert user_query_suggests_digital_service_pitch(
+        "Ciblage restaurants à Toulouse pour refonte site vitrine et présence Google"
+    )
+    assert user_query_suggests_digital_service_pitch(
+        "Je veux moderniser la présence web des commerces du centre-ville"
+    )
+    assert user_query_suggests_digital_service_pitch(
+        "Accompagnement refonte site vitrine pour artisans Rennes"
+    )
+    assert user_query_suggests_digital_service_pitch(
+        "Mise en ligne d'un nouveau site pour les associations sportives 69"
+    )
+
+
+def test_infer_columns_prospection_default_matches_modes_constant():
+    from routers.search import _infer_columns
+
+    rows = [CompanyResult(siren="123456789", nom="Sans pitch")]
+    cols = _infer_columns("recherche_entreprise", {}, rows, mode="prospection")
+    assert cols == list(PROSPECTION_RESULT_COLUMNS)
 
 
 def test_infer_columns_prospection_prefers_pitch_panel():
@@ -42,7 +66,7 @@ def test_infer_columns_prospection_prefers_pitch_panel():
         )
     ]
     cols = _infer_columns("recherche_entreprise", {}, rows, mode="prospection")
-    assert cols == DIGITAL_PITCH_RESULT_COLUMNS
+    assert cols == list(DIGITAL_PITCH_RESULT_COLUMNS)
 
 
 def test_enrich_fills_fields():

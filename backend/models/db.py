@@ -8,7 +8,9 @@ import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import TypeVar
+from urllib.parse import urlparse
 
+import httpx
 from supabase import Client, create_client
 
 from config import settings
@@ -58,6 +60,22 @@ def _warn_mode_column_once() -> None:
     )
 
 
+def _supabase_url_host_problem(url: str) -> str | None:
+    """Retourne un message si l’URL Supabase est manifestement invalide (évite erreurs DNS obscures)."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").strip().lower()
+    if parsed.scheme != "https":
+        return "SUPABASE_URL doit utiliser le schéma https:// (Project URL dans Supabase → Settings → API)."
+    if not host:
+        return "SUPABASE_URL est incomplet : il manque le nom d’hôte (ex. https://<ref>.supabase.co)."
+    if host == "xxxx.supabase.co" or host == "placeholder.supabase.co":
+        return (
+            "SUPABASE_URL contient encore l’exemple du fichier .env.example : remplacez par la Project URL "
+            "réelle de votre projet (https://<project-ref>.supabase.co)."
+        )
+    return None
+
+
 def get_supabase() -> Client:
     global _client
     url = (settings.SUPABASE_URL or "").strip().strip('"').strip("'")
@@ -67,6 +85,9 @@ def get_supabase() -> Client:
             "SUPABASE_URL et SUPABASE_SERVICE_KEY sont requis dans .env "
             "(Supabase → Settings → API)."
         )
+    host_hint = _supabase_url_host_problem(url)
+    if host_hint:
+        raise RuntimeError(host_hint)
     if _client is None:
         _client = create_client(url, key)
     return _client
@@ -79,10 +100,28 @@ async def sb_run(fn: Callable[[], T]) -> T:
     return await asyncio.to_thread(_locked)
 
 
+def _unwrap_connect_error(exc: BaseException) -> BaseException | None:
+    cur: BaseException | None = exc
+    seen: set[int] = set()
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        if isinstance(cur, httpx.ConnectError):
+            return cur
+        cur = cur.__cause__
+    return None
+
+
 async def verify_connection(client: Client) -> None:
     try:
         await sb_run(lambda: client.table("users").select("id").limit(1).execute())
     except Exception as e:
+        if _unwrap_connect_error(e) is not None:
+            raise RuntimeError(
+                "Impossible de joindre l’API Supabase (réseau ou DNS). Vérifiez SUPABASE_URL dans "
+                "backend/.env : URL https complète du type https://<project-ref>.supabase.co, "
+                "connexion Internet, et absence de proxy bloquant. Si les tables manquent, exécutez "
+                f"ensuite `supabase/migrations/001_schema.sql` dans le SQL Editor. Détail : {e}"
+            ) from e
         raise RuntimeError(
             "Impossible d’atteindre la base via Supabase, ou les tables ne sont pas créées. "
             "Exécute le script SQL `supabase/migrations/001_schema.sql` dans le SQL Editor "
@@ -430,3 +469,189 @@ async def cache_update(client: Client, key: str, patch: dict) -> None:
 
 async def cache_insert(client: Client, row: dict) -> None:
     await sb_run(lambda: client.table("cache").insert(row).execute())
+
+
+# ── Admin : versions d'agents, runs, étapes ─────────────────────────────────
+
+
+async def agent_version_active_get(client: Client, agent_id: str) -> dict | None:
+    def q():
+        r = (
+            client.table("agent_versions")
+            .select("*")
+            .eq("agent_id", agent_id)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        return r.data or []
+
+    rows = await sb_run(q)
+    return rows[0] if rows else None
+
+
+async def agent_version_get(client: Client, version_id: str) -> dict | None:
+    def q():
+        r = client.table("agent_versions").select("*").eq("id", version_id).limit(1).execute()
+        return r.data or []
+
+    rows = await sb_run(q)
+    return rows[0] if rows else None
+
+
+async def agent_versions_list(client: Client, agent_id: str, limit: int = 100) -> list[dict]:
+    def q():
+        r = (
+            client.table("agent_versions")
+            .select("*")
+            .eq("agent_id", agent_id)
+            .order("version_number", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return r.data or []
+
+    return await sb_run(q)
+
+
+async def agent_version_next_number(client: Client, agent_id: str) -> int:
+    def q():
+        r = (
+            client.table("agent_versions")
+            .select("version_number")
+            .eq("agent_id", agent_id)
+            .order("version_number", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return r.data or []
+
+    rows = await sb_run(q)
+    if not rows:
+        return 1
+    return int(rows[0]["version_number"]) + 1
+
+
+async def agent_version_deactivate_all(client: Client, agent_id: str) -> None:
+    await sb_run(
+        lambda: client.table("agent_versions")
+        .update({"is_active": False})
+        .eq("agent_id", agent_id)
+        .execute()
+    )
+
+
+async def agent_version_insert(client: Client, row: dict) -> dict:
+    def ins():
+        r = client.table("agent_versions").insert(row).execute()
+        return r.data or []
+
+    rows = await sb_run(ins)
+    return rows[0]
+
+
+async def agent_version_update(client: Client, version_id: str, patch: dict) -> None:
+    await sb_run(lambda: client.table("agent_versions").update(patch).eq("id", version_id).execute())
+
+
+async def agent_run_insert(client: Client, row: dict) -> dict:
+    def ins():
+        r = client.table("agent_runs").insert(row).execute()
+        return r.data or []
+
+    rows = await sb_run(ins)
+    return rows[0]
+
+
+async def agent_run_update(client: Client, run_id: str, patch: dict) -> None:
+    await sb_run(lambda: client.table("agent_runs").update(patch).eq("id", run_id).execute())
+
+
+async def agent_run_get(client: Client, run_id: str) -> dict | None:
+    def q():
+        r = client.table("agent_runs").select("*").eq("id", run_id).limit(1).execute()
+        return r.data or []
+
+    rows = await sb_run(q)
+    return rows[0] if rows else None
+
+
+async def agent_runs_list(
+    client: Client,
+    *,
+    agent_id: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    def q():
+        qb = client.table("agent_runs").select("*").order("started_at", desc=True).range(offset, offset + limit - 1)
+        if agent_id:
+            qb = qb.eq("agent_id", agent_id)
+        r = qb.execute()
+        return r.data or []
+
+    return await sb_run(q)
+
+
+async def agent_run_steps_list(client: Client, run_id: str) -> list[dict]:
+    def q():
+        r = (
+            client.table("agent_run_steps")
+            .select("*")
+            .eq("run_id", run_id)
+            .order("started_at", desc=False)
+            .execute()
+        )
+        return r.data or []
+
+    return await sb_run(q)
+
+
+async def agent_run_step_insert(client: Client, row: dict) -> dict:
+    def ins():
+        r = client.table("agent_run_steps").insert(row).execute()
+        return r.data or []
+
+    rows = await sb_run(ins)
+    return rows[0]
+
+
+async def agent_runs_count_errors_since(
+    client: Client, agent_id: str, since_iso: str
+) -> int:
+    """Compte les runs en erreur (approximatif, max 2000 lignes scannées)."""
+
+    def q():
+        r = (
+            client.table("agent_runs")
+            .select("id")
+            .eq("agent_id", agent_id)
+            .eq("status", "failed")
+            .gte("started_at", since_iso)
+            .limit(2000)
+            .execute()
+        )
+        return len(r.data or [])
+
+    try:
+        return await sb_run(q)
+    except Exception:
+        return 0
+
+
+async def agent_runs_count_since(client: Client, agent_id: str, since_iso: str) -> int:
+    def q():
+        r = (
+            client.table("agent_runs")
+            .select("id")
+            .eq("agent_id", agent_id)
+            .gte("started_at", since_iso)
+            .limit(5000)
+            .execute()
+        )
+        return len(r.data or [])
+
+    try:
+        return await sb_run(q)
+    except Exception:
+        return 0

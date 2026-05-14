@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
-import type {
-  AgentSynthesis,
-  AtelierChecklist,
-  ChecklistItem,
-  ChecklistSection,
+import { RefreshCw, X } from "lucide-react";
+import {
+  regenerateAtelierChecklist,
+  type AgentSynthesis,
+  type AtelierChecklist,
+  type BusinessDossierPayload,
+  type ChecklistItem,
+  type ChecklistSection,
 } from "@/lib/api";
 
 type PanelItem = {
@@ -196,15 +198,65 @@ function normalizeChecklist(synthesis: AgentSynthesis): AtelierChecklist {
 
 interface DossierChecklistProps {
   synthesis: AgentSynthesis;
+  /** Si renseigné avec les callbacks, affiche « Régénérer la checklist (IA) ». */
+  conversationId?: string | null;
+  onDossierReplaced?: (dossier: BusinessDossierPayload) => void;
+  onNotify?: (kind: "success" | "error", message: string) => void;
+  onCreditsRemaining?: (credits: number) => void;
 }
 
-export default function DossierChecklist({ synthesis }: DossierChecklistProps) {
+export default function DossierChecklist({
+  synthesis,
+  conversationId = null,
+  onDossierReplaced,
+  onNotify,
+  onCreditsRemaining,
+}: DossierChecklistProps) {
   const data = useMemo(
     () => normalizeChecklist(synthesis ?? ({} as AgentSynthesis)),
     [synthesis],
   );
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<PanelItem | null>(null);
+  const [regenBusy, setRegenBusy] = useState(false);
+
+  const canRegenerateChecklist = Boolean(
+    conversationId && onDossierReplaced && onNotify,
+  );
+
+  const handleRegenerateChecklist = useCallback(async () => {
+    if (!conversationId || !onDossierReplaced || !onNotify) return;
+    setRegenBusy(true);
+    const ac = new AbortController();
+    const maxMs = 185_000;
+    const timer = window.setTimeout(() => ac.abort(), maxMs);
+    try {
+      const res = await regenerateAtelierChecklist(
+        { conversation_id: conversationId },
+        { signal: ac.signal },
+      );
+      onDossierReplaced(res.dossier);
+      if (typeof res.credits_remaining === "number") {
+        onCreditsRemaining?.(res.credits_remaining);
+      }
+      onNotify("success", "Checklist régénérée.");
+    } catch (e: unknown) {
+      const aborted =
+        (e instanceof DOMException && e.name === "AbortError") ||
+        (e instanceof Error && (e.name === "AbortError" || /aborted/i.test(e.message)));
+      onNotify(
+        "error",
+        aborted
+          ? "Délai dépassé (~3 min). Réessaie ou vérifie la connexion au serveur."
+          : e instanceof Error
+            ? e.message
+            : "Régénération indisponible.",
+      );
+    } finally {
+      window.clearTimeout(timer);
+      setRegenBusy(false);
+    }
+  }, [conversationId, onCreditsRemaining, onDossierReplaced, onNotify]);
 
   const openItem = useCallback((sectionTitle: string, item: ChecklistItem) => {
     setActive({
@@ -233,15 +285,28 @@ export default function DossierChecklist({ synthesis }: DossierChecklistProps) {
       className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6"
       aria-label="Checklist d’actions"
     >
-      <div className="mb-5 border-b border-border pb-4">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">
-          Checklist d’action
-        </p>
-        <h3 className="text-base sm:text-lg font-semibold text-foreground leading-snug">
-          {headline}
-        </h3>
-        {lede ? (
-          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{lede}</p>
+      <div className="mb-5 border-b border-border pb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">
+            Checklist d’action
+          </p>
+          <h3 className="text-base sm:text-lg font-semibold text-foreground leading-snug">
+            {headline}
+          </h3>
+          {lede ? (
+            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{lede}</p>
+          ) : null}
+        </div>
+        {canRegenerateChecklist ? (
+          <button
+            type="button"
+            onClick={() => void handleRegenerateChecklist()}
+            disabled={regenBusy}
+            className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/50 min-h-[40px] disabled:opacity-45 disabled:pointer-events-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500/50"
+          >
+            <RefreshCw size={14} className={regenBusy ? "animate-spin" : ""} aria-hidden />
+            {regenBusy ? "Régénération…" : "Régénérer (IA)"}
+          </button>
         ) : null}
       </div>
 

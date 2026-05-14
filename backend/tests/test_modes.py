@@ -14,7 +14,7 @@ os.environ.setdefault("SUPABASE_SERVICE_KEY", "placeholder-service-key")
 os.environ.setdefault("PAPPERS_API_KEY", "")
 
 
-from models.schemas import ChatRequest, GuardEntity, GuardResult  # noqa: E402
+from models.schemas import ChatRequest, GuardEntity, GuardResult, APICall, BusinessSignal, CompanyResult, SearchResults  # noqa: E402
 from services.modes import (  # noqa: E402
     DEFAULT_MODE,
     MODE_LABELS,
@@ -26,7 +26,12 @@ from services.modes import (  # noqa: E402
     normalize_mode,
     reorder_columns_for_mode,
 )
-from services.orchestrator import _build_fallback_plan  # noqa: E402
+from services.orchestrator import (  # noqa: E402
+    _build_fallback_plan,
+    _orchestrator_merged_system,
+    clamp_prospection_pappers_calls,
+    orchestrator_needs_niche_appendix,
+)
 
 
 # ── Schéma & contrat API ──────────────────────────────────────────────────────
@@ -78,12 +83,49 @@ def test_default_mode_is_prospection():
     assert DEFAULT_MODE == "prospection"
 
 
+def test_prospection_addendum_warns_pappers_cost():
+    add = addendum_for_mode("prospection").lower()
+    assert "pappers" in add
+    assert "interdit" in add or "retire" in add
+
+
+def test_prospection_addendum_documents_columns_and_post_plan_contact_enrich():
+    """Addendum : panneau colonnes + complément fiche Pappers hors plan (plafond)."""
+    add = addendum_for_mode("prospection").lower()
+    assert "signaux" in add
+    assert "pappers_contact_enrich_max" in add
+    assert "après exécution" in add or "exécution du plan" in add
+
+
+def test_export_dataframe_prospection_includes_signaux_column():
+    from services.export import _results_to_dataframe
+
+    rows = [
+        CompanyResult(
+            siren="123456789",
+            nom="ACME",
+            signaux=[
+                BusinessSignal(
+                    type="entreprise_recente",
+                    label="Entreprise récente",
+                    detail="12 mois",
+                    severity="info",
+                )
+            ],
+        )
+    ]
+    sr = SearchResults(
+        total=1,
+        results=rows,
+        columns=list(PROSPECTION_RESULT_COLUMNS),
+        credits_required=1,
+    )
+    df = _results_to_dataframe(sr, rename=False, prospection_export=True)
+    assert "signaux" in df.columns
+    assert "Entreprise récente" in str(df["signaux"].iloc[0])
+
+
 # ── Addendum prompt orchestrateur ────────────────────────────────────────────
-
-def test_prospection_has_no_addendum():
-    """Mode défaut → prompt système identique à avant l'introduction des modes."""
-    assert addendum_for_mode("prospection") == ""
-
 
 @pytest.mark.parametrize("mode", ["sous_traitant", "benchmark", "rachat"])
 def test_other_modes_have_distinct_addendum(mode):
@@ -279,6 +321,143 @@ def test_fallback_plan_default_mode_matches_prospection():
     plan_prospection = _build_fallback_plan(_make_guard_result(), "prospection")
     assert plan_default.columns == plan_prospection.columns
     assert plan_default.estimated_credits == plan_prospection.estimated_credits
+
+
+# ── Clamp Pappers (prospection) ───────────────────────────────────────────────
+
+
+def test_clamp_prospection_strips_pappers_search_without_signals():
+    g = _make_guard_result("PME BTP Lyon")
+    calls = [
+        APICall(source="sirene", action="search", params={"departement": "69", "per_page": 25}, priority=1),
+        APICall(source="pappers", action="search", params={"q": "BTP"}, priority=2),
+    ]
+    clamp_prospection_pappers_calls(calls, g)
+    assert [c.source for c in calls] == ["sirene"]
+
+
+def test_clamp_prospection_keeps_pappers_search_when_ca_bounds_on_entity():
+    g = GuardResult(
+        intent="recherche_entreprise",
+        entities=GuardEntity(ca_min=100_000, ca_max=5_000_000, region="11"),
+        confidence=0.9,
+        original_query="PME IDF",
+    )
+    calls = [
+        APICall(source="sirene", action="search", params={"region": "11", "per_page": 25}, priority=1),
+        APICall(source="pappers", action="search", params={"ca_min": 100000}, priority=2),
+    ]
+    clamp_prospection_pappers_calls(calls, g)
+    assert len(calls) == 2
+
+
+def test_clamp_prospection_keeps_get_dirigeants_when_narrow_commune():
+    g = _make_guard_result()
+    calls = [
+        APICall(source="sirene", action="search", params={"code_commune": "69123", "per_page": 25}, priority=1),
+        APICall(source="pappers", action="get_dirigeants", params={}, priority=3),
+    ]
+    clamp_prospection_pappers_calls(calls, g)
+    assert [c.action for c in calls if c.source == "pappers"] == ["get_dirigeants"]
+
+
+def test_clamp_prospection_strips_get_finances_without_need():
+    g = _make_guard_result()
+    calls = [
+        APICall(source="sirene", action="search", params={"departement": "69"}, priority=1),
+        APICall(source="pappers", action="get_finances", params={}, priority=3),
+    ]
+    clamp_prospection_pappers_calls(calls, g)
+    assert [c.source for c in calls] == ["sirene"]
+
+
+def test_clamp_prospection_keeps_get_finances_when_user_asks_ca():
+    g = GuardResult(
+        intent="recherche_entreprise",
+        entities=GuardEntity(secteur="BTP"),
+        confidence=0.9,
+        original_query="Liste des entreprises avec leur chiffre d'affaires à Lyon",
+    )
+    calls = [
+        APICall(source="sirene", action="search", params={"departement": "69"}, priority=1),
+        APICall(source="pappers", action="get_finances", params={}, priority=3),
+    ]
+    clamp_prospection_pappers_calls(calls, g)
+    assert any(c.source == "pappers" and c.action == "get_finances" for c in calls)
+
+
+def test_clamp_prospection_recherche_dirigeant_keeps_get_dirigeants():
+    g = GuardResult(
+        intent="recherche_dirigeant",
+        entities=GuardEntity(secteur="BTP", localisation="Lyon"),
+        confidence=0.9,
+        original_query="Qui dirige les entreprises du BTP à Lyon",
+    )
+    calls = [
+        APICall(source="sirene", action="search", params={"departement": "69"}, priority=1),
+        APICall(source="pappers", action="get_dirigeants", params={}, priority=3),
+    ]
+    clamp_prospection_pappers_calls(calls, g)
+    assert any(c.source == "pappers" and c.action == "get_dirigeants" for c in calls)
+
+
+def test_clamp_prospection_enrichissement_keeps_get_finances():
+    g = GuardResult(
+        intent="enrichissement",
+        entities=GuardEntity(),
+        confidence=0.95,
+        original_query="Enrichis les fiches",
+    )
+    calls = [
+        APICall(source="sirene", action="search", params={"departement": "69"}, priority=1),
+        APICall(source="pappers", action="get_finances", params={}, priority=3),
+    ]
+    clamp_prospection_pappers_calls(calls, g)
+    assert any(c.source == "pappers" and c.action == "get_finances" for c in calls)
+
+
+# ── Prompt orchestrateur : annexe niche conditionnelle ───────────────────────
+
+
+def test_orchestrator_needs_niche_appendix_false_without_geo():
+    g = GuardResult(
+        intent="recherche_entreprise",
+        entities=GuardEntity(mots_cles=["padel"]),
+        confidence=0.9,
+        original_query="padel",
+    )
+    assert orchestrator_needs_niche_appendix(g) is False
+
+
+def test_orchestrator_needs_niche_appendix_true_with_geo_and_keywords():
+    g = GuardResult(
+        intent="recherche_entreprise",
+        entities=GuardEntity(mots_cles=["padel"], region="PACA"),
+        confidence=0.9,
+        original_query="padel PACA",
+    )
+    assert orchestrator_needs_niche_appendix(g) is True
+
+
+def test_orchestrator_merged_system_includes_niche_appendix_when_needed():
+    g_narrow = GuardResult(
+        intent="recherche_entreprise",
+        entities=GuardEntity(code_naf="41"),
+        confidence=0.9,
+        original_query="BTP",
+    )
+    short = _orchestrator_merged_system("prospection", g_narrow)
+    assert "CODES NAF POUR NICHES FRÉQUENTES" not in short
+
+    g_niche = GuardResult(
+        intent="recherche_entreprise",
+        entities=GuardEntity(mots_cles=["padel"], region="PACA"),
+        confidence=0.9,
+        original_query="padel",
+    )
+    long = _orchestrator_merged_system("prospection", g_niche)
+    assert "CODES NAF POUR NICHES FRÉQUENTES" in long
+    assert len(long) > len(short)
 
 
 # ── Étiquettes UI ────────────────────────────────────────────────────────────

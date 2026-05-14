@@ -6,11 +6,15 @@ Le Guard se concentre sur :
   • classification de l'intent précis (recherche_entreprise, recherche_dirigeant, enrichissement)
   • extraction structurée des entités
   • détection du besoin de clarification
+  • ambiguïté sectorielle : second passage LLM optionnel (prompt long) si détecteur lexical
 """
 
-from models.schemas import GuardResult, GuardEntity
+from models.schemas import GuardResult, GuardEntity, GUARD_INTENT_VALUES
+from services.guard_ambiguity import (
+    message_triggers_sector_ambiguity_check,
+    run_guard_sector_ambiguity,
+)
 from services.zone_policy import post_process_guard_geography
-from utils.llm import llm_json_call
 from config import settings
 
 GUARD_SYSTEM_PROMPT = """\
@@ -57,177 +61,35 @@ TRANCHES D'EFFECTIF (codes INSEE) :
 - "22"=100-199, "31"=200-249, "32"=250-499, "41"=500-999, "42"=1000-1999
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-RÈGLE CRITIQUE — sector_ambiguous :
+sector_ambiguous — NOYAU (liste longue en second passage conditionnel)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Tu DOIS mettre sector_ambiguous: true et clarification_needed: true
-dès qu'un mot du message peut désigner plusieurs types d'entreprises
-B2B distincts en France. C'est une règle ABSOLUE, pas une suggestion.
+Un **second module** applique la longue liste d’ambiguïtés sectorielles B2B (sport, restauration,
+services, etc.) **uniquement** lorsqu’un détecteur lexical interne l’active. Tu n’as **pas** cette liste
+dans ce prompt.
 
-Liste non exhaustive — met sector_ambiguous: true si le message contient (exemples ; généralise au-delà) :
-
-SPORT & LOISIRS :
-- "padel" / "paddle" → padel sport raquette VS paddle nautique VS paddle board
-- "golf" → terrain/club de golf VS boutique équipements golf VS simulateur indoor
-- "foot" / "football" → club sportif VS boutique VS terrain synthétique VS académie
-- "tennis" → club/court VS boutique équipements VS académie VS mur de tennis
-- "boxe" → salle de boxe VS boutique équipements VS boxe thaï / MMA
-- "yoga" → studio de cours VS boutique produits yoga VS retraite bien-être
-- "pilates" → studio VS équipements VS formation instructeurs
-- "escalade" → salle d'escalade indoor VS magasin matériel VS école plein air
-- "surf" → école de surf VS boutique surf VS fabricant planches
-- "ski" → station de ski VS location matériel VS boutique VS école de ski
-- "natation" → piscine publique VS club VS boutique matériel VS école
-- "vélo" / "cyclisme" → magasin VS club VS réparation VS location VS coaching
-- "running" → boutique VS club VS coaching VS événement/course
-- "équitation" → centre équestre VS vente chevaux VS sellerie VS soins vétérinaires
-- "chasse" → armurerie VS vêtements chasse VS location terrain VS taxidermie
-- "pêche" → magasin articles pêche VS location bateau VS guide de pêche
-
-BIEN-ÊTRE & SANTÉ :
-- "spa" / "spas" / "institut spa" / "centre spa" → institut bien-être/soins VS fabricant jacuzzis/spas VS hôtel avec espace spa VS spa nordique
-- "massage" → institut massage VS formation massage VS équipements massage
-- "laser" → centre médical/esthétique VS découpe industrielle VS gravure laser
-- "bio" → agriculture biologique VS cosmétiques bio VS restauration bio VS magasin bio
-- "médecine" → cabinet médical VS formation médicale VS équipements médicaux
-- "optique" → opticien VS fabricant verres VS lunettes de protection industrielle
-- "dentiste" / "dentaire" → cabinet VS équipements dentaires VS laboratoire prothèses
-- "pharmacie" → officine VS grossiste pharmaceutique VS fabricant médicaments
-- "nutrition" → diététicien VS compléments alimentaires VS restauration santé
-- "psychologie" → cabinet VS formation VS logiciels RH/bien-être en entreprise
-
-RESTAURATION & ALIMENTATION :
-- "bar" → bar à cocktails VS bar de coiffure VS bar en acier (matériau) VS bar à vin VS bar de sport
-- "café" → café/bistrot VS torréfacteur VS distributeur café VS café coworking
-- "restaurant" → restaurant traditionnel VS restauration rapide VS traiteur VS dark kitchen
-- "boulangerie" → boulangerie artisanale VS industrielle VS fournitures boulangerie
-- "chocolat" → chocolatier artisan VS fabricant industriel VS distributeur
-- "glace" → glacier artisan VS fabricant industriel VS machine à glace VS logistique froid
-- "traiteur" → traiteur événementiel VS traiteur entreprise VS plats préparés industriels
-- "épicerie" → épicerie fine VS épicerie de quartier VS épicerie en ligne VS grossiste
-- "fromage" → fromagerie artisanale VS grossiste fromage VS affinage VS cave
-
-BEAUTÉ & COSMÉTIQUES :
-- "coiffure" → salon de coiffure VS fournisseur produits coiffure VS école coiffure VS franchiseur
-- "esthétique" → institut esthétique VS formation VS équipements esthétique VS cosmétiques pro
-- "onglerie" → salon d'ongle VS fournisseur produits ongles VS formation nail art
-- "barbier" → salon barbier VS fournisseur produits barbier VS formation
-- "maquillage" → artiste maquillage VS marque cosmétique VS école maquillage
-- "parfum" → parfumerie VS fabricant parfums VS distributeur VS nez/création
-
-IMMOBILIER & BTP :
-- "piscine" → constructeur piscine VS entretien/maintenance VS boutique matériel VS école natation
-- "pont" → BTP génie civil VS réparation ponts automobiles VS pont levant/industriel
-- "isolation" → isolation thermique bâtiment VS isolation acoustique VS isolants industriels
-- "peinture" → artisan peintre VS fabricant peinture VS distributeur VS peinture industrielle
-- "plomberie" → artisan plombier VS grossiste matériel VS fabricant robinetterie
-- "électricité" → électricien VS grossiste matériel élec VS fabricant composants
-- "charpente" → charpentier bois VS charpente métallique VS couverture/zinguerie
-- "démolition" → démolition bâtiment VS désamiantage VS démolition automobile
-- "architecture" → cabinet d'architecte VS logiciel architecture VS formation
-- "alarme" → installateur alarme VS fabricant systèmes VS télésurveillance
-- "ascenseur" → installateur VS maintenance VS fabricant VS modernisation
-
-INDUSTRIE & TECHNIQUE :
-- "pressing" → pressing textile VS pressing industriel VS pressing politique (éliminer)
-- "vapeur" → cigarette électronique VS nettoyage vapeur VS chaudière vapeur industrielle
-- "soudure" → prestataire soudure VS équipements soudure VS formation soudure
-- "usinage" → atelier usinage VS machine-outil VS logiciel FAO
-- "mécanique" → garage auto VS mécanique industrielle VS bureau d'études méca
-- "automatisme" → intégrateur automatisme VS fabricant automates VS maintenance
-- "robotique" → intégrateur robots VS fabricant VS formation VS maintenance
-- "impression" / "imprimerie" → imprimerie offset VS impression 3D VS sérigraphie VS broderie
-- "emballage" → fabricant emballage VS machine d'emballage VS distributeur
-- "étiquette" → imprimeur étiquettes VS logiciel étiquetage VS distributeur
-- "nettoyage" → entreprise de nettoyage VS fabricant produits VS machines nettoyage
-- "tri" / "recyclage" → collecte/tri VS recycleur industriel VS négoce matières
-- "batterie" → fabricant batteries VS recyclage VS installation stockage énergie
-
-NUMÉRIQUE & TECH :
-- "cloud" → hébergeur cloud VS intégrateur cloud VS éditeur logiciel SaaS
-- "cybersécurité" → prestataire MSSP VS éditeur logiciel VS formation VS conseil
-- "développement" → agence web/mobile VS éditeur logiciel VS formation VS freelance
-- "data" → cabinet conseil data VS éditeur BI VS collecte données VS courtier data
-- "IA" / "intelligence artificielle" → éditeur IA VS intégrateur VS conseil VS formation
-- "télécommunication" → opérateur VS installateur réseau VS revendeur VS matériel
-- "drone" → opérateur drone VS fabricant VS formation VS inspection industrielle
-- "réalité virtuelle" / "VR" → studio création VS équipements VS formation VS événementiel
-
-TRANSPORT & LOGISTIQUE :
-- "transport" → transport routier VS maritime VS aérien VS ferroviaire VS VTC
-- "déménagement" → déménagement particulier VS déménagement entreprise VS garde-meuble
-- "taxi" → taxi traditionnel VS VTC VS taxi ambulance VS dispatch logiciel
-- "location voiture" → agence location VS leasing longue durée VS location utilitaires
-- "garage" → réparation auto VS carrosserie VS contrôle technique VS vente
-- "carrosserie" → réparation carrosserie VS fabricant carrosseries industrielles VS peinture auto
-
-ÉNERGIE & ENVIRONNEMENT :
-- "solaire" → installateur panneaux VS fabricant VS bureau d'études VS financement
-- "éolien" → installateur VS fabricant VS maintenance VS bureau d'études
-- "pompe à chaleur" → installateur VS fabricant VS maintenance VS distributeur
-- "géothermie" → installateur VS bureau d'études VS foreur
-- "eau" → traitement eau industriel VS plombier VS distributeur eau VS analyse qualité
-
-SERVICES AUX ENTREPRISES :
-- "conseil" / "consulting" → conseil en stratégie VS conseil IT VS conseil RH VS conseil financier
-- "formation" → organisme de formation VS éditeur e-learning VS formation métier spécifique
-- "recrutement" → cabinet recrutement VS ESN portage VS chasseur de têtes VS ATS logiciel
-- "coach" / "coaching" → coach sportif VS coach business/executive VS coach de vie VS plateforme coaching VS formation coach
-- "communication" → agence com VS agence pub VS relations presse VS événementiel
-- "marketing" → agence marketing VS logiciel marketing VS conseil growth
-- "traduction" → agence traduction VS traducteur indépendant VS logiciel traduction
-- "sécurité" → gardiennage VS cybersécurité VS sécurité incendie VS serrurerie
-- "audit" → cabinet d'audit financier VS audit technique VS audit SI VS audit qualité
-- "assurance" → courtier VS compagnie d'assurance VS gestion sinistres
-- "event" / "événementiel" → agence événementiel VS location matériel VS traiteur VS sécurité event
-- "photo" / "photographie" → studio photo VS photographe événementiel VS équipements photo VS traitement image
-- "vidéo" → production vidéo VS post-production VS équipements VS diffusion/streaming
-- "musique" → salle de concert VS studio enregistrement VS distribution musicale VS école musique
-- "impôt" / "fiscal" → cabinet expertise comptable VS logiciel fiscal VS conseil fiscal
-- "juridique" / "droit" → cabinet avocat VS huissier VS notaire VS conseil juridique entreprise
-- "nourrice" / "garde enfant" → crèche VS assistante maternelle VS application mise en relation
-
-COMMERCE & DISTRIBUTION :
-- "grossiste" → grossiste alimentaire VS grossiste textile VS grossiste électronique
-- "import" / "export" → transitaire VS courtier VS fabricant exportateur VS logistique internationale
-- "franchise" → réseau franchiseur VS conseil en franchise VS financement franchise
-- "e-commerce" → boutique en ligne VS logistique e-com VS plateforme VS agence
-- "marketplace" → éditeur marketplace VS vendeur marketplace VS logistique
-
-ANIMAUX :
-- "vétérinaire" → clinique vétérinaire VS équipements vétérinaires VS formation vétérinaire
-- "animalerie" → boutique animaux VS éleveur VS soins/toilettage VS pension
-- "cheval" / "équidé" → centre équestre VS élevage VS vente/négoce VS soins vétérinaires équins
-
-- Tout autre terme du message absent de cette liste mais polysémique en B2B français (2+ chaînes de valeur ou secteurs NAF distincts) → sector_ambiguous: true également.
+Règles pour **cet** appel :
+- Si le message énumère **plusieurs types d’établissements complémentaires** (souvent après QCM,
+  ex. boutiques de padel **et** clubs de padel) : **sector_ambiguous: false**, retire **"secteur_confirmation"**
+  de missing_criteria, et mets **tous** les types dans **mots_cles** ; ne redemande pas de clarification
+  sectorielle unique pour ce cas.
+- Sinon : **sector_ambiguous: true** seulement si tu es **sans doute** que le cœur métier est polysémique
+  B2B **sans** la longue liste (ex. « spa » seul, « laser » seul, « pressing » sans précision…).
+- Si tu doutes : **false** (le second passage reprendra quand le détecteur l’ordonnera).
 
 Quand sector_ambiguous: true :
 - clarification_needed DOIT être true
 - missing_criteria DOIT contenir "secteur_confirmation"
-- Si le message ne fixe aucune zone géographique explicite (voir bloc « ZONE EXPLICITE »),
-  ajoute aussi "zone_geo". Si ville / département / région / France nationale est déjà claire
-  dans le texte, ne mets pas "zone_geo" seulement pour cause d'ambiguïté sectorielle.
+- Si aucune zone géographique explicite (voir bloc « ZONE EXPLICITE » plus bas), ajoute aussi "zone_geo".
 
-Si tu hésites entre ambigu et non-ambigu, TOUJOURS choisir ambigu.
-Il vaut mieux une question de trop qu'un résultat hors cible.
+Quand sector_ambiguous: false : ne mets pas "secteur_confirmation" dans missing_criteria **pour cause**
+d’ambiguïté sectorielle seule.
 
-Quand sector_ambiguous: false (cas normal) :
-- Le terme désigne sans ambiguïté un seul type d'entreprise
-- Ex: "plombier", "cabinet comptable", "boulangerie", "agence immobilière"
-
-**Après clarification QCM — plusieurs types d'établissements visés** :
-Si le dernier message de l'utilisateur énumère explicitement **plusieurs** types d'activité ou
-d'établissements complémentaires (souvent après un QCM « précisez le type d'établissement » avec
-plusieurs choix cochés, ex. boutiques de padel **et** clubs de padel), ce n'est plus une ambiguïté
-à lever par un choix unique : mets **sector_ambiguous: false**, retire **"secteur_confirmation"**
-de missing_criteria, et remplis **mots_cles** avec **tous** les types ciblés (ex. ["boutique padel", "club padel"])
-en gardant le terme générique si pertinent (ex. "padel"). Ne redemande pas de clarification sectorielle
-pour ce cas tant que la zone reste explicite ou manquante selon les règles zone_geo ci-dessous.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Réponds UNIQUEMENT avec un JSON valide :
 {
-    "intent": "recherche_entreprise|recherche_dirigeant|enrichissement",
+    "intent": "recherche_entreprise|recherche_dirigeant|enrichissement|salutation|meta_question|hors_scope",
     "confidence": 0.0-1.0,
     "context_hints": [],
     "entities": {
@@ -382,19 +244,37 @@ def sanitize_context_hints(raw: object, *, max_items: int = 5, max_len: int = 20
     return out
 
 
-async def run_guard(user_message: str, conversation_history: list[dict] | None = None) -> GuardResult:
+async def run_guard(
+    user_message: str,
+    conversation_history: list[dict] | None = None,
+    *,
+    agent_id: str = "prospection",
+    block_id: str = "guard",
+) -> GuardResult:
     messages: list[dict] = []
     if conversation_history:
         messages.extend(conversation_history)
     messages.append({"role": "user", "content": user_message})
 
+    from services.agent_config import resolve_llm_for_block
+    from utils.llm import llm_json_call
+
+    cfg = await resolve_llm_for_block(
+        agent_id,
+        block_id,
+        default_model=settings.GUARD_MODEL,
+        default_system=GUARD_SYSTEM_PROMPT,
+        default_max_tokens=1024,
+        default_temperature=0.0,
+    )
     try:
         result = await llm_json_call(
-            model=settings.GUARD_MODEL,
-            system=GUARD_SYSTEM_PROMPT,
+            model=cfg.model,
+            system=cfg.system_prompt,
             messages=messages,
-            max_tokens=1024,
-            temperature=0.0,
+            max_tokens=cfg.max_tokens,
+            temperature=cfg.temperature,
+            usage_stage="guard",
         )
     except Exception as e:
         return GuardResult(
@@ -427,8 +307,20 @@ async def run_guard(user_message: str, conversation_history: list[dict] | None =
         forme_juridique=entities_raw.get("forme_juridique"),
     )
 
-    sector_ambiguous = _parse_bool_llm(result.get("sector_ambiguous"), False)
+    sector_ambiguous_core = _parse_bool_llm(result.get("sector_ambiguous"), False)
     sector_confirmed = _parse_sector_confirmed(result.get("sector_confirmed"))
+
+    sector_ambiguous = sector_ambiguous_core
+    if settings.GUARD_SECTOR_AMBIGUITY_SECOND_PASS and (
+        message_triggers_sector_ambiguity_check(user_message)
+    ):
+        try:
+            sector_ambiguous = await run_guard_sector_ambiguity(
+                user_message,
+                agent_id=agent_id,
+            )
+        except Exception:
+            sector_ambiguous = sector_ambiguous_core
 
     # ── Cohérence sector_ambiguous → clarification forcée ──────────────
     # Le LLM peut renvoyer sector_ambiguous=True sans mettre
@@ -444,9 +336,15 @@ async def run_guard(user_message: str, conversation_history: list[dict] | None =
             ]
     else:
         clarification_needed_final = result.get("clarification_needed", False)
-        missing_final = list(result.get("missing_criteria") or [])
+        missing_final = [
+            m
+            for m in (result.get("missing_criteria") or [])
+            if m != "secteur_confirmation"
+        ]
 
     intent_val = result.get("intent", "recherche_entreprise")
+    if not isinstance(intent_val, str) or intent_val not in GUARD_INTENT_VALUES:
+        intent_val = "recherche_entreprise"
     clarification_needed_final = post_process_guard_geography(
         user_message,
         intent_val,

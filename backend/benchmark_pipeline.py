@@ -20,9 +20,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from models.schemas import GUARD_INTENTS_STATIC_REPLY
 from services.filter import run_filter
 from services.guard import run_guard
-from services.orchestrator import run_orchestrator
+from services.orchestrator import run_orchestrator, maybe_clamp_prospection_after_plan_patches
 from services.api_engine import execute_plan
 from services.sirene import patch_sirene_calls_from_guard_entities
 
@@ -271,7 +272,7 @@ async def benchmark_one(q: dict) -> BenchmarkResult:
         r.verdict = "FAIL_GUARD"
         return r
 
-    if guard.intent in ("hors_scope", "salutation", "meta_question"):
+    if guard.intent in GUARD_INTENTS_STATIC_REPLY:
         r.total_time_ms = round((time.monotonic() - start_all) * 1000)
         r.verdict = "PASS" if not q["expect_results"] else "FAIL_GUARD_OOS"
         return r
@@ -327,6 +328,7 @@ async def benchmark_one(q: dict) -> BenchmarkResult:
     try:
         t0 = time.monotonic()
         patch_sirene_calls_from_guard_entities(plan, guard.entities)
+        maybe_clamp_prospection_after_plan_patches(plan, "prospection", guard)
         results = await execute_plan(plan)
         r.engine_time_ms = round((time.monotonic() - t0) * 1000)
         r.engine_ok = True

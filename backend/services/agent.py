@@ -26,6 +26,8 @@ from typing import Any
 
 from config import settings
 from models.schemas import (
+    AgentSynthesis,
+    AtelierChecklist,
     BusinessCanvas,
     BusinessDossier,
     FlowMap,
@@ -37,6 +39,7 @@ from models.schemas import (
     SegmentResult,
 )
 from services.atelier_constants import ATELIER_MODE_LABEL
+from services.atelier_checklist_pipeline import generate_checklist_multi_stage
 from services.atelier_coerce import coerce_dossier
 from services.atelier_mutations import atelier_dossier_rollup_fields, merge_atelier_cross_segment_tags
 from services.atelier_heuristics import (
@@ -49,6 +52,7 @@ from services.atelier_qcm import (
     parse_qcm_raw as _parse_qcm_raw,
 )
 from services.api_engine import _dedup_key, execute_plan
+from services.agent_config import resolve_llm_for_block
 from services.guard import run_guard
 from services.orchestrator import run_orchestrator
 from services.modes import normalize_mode, Mode
@@ -414,12 +418,20 @@ async def suggest_atelier_conversation_title(pitch: str) -> str:
     if not (settings.OPENROUTER_API_KEY or "").strip():
         return base
     try:
+        cfg_t = await resolve_llm_for_block(
+            "atelier",
+            "titles",
+            default_model=settings.FILTER_MODEL,
+            default_system=_CONV_TITLE_SYSTEM,
+            default_max_tokens=48,
+            default_temperature=0.2,
+        )
         raw = await llm_call(
-            model=settings.FILTER_MODEL,
-            system=_CONV_TITLE_SYSTEM,
+            model=cfg_t.model,
+            system=cfg_t.system_prompt,
             messages=[{"role": "user", "content": f"Pitch :\n{pitch.strip()}"}],
-            max_tokens=48,
-            temperature=0.2,
+            max_tokens=cfg_t.max_tokens,
+            temperature=cfg_t.temperature,
         )
         title = (raw or "").strip()
         title = title.split("\n", 1)[0].strip()
@@ -448,12 +460,20 @@ async def suggest_atelier_project_folder_name(pitch: str) -> str:
     if not (settings.OPENROUTER_API_KEY or "").strip():
         return base
     try:
+        cfg_t = await resolve_llm_for_block(
+            "atelier",
+            "titles",
+            default_model=settings.FILTER_MODEL,
+            default_system=_PROJECT_FOLDER_NAME_SYSTEM,
+            default_max_tokens=40,
+            default_temperature=0.15,
+        )
         raw = await llm_call(
-            model=settings.FILTER_MODEL,
-            system=_PROJECT_FOLDER_NAME_SYSTEM,
+            model=cfg_t.model,
+            system=cfg_t.system_prompt,
             messages=[{"role": "user", "content": f"Première requête :\n{pitch.strip()}"}],
-            max_tokens=40,
-            temperature=0.15,
+            max_tokens=cfg_t.max_tokens,
+            temperature=cfg_t.temperature,
         )
         name = (raw or "").strip()
         name = name.split("\n", 1)[0].strip()
@@ -526,17 +546,25 @@ async def generate_atelier_qcm(pitch: str) -> tuple[str, list[QcmQuestion]]:
     try:
         pitch_clean = (pitch or "").strip()
         n_words = len(pitch_clean.split())
+        cfg_q = await resolve_llm_for_block(
+            "atelier",
+            "atelier_qcm",
+            default_model=settings.GUARD_MODEL,
+            default_system=_ATELIER_QCM_SYSTEM,
+            default_max_tokens=1408,
+            default_temperature=0.22,
+        )
         raw = await llm_json_call(
-            model=settings.GUARD_MODEL,
-            system=_ATELIER_QCM_SYSTEM,
+            model=cfg_q.model,
+            system=cfg_q.system_prompt,
             messages=[
                 {
                     "role": "user",
                     "content": f"Pitch projet ({n_words} mots) :\n{pitch_clean}",
                 }
             ],
-            max_tokens=1408,
-            temperature=0.22,
+            max_tokens=cfg_q.max_tokens,
+            temperature=cfg_q.temperature,
         )
         intro, questions = _parse_qcm_raw(raw)
         return _finalize_atelier_qcm(intro, questions)
@@ -757,6 +785,14 @@ async def generate_dossier_skeleton(
     if is_atelier_fake_mode_enabled():
         return _fake_dossier_payload()
     model = _atelier_business_model()
+    cfg_plan = await resolve_llm_for_block(
+        "atelier",
+        "strategic_plan",
+        default_model=model,
+        default_system=_ATELIER_STRATEGIC_PLAN_SYSTEM,
+        default_max_tokens=4096,
+        default_temperature=0.25,
+    )
     user_base = (
         "Pitch initial :\n"
         f"{pitch.strip()}\n\n"
@@ -766,11 +802,11 @@ async def generate_dossier_skeleton(
     plan: dict[str, Any] = {}
     try:
         plan = await llm_json_call(
-            model=model,
-            system=_ATELIER_STRATEGIC_PLAN_SYSTEM,
+            model=cfg_plan.model,
+            system=cfg_plan.system_prompt,
             messages=[{"role": "user", "content": user_base}],
-            max_tokens=4096,
-            temperature=0.25,
+            max_tokens=cfg_plan.max_tokens,
+            temperature=cfg_plan.temperature,
             json_mode=True,
             allow_json_repair=True,
             repair_model=settings.FILTER_MODEL,
@@ -792,12 +828,20 @@ async def generate_dossier_skeleton(
         "Respecte les minimums indiqués dans le prompt système (nombre de sections, d'items, pièges). "
         "Canvas et flux : rester concis pour laisser de la place à la checklist."
     )
+    cfg_fill = await resolve_llm_for_block(
+        "atelier",
+        "dossier_fill",
+        default_model=model,
+        default_system=_ATELIER_DOSSIER_FILL_SYSTEM,
+        default_max_tokens=16384,
+        default_temperature=0.2,
+    )
     raw = await llm_json_call(
-        model=model,
-        system=_ATELIER_DOSSIER_FILL_SYSTEM,
+        model=cfg_fill.model,
+        system=cfg_fill.system_prompt,
         messages=[{"role": "user", "content": user_fill}],
-        max_tokens=16384,
-        temperature=0.2,
+        max_tokens=cfg_fill.max_tokens,
+        temperature=cfg_fill.temperature,
         json_mode=True,
         allow_json_repair=True,
         repair_model=settings.FILTER_MODEL,
@@ -839,14 +883,18 @@ async def run_segment_search(segment: SegmentBrief) -> SegmentResult:
             relevance_threshold=None,
         )
     try:
-        guard_result: GuardResult = await run_guard(segment.query)
+        guard_result: GuardResult = await run_guard(
+            segment.query, None, agent_id="atelier", block_id="segment_guard"
+        )
         plog(
             "atelier_segment_guard",
             key=segment.key,
             intent=guard_result.intent,
             entities=guard_result.entities.model_dump(),
         )
-        plan = await run_orchestrator(guard_result, mode=mode)
+        plan = await run_orchestrator(
+            guard_result, mode=mode, config_agent_id="atelier", config_block_id="segment_orchestrator"
+        )
         patch_sirene_calls_from_guard_entities(plan, guard_result.entities)
         results = await execute_plan(plan, mode=mode)
         n = len(results.results)
@@ -858,6 +906,8 @@ async def run_segment_search(segment: SegmentBrief) -> SegmentResult:
                 user_query=segment.query,
                 guard_result=guard_result,
                 mode=mode,
+                agent_id="atelier",
+                block_id="segment_relevance",
             )
             plog(
                 "atelier_segment_relevance",
@@ -1051,6 +1101,32 @@ Français, factuel, pas de markdown hors JSON.
 """
 
 
+async def regenerate_atelier_checklist_llm(
+    pitch: str,
+    answers: str,
+    brief: ProjectBrief,
+    synthesis: AgentSynthesis,
+    segment_labels: list[str],
+) -> AtelierChecklist | None:
+    """Régénère la checklist : pipeline multi-étapes (voir `atelier_checklist_pipeline`), repli monolithique."""
+    from services.atelier_coerce import coerce_checklist_from_llm_dict
+
+    if is_atelier_fake_mode_enabled():
+        raw = _fake_dossier_payload()
+        cl = raw.get("synthesis", {}).get("checklist")
+        if isinstance(cl, dict):
+            return coerce_checklist_from_llm_dict({"checklist": cl})
+        return None
+
+    return await generate_checklist_multi_stage(
+        pitch=pitch,
+        answers=answers,
+        brief=brief,
+        synthesis=synthesis,
+        segment_labels=segment_labels,
+    )
+
+
 async def regenerate_atelier_canvas_llm(
     pitch: str,
     answers: str,
@@ -1069,12 +1145,20 @@ async def regenerate_atelier_canvas_llm(
         "brief": brief.model_dump(),
         "canvas_actuel": current_canvas.model_dump(),
     }
+    cfg_c = await resolve_llm_for_block(
+        "atelier",
+        "canvas_regen",
+        default_model=model,
+        default_system=_ATELIER_CANVAS_REFRESH_SYSTEM,
+        default_max_tokens=4096,
+        default_temperature=0.2,
+    )
     raw = await llm_json_call(
-        model=model,
-        system=_ATELIER_CANVAS_REFRESH_SYSTEM,
+        model=cfg_c.model,
+        system=cfg_c.system_prompt,
         messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
-        max_tokens=4096,
-        temperature=0.2,
+        max_tokens=cfg_c.max_tokens,
+        temperature=cfg_c.temperature,
         json_mode=True,
         allow_json_repair=True,
         repair_model=settings.FILTER_MODEL,
@@ -1106,12 +1190,20 @@ async def regenerate_atelier_flows_llm(
         "cles_segments_autorisees": keys,
         "flows_actuels": current_flows.model_dump(),
     }
+    cfg_f = await resolve_llm_for_block(
+        "atelier",
+        "flows_regen",
+        default_model=model,
+        default_system=_ATELIER_FLOWS_REFRESH_SYSTEM,
+        default_max_tokens=4096,
+        default_temperature=0.2,
+    )
     raw = await llm_json_call(
-        model=model,
-        system=_ATELIER_FLOWS_REFRESH_SYSTEM,
+        model=cfg_f.model,
+        system=cfg_f.system_prompt,
         messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
-        max_tokens=4096,
-        temperature=0.2,
+        max_tokens=cfg_f.max_tokens,
+        temperature=cfg_f.temperature,
         json_mode=True,
         allow_json_repair=True,
         repair_model=settings.FILTER_MODEL,
@@ -1131,6 +1223,7 @@ __all__ = [
     "build_fake_segment_results",
     "is_atelier_fake_mode_enabled",
     "regenerate_atelier_canvas_llm",
+    "regenerate_atelier_checklist_llm",
     "regenerate_atelier_flows_llm",
     "run_segment_search",
     "run_segment_searches",

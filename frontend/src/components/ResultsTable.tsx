@@ -185,9 +185,10 @@ const META_COLS_HIDE = new Set([
   "_dedup_key",
 ]);
 
-/** Ordre et champs du tableau prospection (aligné export). */
+/** Ordre et champs du tableau prospection (aligné export : inclut signaux). */
 const PROSPECTION_TABLE_COLS: string[] = [
   "nom",
+  "signaux",
   "telephone",
   "site_web",
   "adresse",
@@ -198,6 +199,7 @@ const PROSPECTION_TABLE_COLS: string[] = [
 
 const PROSPECTION_HEADER: Record<string, string> = {
   nom: "Dénomination",
+  signaux: "Signaux",
   telephone: "Téléphone",
   site_web: "Site Web",
   adresse: "Adresse",

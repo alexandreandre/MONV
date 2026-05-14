@@ -22,6 +22,7 @@ import httpx
 
 from config import settings
 from models.schemas import CompanyResult
+from utils.connector_cache import connector_cache_get, connector_cache_set
 from utils.pipeline_log import plog
 
 PLACES_URL = "https://places.googleapis.com/v1/places:searchText"
@@ -267,6 +268,11 @@ async def search_google_places(
         plog("google_places_skip", reason="no_api_key")
         return []
 
+    cache_params = {"query": query, "location": location or "", "max_results": max_results}
+    cached = connector_cache_get("google_places_search", cache_params)
+    if cached is not None:
+        return list(cached)
+
     text_query = f"{query} {location}".strip() if location else query
 
     headers = {
@@ -346,4 +352,5 @@ async def search_google_places(
         total=len(results),
         enriched_with_siren=sum(1 for r in results if r.siren),
     )
+    connector_cache_set("google_places_search", cache_params, results)
     return results

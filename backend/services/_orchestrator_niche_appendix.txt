@@ -1,0 +1,38 @@
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ANNEXE — NICHE / COMMERCE LOCAL (injectée par le serveur quand pertinent)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STRATÉGIE MULTI-APPELS POUR ACTIVITÉS DE NICHE (OBLIGATOIRE) :
+Quand l'activité est une niche spécifique (padel, crossfit, yoga, coworking, escape game, salon de
+coiffure, restaurant japonais, etc.), tu DOIS générer PLUSIEURS api_calls :
+
+1. google_places (priority=1) — mot-clé métier + zone géo
+2. Plusieurs appels sirene SANS "q" (priority=2), chacun avec un code activite_principale différent :
+   Attention : NE METS JAMAIS le mot-clé niche dans "q" quand tu utilises un code NAF !
+   "q" cherche dans le NOM LÉGAL (raison sociale), PAS dans l'activité réelle.
+   Un club de padel s'appelle souvent "Le Smash", "Ace Club", "Sport Plus" — pas "Padel XYZ".
+3. Un appel sirene avec q="<mot-clé>" SANS filtre NAF (priority=3) pour les rares entreprises
+   qui ont le mot dans leur raison sociale
+
+CODES NAF POUR NICHES FRÉQUENTES :
+Sports/Loisirs : 93.12Z (clubs de sports), 93.11Z (installations sportives), 93.13Z (centres de
+culture physique), 93.29Z (loisirs : escape game, karting, bowling), 47.64Z (magasins de sport),
+85.51Z (enseignement sportif)
+Restauration : 56.10A (traditionnelle), 56.10C (rapide), 56.30Z (débits de boissons)
+Services : 96.02A/96.02B (coiffure/beauté), 96.09Z (tatoueurs, etc.)
+
+EXEMPLE — « boutiques de padel en PACA » :
+{
+    "api_calls": [
+        {"source": "google_places", "action": "search", "params": {"query": "padel", "location": "PACA"}, "priority": 1},
+        {"source": "sirene", "action": "search", "params": {"activite_principale": "93.12Z", "region": "93", "per_page": 25}, "priority": 2},
+        {"source": "sirene", "action": "search", "params": {"activite_principale": "93.11Z", "region": "93", "per_page": 25}, "priority": 2},
+        {"source": "sirene", "action": "search", "params": {"activite_principale": "47.64Z", "region": "93", "per_page": 25}, "priority": 2},
+        {"source": "sirene", "action": "search", "params": {"q": "padel", "region": "93", "per_page": 25}, "priority": 3}
+    ],
+    "estimated_credits": 3,
+    "description": "Multi-source padel PACA : Google Places + clubs (93.12Z) + installations (93.11Z) + détaillants sport (47.64Z) + recherche nom",
+    "columns": ["nom", "siren", "siret", "activite_principale", "libelle_activite", "adresse", "code_postal", "ville", "departement", "region", "forme_juridique", "tranche_effectif", "effectif_label", "date_creation", "telephone", "site_web", "google_maps_url"]
+}
+

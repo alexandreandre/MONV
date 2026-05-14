@@ -18,6 +18,7 @@ from services.modes import normalize_mode
 from utils.llm import llm_json_call
 from utils.text_sanitize import strip_emojis
 from config import settings
+from services.agent_config import resolve_llm_for_block
 
 QCM_SYSTEM_PROMPT = """\
 Tu es l'assistant conversationnel de MONV, un outil de recherche d'entreprises en France.
@@ -378,6 +379,8 @@ def _fallback_sector_confirmation_question(guard_result: GuardResult) -> QcmQues
 
 async def _generate_sector_confirmation_question(
     guard_result: GuardResult,
+    *,
+    agent_id: str = "prospection",
 ) -> QcmQuestion:
     base_m = list(guard_result.missing_criteria or [])
     skip_one = len(base_m) == 1 and base_m[0] == "secteur_confirmation"
@@ -393,12 +396,21 @@ async def _generate_sector_confirmation_question(
     )
     user_block = f"Terme ambigu à clarifier : « {ambiguous_term} »\n\n{ctx}"
     try:
+        cfg = await resolve_llm_for_block(
+            agent_id,
+            "sector_confirm",
+            default_model=settings.GUARD_MODEL,
+            default_system=SECTOR_CONFIRMATION_SYSTEM,
+            default_max_tokens=512,
+            default_temperature=0.2,
+        )
         raw = await llm_json_call(
-            model=settings.GUARD_MODEL,
-            system=SECTOR_CONFIRMATION_SYSTEM,
+            model=cfg.model,
+            system=cfg.system_prompt,
             messages=[{"role": "user", "content": user_block}],
-            max_tokens=512,
-            temperature=0.2,
+            max_tokens=cfg.max_tokens,
+            temperature=cfg.temperature,
+            usage_stage="conversationalist_sector_confirm",
         )
         qtext = str(raw.get("question", "")).strip()
         opts_raw = raw.get("options", [])
@@ -538,13 +550,17 @@ async def generate_qcm(
     guard_result: GuardResult,
     conversation_history: list[dict] | None = None,
     mode: str = "prospection",
+    *,
+    agent_id: str | None = None,
 ) -> tuple[str, list[QcmQuestion]]:
     """Génère un QCM structuré pour les critères manquants."""
+
+    aid = (agent_id or str(normalize_mode(mode))).strip()
 
     raw_missing = list(guard_result.missing_criteria or [])
     sector_q: QcmQuestion | None = None
     if "secteur_confirmation" in raw_missing:
-        sector_q = await _generate_sector_confirmation_question(guard_result)
+        sector_q = await _generate_sector_confirmation_question(guard_result, agent_id=aid)
 
     # Qualification rachat : libellés figés + zone en fallback — inutile d'appeler le QCM générique.
     if normalize_mode(mode) == "rachat" and "budget_acquisition" in raw_missing:
@@ -581,12 +597,21 @@ async def generate_qcm(
     messages.append({"role": "user", "content": context})
 
     try:
+        cfg = await resolve_llm_for_block(
+            aid,
+            "qcm",
+            default_model=settings.GUARD_MODEL,
+            default_system=QCM_SYSTEM_PROMPT,
+            default_max_tokens=1024,
+            default_temperature=0.3,
+        )
         raw = await llm_json_call(
-            model=settings.GUARD_MODEL,
-            system=QCM_SYSTEM_PROMPT,
+            model=cfg.model,
+            system=cfg.system_prompt,
             messages=messages,
-            max_tokens=1024,
-            temperature=0.3,
+            max_tokens=cfg.max_tokens,
+            temperature=cfg.temperature,
+            usage_stage="conversationalist_qcm",
         )
         intro, questions = _parse_questions(raw)
         if sector_q:

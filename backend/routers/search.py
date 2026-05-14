@@ -3,24 +3,96 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from supabase import Client
 import json
+from datetime import datetime, timezone
 
 from config import settings
 from models.db import (
     get_supabase,
+    conversation_get,
     search_history_get,
     search_history_list,
     search_history_update,
     user_update_credits,
 )
-from models.entities import User
-from models.schemas import SearchResults, CompanyResult, ExportRequest, ExportResponse
+from models.entities import User, Message
+from models.schemas import (
+    SearchResults,
+    CompanyResult,
+    ExportRequest,
+    ExportResponse,
+    SearchEstimateRequest,
+    SearchEstimateResponse,
+)
 from services.export import generate_excel, generate_csv
-from services.modes import normalize_mode
+from services.modes import PROSPECTION_RESULT_COLUMNS, Mode, normalize_mode
 from services.digital_pitch_enrichment import DIGITAL_PITCH_RESULT_COLUMNS
+from services.search_estimate import build_estimate_context, estimate_search_execution
+from services.sliding_rate_limit import check_sliding_window
 from routers.auth import get_current_user
 from utils.credits_policy import user_has_unlimited_credits
 
 router = APIRouter(prefix="/api/search", tags=["search"])
+
+
+@router.post("/estimate", response_model=SearchEstimateResponse)
+async def search_estimate(
+    req: SearchEstimateRequest,
+    user: User = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+):
+    """
+    Estime crédits et appels API (plan) sans lancer SIRENE / Pappers / Places.
+    """
+    if settings.SEARCH_ESTIMATE_RATE_LIMIT_ENABLED:
+        if not check_sliding_window(
+            f"search_est:{user.id}",
+            settings.SEARCH_ESTIMATE_RATE_LIMIT_MAX_REQUESTS,
+            float(settings.SEARCH_ESTIMATE_RATE_LIMIT_WINDOW_S),
+        ):
+            raise HTTPException(
+                status_code=429,
+                detail="Trop de demandes d'estimation en peu de temps. Réessaie dans une minute.",
+            )
+
+    requested_mode: Mode = normalize_mode(req.mode)
+
+    if req.conversation_id:
+        conv = await conversation_get(supabase, req.conversation_id, user.id)
+        if not conv:
+            raise HTTPException(404, "Conversation non trouvée")
+        active_mode: Mode = normalize_mode(conv.mode) if conv.mode else requested_mode
+        history, recent_db, recent_for_gates, skip_filter_llm = await build_estimate_context(
+            supabase,
+            conversation_id=req.conversation_id,
+            pending_user_message=req.message,
+        )
+    else:
+        active_mode = requested_mode
+        history = [{"role": "user", "content": req.message}]
+        recent_db = []
+        recent_for_gates = [
+            Message(
+                id="estimate-pending",
+                conversation_id="00000000-0000-0000-0000-000000000001",
+                role="user",
+                content=req.message,
+                message_type="text",
+                metadata_json=None,
+                created_at=datetime.now(timezone.utc),
+            )
+        ]
+        skip_filter_llm = False
+
+    raw = await estimate_search_execution(
+        user_message=req.message,
+        mode=active_mode,
+        history=history,
+        recent_db=recent_db,
+        recent_for_gates=recent_for_gates,
+        agent_id=str(active_mode),
+        skip_filter_llm=skip_filter_llm,
+    )
+    return SearchEstimateResponse.model_validate(raw)
 
 
 @router.get("/history")
@@ -142,15 +214,7 @@ def _infer_columns(
             for r in results
         ):
             return list(DIGITAL_PITCH_RESULT_COLUMNS)
-        return [
-            "nom",
-            "telephone",
-            "site_web",
-            "adresse",
-            "code_postal",
-            "ville",
-            "google_maps_url",
-        ]
+        return list(PROSPECTION_RESULT_COLUMNS)
     base = [
         "nom",
         "siren",

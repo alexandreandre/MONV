@@ -11,6 +11,7 @@ Pipeline en 4 couches + conversation :
 """
 
 import json
+import time
 import traceback
 from datetime import datetime, timezone
 
@@ -47,12 +48,18 @@ from models.schemas import (
     ProjectFolderOut,
     ProjectFolderPatch,
     SearchResults,
+    GUARD_INTENTS_STATIC_REPLY,
 )
 from services.filter import FilterResult, run_filter
 from services.guard import run_guard
 from services.conversationalist import generate_qcm
-from services.orchestrator import run_orchestrator
+from services.orchestrator import maybe_clamp_prospection_after_plan_patches, run_orchestrator
 from services.api_engine import execute_plan
+from services.clarification_gate import (
+    should_skip_orchestrator_clarification_qcm,
+    should_suppress_orchestrator_clarification_after_guard_flow,
+    should_unlock_guard_after_qcm,
+)
 from services.relevance import filter_results_by_relevance
 from services.benchmark_stats import enrich_with_benchmark_positions
 from services.modes import (
@@ -64,8 +71,12 @@ from services.sirene import patch_sirene_calls_from_guard_entities
 from routers.auth import get_current_user
 from utils.credits_policy import credits_for_api, user_has_unlimited_credits
 from utils.pipeline_log import plog
+from utils.pipeline_timing import record_chat_pipeline_sample
+from utils.llm import begin_llm_usage_session, snapshot_llm_usage_for_pipeline
 from config import settings
+from services.sliding_rate_limit import check_sliding_window
 from services.digital_pitch_enrichment import (
+    DIGITAL_PITCH_ENRICH_MAX_ROWS,
     DIGITAL_PITCH_RESULT_COLUMNS,
     enrich_results_for_digital_service_pitch,
     prioritize_google_maps_discoveries,
@@ -75,6 +86,36 @@ from services.plan_google_places import (
     augment_google_places_boutique_and_club_queries,
     augment_google_places_regional_variant,
 )
+from services.chat_async_jobs import get_job, launch_chat_job_task, register_job
+
+# Historique Guard : fenêtre DB large puis compactage (préserve dernier QCM + réponses).
+_GUARD_LLM_FETCH = 28
+_GUARD_LLM_MAX_MESSAGES = 16
+
+
+def _compact_messages_for_guard_llm(messages: list[Message]) -> list[Message]:
+    """Réduit les tours anciens en conservant le bloc à partir du dernier message QCM."""
+    if len(messages) <= _GUARD_LLM_MAX_MESSAGES:
+        return messages
+    last_qcm_i: int | None = None
+    for i in range(len(messages) - 1, -1, -1):
+        m = messages[i]
+        if m.role == "assistant" and m.message_type == "qcm":
+            last_qcm_i = i
+            break
+    if last_qcm_i is None:
+        return messages[-_GUARD_LLM_MAX_MESSAGES:]
+    tail = messages[last_qcm_i:]
+    if len(tail) >= _GUARD_LLM_MAX_MESSAGES:
+        return tail[-_GUARD_LLM_MAX_MESSAGES:]
+    need = _GUARD_LLM_MAX_MESSAGES - len(tail)
+    start = max(0, last_qcm_i - need)
+    prefix = messages[start:last_qcm_i]
+    out = prefix + tail
+    if len(out) > _GUARD_LLM_MAX_MESSAGES:
+        return out[-_GUARD_LLM_MAX_MESSAGES:]
+    return out
+
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -124,8 +165,74 @@ async def send_message(
     user: User = Depends(get_current_user),
     supabase: Client = Depends(get_supabase),
 ):
-  try:
+    try:
+        if settings.CHAT_SEND_RATE_LIMIT_ENABLED:
+            if not check_sliding_window(
+                str(user.id),
+                settings.CHAT_SEND_RATE_LIMIT_MAX_REQUESTS,
+                float(settings.CHAT_SEND_RATE_LIMIT_WINDOW_S),
+            ):
+                raise HTTPException(
+                    status_code=429,
+                    detail="Trop de messages envoyés en peu de temps. Réessaie dans une minute.",
+                )
+        return await _process_chat_send_core(req, user, supabase)
+    except HTTPException:
+        raise
+    except Exception:
+        plog("send_message_crash", error=traceback.format_exc()[-2000:])
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Erreur interne du serveur. Consulte les logs pour plus de détails."},
+        )
+
+
+@router.post("/jobs")
+async def create_chat_async_job(
+    req: ChatRequest,
+    user: User = Depends(get_current_user),
+):
+    """Lance le traitement ``/send`` en arrière-plan ; interroger ``GET /api/chat/jobs/{id}``."""
+    if settings.CHAT_SEND_RATE_LIMIT_ENABLED:
+        if not check_sliding_window(
+            str(user.id),
+            settings.CHAT_SEND_RATE_LIMIT_MAX_REQUESTS,
+            float(settings.CHAT_SEND_RATE_LIMIT_WINDOW_S),
+        ):
+            raise HTTPException(
+                status_code=429,
+                detail="Trop de messages envoyés en peu de temps. Réessaie dans une minute.",
+            )
+    job_id = gen_uuid()
+    register_job(job_id, user_id=user.id)
+    launch_chat_job_task(job_id, req, user.id)
+    return {"job_id": job_id, "status": "accepted"}
+
+
+@router.get("/jobs/{job_id}")
+async def get_chat_async_job(
+    job_id: str,
+    user: User = Depends(get_current_user),
+):
+    row = get_job(job_id)
+    if not row or row.get("user_id") != user.id:
+        raise HTTPException(404, "Job introuvable")
+    out = {k: v for k, v in row.items() if k != "user_id"}
+    out.pop("trace_tail", None)
+    if out.get("status") != "completed":
+        out.pop("response", None)
+    return out
+
+
+async def _process_chat_send_core(
+    req: ChatRequest,
+    user: User,
+    supabase: Client,
+) -> ChatResponse:
     now = datetime.now(timezone.utc)
+    stages_ms: dict[str, float | None] = {}
+    t0 = time.perf_counter()
+    t_stage = t0
 
     requested_mode: Mode = normalize_mode(req.mode)
 
@@ -167,15 +274,20 @@ async def send_message(
 
     response_messages: list[Message] = []
 
+    begin_llm_usage_session()
+
     # ── Couche 0 — Filtre scope (modèle cheap) ─────────────────────
     # Skip si la conversation a déjà un QCM (réponse de qualification rachat / sous-traitant)
-    _recent = await messages_recent_for_llm(supabase, conv.id, 10)
-    _skip_filter = any(m.message_type == "qcm" for m in _recent)
+    recent_msgs = await messages_recent_for_llm(supabase, conv.id, 24)
+    _skip_filter = any(m.message_type == "qcm" for m in recent_msgs)
 
     if _skip_filter:
         filter_result = FilterResult(in_scope=True)
     else:
-        filter_result = await run_filter(req.message)
+        filter_result = await run_filter(req.message, agent_id=str(active_mode))
+
+    stages_ms["filter_ms"] = (time.perf_counter() - t_stage) * 1000
+    t_stage = time.perf_counter()
 
     if not filter_result.in_scope:
         msg = Message(
@@ -189,11 +301,17 @@ async def send_message(
         )
         await message_insert(supabase, msg)
         response_messages.append(msg)
+        stages_ms["total_ms"] = (time.perf_counter() - t0) * 1000
+        stages_ms.update(snapshot_llm_usage_for_pipeline())
+        record_chat_pipeline_sample(str(active_mode), stages_ms)
         return _build_response(conv.id, response_messages)
 
     # ── Couche 1 — Guard extraction (modèle moyen) ─────────────────
     history = await _get_conversation_history(supabase, conv.id)
-    guard_result = await run_guard(req.message, history)
+    guard_result = await run_guard(req.message, history, agent_id=str(active_mode))
+
+    stages_ms["guard_ms"] = (time.perf_counter() - t_stage) * 1000
+    t_stage = time.perf_counter()
 
     plog(
         "guard",
@@ -206,7 +324,7 @@ async def send_message(
         context_hints=guard_result.context_hints,
     )
 
-    if guard_result.intent in ("hors_scope", "salutation", "meta_question"):
+    if guard_result.intent in GUARD_INTENTS_STATIC_REPLY:
         if guard_result.intent == "salutation":
             reply = GREETING_MESSAGE
         elif guard_result.intent == "meta_question":
@@ -230,19 +348,33 @@ async def send_message(
         )
         await message_insert(supabase, msg)
         response_messages.append(msg)
+        stages_ms["total_ms"] = (time.perf_counter() - t0) * 1000
+        stages_ms.update(snapshot_llm_usage_for_pipeline())
+        record_chat_pipeline_sample(str(active_mode), stages_ms)
         return _build_response(conv.id, response_messages)
 
     # ── Garde-fou : secteur + zone présents → on lance la recherche ─
     e = guard_result.entities
     has_secteur = bool(e.secteur or e.code_naf or e.mots_cles)
     has_zone = bool(e.localisation or e.departement or e.region)
+
+    # Réponse juste après un QCM + entités suffisantes : lever une clarification Guard résiduelle
+    # (évite enchaînement QCM Guard puis de nouveau QCM / blocage).
+    if should_unlock_guard_after_qcm(guard_result, recent_msgs, mode=active_mode):
+        if guard_result.clarification_needed or guard_result.missing_criteria:
+            plog(
+                "guard_override_post_qcm",
+                reason="message suite a QCM + secteur/zone OK, lever clarification Guard",
+            )
+        guard_result.clarification_needed = False
+        guard_result.missing_criteria = []
+
     # Modes sous-traitant / rachat : QCM de qualification à la 1re interaction
     # seulement (pas de boucle si un message qcm existe déjà).
     if active_mode in ("sous_traitant", "rachat") and not guard_result.clarification_needed:
-        recent_messages = await messages_recent_for_llm(supabase, conv.id, 20)
         has_qcm_in_history = any(
             m.message_type == "qcm"
-            for m in recent_messages
+            for m in recent_msgs
         )
         if not has_qcm_in_history:
             base_missing: list[str] = []
@@ -283,7 +415,10 @@ async def send_message(
 
     # ── Couche 1b — QCM de clarification (modèle moyen) ────────────
     if guard_result.clarification_needed:
-        intro, questions = await generate_qcm(guard_result, history, mode=active_mode)
+        t_qcm = time.perf_counter()
+        intro, questions = await generate_qcm(
+            guard_result, history, mode=active_mode, agent_id=str(active_mode)
+        )
         intro_clean = strip_emojis(intro)
         qcm_payload = {
             "intro": intro_clean,
@@ -300,10 +435,38 @@ async def send_message(
         )
         await message_insert(supabase, msg)
         response_messages.append(msg)
+        stages_ms["guard_qcm_ms"] = (time.perf_counter() - t_qcm) * 1000
+        stages_ms["total_ms"] = (time.perf_counter() - t0) * 1000
+        stages_ms.update(snapshot_llm_usage_for_pipeline())
+        record_chat_pipeline_sample(str(active_mode), stages_ms)
         return _build_response(conv.id, response_messages)
 
     # ── Couche 2 — Orchestrateur (meilleur modèle) ─────────────────
     plan = await run_orchestrator(guard_result, mode=active_mode)
+
+    stages_ms["orchestrator_ms"] = (time.perf_counter() - t_stage) * 1000
+    t_stage = time.perf_counter()
+
+    sk = should_skip_orchestrator_clarification_qcm(
+        plan_clarification_needed=plan.clarification_needed,
+        guard_result=guard_result,
+        recent_messages=recent_msgs,
+        mode=active_mode,
+    )
+    sup = should_suppress_orchestrator_clarification_after_guard_flow(
+        plan_clarification_needed=plan.clarification_needed,
+        guard_result=guard_result,
+        recent_messages=recent_msgs,
+        mode=active_mode,
+    )
+    if sk or sup:
+        plog(
+            "orchestrator_override_skip_clarification",
+            reason="second_qcm_evite",
+            skip_classique=sk,
+            suppress_guard_clear=sup,
+        )
+        plan = plan.model_copy(update={"clarification_needed": False, "clarification_question": None})
 
     plog(
         "orchestrator_plan",
@@ -317,7 +480,9 @@ async def send_message(
     )
 
     if plan.clarification_needed:
-        intro, questions = await generate_qcm(guard_result, history, mode=active_mode)
+        intro, questions = await generate_qcm(
+            guard_result, history, mode=active_mode, agent_id=str(active_mode)
+        )
         intro_clean = strip_emojis(plan.clarification_question or intro)
         qcm_payload = {
             "intro": intro_clean,
@@ -334,6 +499,10 @@ async def send_message(
         )
         await message_insert(supabase, msg)
         response_messages.append(msg)
+        stages_ms["orchestrator_qcm_ms"] = (time.perf_counter() - t_stage) * 1000
+        stages_ms["total_ms"] = (time.perf_counter() - t0) * 1000
+        stages_ms.update(snapshot_llm_usage_for_pipeline())
+        record_chat_pipeline_sample(str(active_mode), stages_ms)
         return _build_response(conv.id, response_messages)
 
     # ── Couche 3 — Exécution API (déterministe) ────────────────────
@@ -352,15 +521,22 @@ async def send_message(
     augment_google_places_regional_variant(plan, guard_result.entities)
     augment_google_places_boutique_and_club_queries(plan, req.message)
     patch_sirene_calls_from_guard_entities(plan, guard_result.entities)
+    maybe_clamp_prospection_after_plan_patches(plan, active_mode, guard_result)
+    t_stage = time.perf_counter()
     search_results = await execute_plan(plan, mode=active_mode)
+    stages_ms["execute_plan_wall_ms"] = (time.perf_counter() - t_stage) * 1000
+    if search_results.timing_ms:
+        stages_ms.update(search_results.timing_ms)
 
     relevance_meta: dict = {}
+    t_rel = time.perf_counter()
     if search_results.total > 0:
         filtered_rows, rel_stats = await filter_results_by_relevance(
             search_results.results,
             user_query=req.message,
             guard_result=guard_result,
             mode=active_mode,
+            agent_id=str(active_mode),
         )
         search_results.results = filtered_rows
         search_results.total = len(filtered_rows)
@@ -378,6 +554,7 @@ async def send_message(
             )
             if k in rel_stats
         }
+    stages_ms["relevance_ms"] = (time.perf_counter() - t_rel) * 1000
 
     # ── Enrichissement benchmark (positionnement relatif au panel) ──
     panel_stats: dict = {}
@@ -394,6 +571,7 @@ async def send_message(
             if c not in search_results.columns:
                 search_results.columns.append(c)
 
+    t_pitch = time.perf_counter()
     pitch_enriched = False
     if (
         active_mode == "prospection"
@@ -408,9 +586,12 @@ async def send_message(
             user_query=req.message,
             guard_result=guard_result,
             mode=active_mode,
+            agent_id=str(active_mode),
         )
         if pitch_enriched:
             search_results.columns = list(DIGITAL_PITCH_RESULT_COLUMNS)
+
+    stages_ms["digital_pitch_ms"] = (time.perf_counter() - t_pitch) * 1000
 
     plog(
         "execute_plan_done",
@@ -438,6 +619,9 @@ async def send_message(
         )
         await message_insert(supabase, result_msg)
         response_messages.append(result_msg)
+        stages_ms["total_ms"] = (time.perf_counter() - t0) * 1000
+        stages_ms.update(snapshot_llm_usage_for_pipeline())
+        record_chat_pipeline_sample(str(active_mode), stages_ms)
         return _build_response(conv.id, response_messages)
 
     # ── Sauvegarder l'historique de recherche (background) ─────────
@@ -512,7 +696,7 @@ async def send_message(
             "fiches publiques, sans crawl réel) pour cadrer ton approche commerciale."
         )
     if pitch_enriched:
-        preview_cap = 20
+        preview_cap = DIGITAL_PITCH_ENRICH_MAX_ROWS
     elif active_mode == "benchmark":
         preview_cap = 50
     else:
@@ -591,16 +775,11 @@ async def send_message(
     except Exception:
         plog("search_history_insert_error", error=traceback.format_exc()[-1500:])
 
-    return _build_response(conv.id, response_messages)
+    stages_ms["total_ms"] = (time.perf_counter() - t0) * 1000
+    stages_ms.update(snapshot_llm_usage_for_pipeline())
+    record_chat_pipeline_sample(str(active_mode), stages_ms)
 
-  except HTTPException:
-    raise
-  except Exception:
-    plog("send_message_crash", error=traceback.format_exc()[-2000:])
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Erreur interne du serveur. Consulte les logs pour plus de détails."},
-    )
+    return _build_response(conv.id, response_messages)
 
 
 def _build_response(conv_id: str, messages: list[Message]) -> ChatResponse:
@@ -801,8 +980,9 @@ async def patch_conversation_folder(
 
 
 async def _get_conversation_history(supabase: Client, conv_id: str) -> list[dict]:
-    """Derniers messages pour le contexte LLM."""
-    messages = await messages_recent_for_llm(supabase, conv_id, 10)
+    """Derniers messages pour le contexte LLM du Guard (compactés si fil long)."""
+    messages = await messages_recent_for_llm(supabase, conv_id, _GUARD_LLM_FETCH)
+    messages = _compact_messages_for_guard_llm(messages)
 
     history = []
     for m in messages:

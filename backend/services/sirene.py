@@ -14,6 +14,7 @@ import traceback
 
 from models.schemas import CompanyResult, ExecutionPlan, GuardEntity
 from config import settings
+from utils.connector_cache import connector_cache_get, connector_cache_set
 from utils.pipeline_log import plog
 
 BASE_URL = settings.SIRENE_BASE_URL
@@ -601,6 +602,12 @@ async def search_sirene(params: dict, max_pages: int = 20) -> list[CompanyResult
     if "activite_principale_filter" in params:
         naf_filter = params.pop("activite_principale_filter")
 
+    cache_key = dict(params)
+    cache_key["_max_pages"] = max_pages
+    cached = connector_cache_get("sirene_search", cache_key)
+    if cached is not None:
+        return list(cached)
+
     plog(
         "sirene_search_start",
         params_after_normalize=params,
@@ -701,6 +708,7 @@ async def search_sirene(params: dict, max_pages: int = 20) -> list[CompanyResult
             await asyncio.sleep(0.15)
 
     plog("sirene_search_done", total_kept=len(results))
+    connector_cache_set("sirene_search", cache_key, results)
     return results
 
 

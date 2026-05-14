@@ -2,10 +2,16 @@
 Post-filtrage de pertinence des lignes de résultats (couche LLM).
 
 Utilisé après `execute_plan` : compacte chaque fiche, envoie des lots au modèle
-qui attribue un score de pertinence 0-10, puis on coupe au seuil.
+qui attribue un score de pertinence 0-10, puis on coupe au seuil **calculé**
+(mots-clés / géo / volume, mode, part Google Maps ; voir ``_compute_threshold``).
 Les lignes jamais notées par le LLM (id manquant, lot incomplet) reçoivent 0 : \
 elles ne passent pas le seuil. Si toutes les lignes sont exclues, repli sur la liste brute.
+
+Taille des lots : 50 lignes par appel LLM (réduit le nombre d'appels vs 40 historique
+pour un panel max ~150 lignes ; qualité : même barème 0–10, légèrement plus de fiches
+par prompt — surveiller les réponses JSON incomplètes via logs ``relevance_batch_*``).
 """
+
 
 from __future__ import annotations
 
@@ -16,13 +22,17 @@ from typing import Any, Literal
 from config import settings
 from models.schemas import CompanyResult, GuardEntity, GuardResult
 from services.modes import MODE_LABELS, Mode
-from utils.llm import llm_json_call
+from utils.observability_counters import increment_counter
 from utils.pipeline_log import plog
 
-_BATCH_SIZE = 40
+_BATCH_SIZE = 50
 _MAX_STR = 180
 _BASE_THRESHOLD = 5
 _NICHE_THRESHOLD = 6
+# Prospection « large » (sans niche mots-clés + géo / volume) : garder plus de lignes utiles
+_BASE_THRESHOLD_PROSPECTION = 4
+# Niche + panel dominé par Google Places : faux positifs fréquents → couper plus haut
+_PLACES_NICHE_THRESHOLD = 7
 # Sentinelle : en attente de note LLM (ne doit pas passer le filtre telle quelle)
 _UNSCORED = -1
 
@@ -124,6 +134,12 @@ RÈGLES D'ÉVALUATION :
    pas dépasser 5. Le doute ne profite pas : il vaut mieux écarter un résultat \
    douteux que polluer la liste avec un faux positif.
 
+7. SEUIL D'APPLICATION. Le bloc utilisateur JSON contient **seuil_application** (entier). \
+   Une fiche sera conservée si et seulement si sa note **s** ≥ seuil_application. \
+   Ce seuil est calculé côté serveur (mode d'usage, niche mots-clés/géo/volume, \
+   part des résultats Google Maps) : ne « gonfle » pas artificiellement les scores ; \
+   le barème 0-10 reste absolu, le seuil encode la politique métier.
+
 Réponds UNIQUEMENT en JSON valide :
 {"scores":[{"id":<int>,"s":<int 0-10>}]}
 Exactement une entrée par fiche, mêmes "id"."""
@@ -134,11 +150,25 @@ def _guard_entities_payload(entities: GuardEntity) -> dict[str, Any]:
     return {k: v for k, v in d.items() if v}
 
 
+def _places_heavy_for_niche(results: list[CompanyResult] | None, n_results: int) -> bool:
+    """True si une part significative des lignes porte une URL Maps (découverte locale)."""
+    if not results or n_results < 8:
+        return False
+    with_maps = sum(1 for r in results if (r.google_maps_url or "").strip())
+    if with_maps < 5:
+        return False
+    ratio = with_maps / max(n_results, 1)
+    return with_maps >= 10 or ratio >= 0.28
+
+
 def _compute_threshold(
     guard_result: GuardResult,
     n_results: int,
+    *,
+    mode: Mode = "prospection",
+    results: list[CompanyResult] | None = None,
 ) -> int:
-    """Seuil dynamique : monte pour les requêtes niches / spécifiques."""
+    """Seuil dynamique : mots-clés / géo / volume, puis mode et niche + Places."""
     e = guard_result.entities
     has_keywords = bool(e.mots_cles)
     # Ville, département ou région extraits du guard comptent comme ancrage géo
@@ -147,12 +177,33 @@ def _compute_threshold(
     has_sector = bool(e.secteur)
 
     if has_keywords and has_geo:
-        return _NICHE_THRESHOLD
-    if has_keywords and n_results > 200:
-        return _NICHE_THRESHOLD
-    if has_geo and has_sector and n_results > 300:
-        return _BASE_THRESHOLD + 1
-    return _BASE_THRESHOLD
+        t = _NICHE_THRESHOLD
+    elif has_keywords and n_results > 200:
+        t = _NICHE_THRESHOLD
+    elif has_geo and has_sector and n_results > 300:
+        t = _BASE_THRESHOLD + 1
+    else:
+        t = _BASE_THRESHOLD
+
+    niche_kw = (has_keywords and has_geo) or (has_keywords and n_results > 200)
+
+    # Prospection large B2B : plus tolérant ; structuré géo+secteur+volume sans mots-clés : pas de +1 dur
+    if mode == "prospection":
+        if t == _BASE_THRESHOLD:
+            t = _BASE_THRESHOLD_PROSPECTION
+        elif (
+            t == _BASE_THRESHOLD + 1
+            and has_geo
+            and has_sector
+            and n_results > 300
+            and not has_keywords
+        ):
+            t = _BASE_THRESHOLD
+
+    if niche_kw and _places_heavy_for_niche(results, n_results):
+        t = max(t, _PLACES_NICHE_THRESHOLD)
+
+    return max(0, min(10, t))
 
 
 async def _score_batch(
@@ -160,9 +211,15 @@ async def _score_batch(
     user_query: str,
     guard_result: GuardResult,
     mode: Mode,
+    threshold: int,
     rows_payload: list[dict[str, Any]],
+    agent_id: str,
+    block_id: str,
 ) -> dict[int, int]:
     """Un appel LLM : retourne id -> score (0-10)."""
+    from services.agent_config import resolve_llm_for_block
+    from utils.llm import llm_json_call
+
     mode_label = MODE_LABELS.get(mode, mode)
     user_content = json.dumps(
         {
@@ -170,16 +227,26 @@ async def _score_batch(
             "intent": guard_result.intent,
             "entites": _guard_entities_payload(guard_result.entities),
             "mode": mode_label,
+            "seuil_application": threshold,
             "fiches": rows_payload,
         },
         ensure_ascii=False,
     )
+    cfg = await resolve_llm_for_block(
+        agent_id,
+        block_id,
+        default_model=settings.RELEVANCE_FILTER_MODEL,
+        default_system=RELEVANCE_SYSTEM_PROMPT,
+        default_max_tokens=2048,
+        default_temperature=0.0,
+    )
     raw = await llm_json_call(
-        model=settings.RELEVANCE_FILTER_MODEL,
-        system=RELEVANCE_SYSTEM_PROMPT,
+        model=cfg.model,
+        system=cfg.system_prompt,
         messages=[{"role": "user", "content": user_content}],
-        max_tokens=2048,
-        temperature=0.0,
+        max_tokens=cfg.max_tokens,
+        temperature=cfg.temperature,
+        usage_stage="relevance",
     )
     out: dict[int, int] = {}
     for item in raw.get("scores") or []:
@@ -221,6 +288,8 @@ async def compute_relevance_scores(
     user_query: str,
     guard_result: GuardResult,
     mode: Mode,
+    agent_id: str | None = None,
+    block_id: str = "relevance",
 ) -> tuple[list[int], int, dict[str, Any]]:
     """Calcule une note 0–10 par ligne et le seuil, sans filtrer la liste.
 
@@ -254,14 +323,29 @@ async def compute_relevance_scores(
         stats["relevance_avg_score"] = float(t)
         return [t] * n, t, stats
 
-    threshold = _compute_threshold(guard_result, n)
+    threshold = _compute_threshold(guard_result, n, mode=mode, results=results)
     stats["relevance_threshold"] = threshold
+
+    if (
+        mode == "prospection"
+        and 2 <= n <= 6
+        and not (guard_result.entities.mots_cles or [])
+        and not _places_heavy_for_niche(results, n)
+    ):
+        stats["relevance_skipped"] = True
+        stats["relevance_skip_reason"] = "small_structured_panel"
+        pass_score = max(threshold, 6)
+        stats["relevance_avg_score"] = float(pass_score)
+        return [pass_score] * n, threshold, stats
+
     scores = [_UNSCORED] * n
 
     batches: list[tuple[int, int, list[int]]] = []
     for start in range(0, n, _BATCH_SIZE):
         end = min(start + _BATCH_SIZE, n)
         batches.append((start, end, list(range(start, end))))
+
+    aid = (agent_id or str(mode)).strip()
 
     async def _process_batch(start: int, end: int, batch_indices: list[int]) -> dict[int, int]:
         payload = [row_for_relevance_check(i, results[i]) for i in batch_indices]
@@ -270,7 +354,10 @@ async def compute_relevance_scores(
                 user_query=user_query,
                 guard_result=guard_result,
                 mode=mode,
+                threshold=threshold,
                 rows_payload=payload,
+                agent_id=aid,
+                block_id=block_id,
             )
         except Exception as e:
             plog("relevance_batch_error", batch_start=start, batch_end=end, error=repr(e))
@@ -322,6 +409,8 @@ async def filter_results_by_relevance(
     user_query: str,
     guard_result: GuardResult,
     mode: Mode,
+    agent_id: str | None = None,
+    relevance_block_id: str = "relevance",
 ) -> tuple[list[CompanyResult], dict[str, Any]]:
     """
     Retourne (résultats filtrés, stats pour logs / métadonnées).
@@ -344,6 +433,8 @@ async def filter_results_by_relevance(
         user_query=user_query,
         guard_result=guard_result,
         mode=mode,
+        agent_id=agent_id,
+        block_id=relevance_block_id,
     )
     stats.update(partial)
 
@@ -359,6 +450,7 @@ async def filter_results_by_relevance(
 
     if removed == n and n > 0:
         plog("relevance_fallback_all_rejected", n=n)
+        increment_counter("relevance_fallback_all_rejected", 1)
         filtered = list(results)
         removed = 0
         stats["relevance_fallback_unfiltered"] = True

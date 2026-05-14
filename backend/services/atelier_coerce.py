@@ -22,6 +22,126 @@ from models.schemas import (
 )
 
 
+def _checklist_item_from_obj(obj: object) -> ChecklistItem | None:
+    if isinstance(obj, str):
+        lab = obj.strip()
+        return ChecklistItem(label=lab[:280], guide="") if lab else None
+    if not isinstance(obj, dict):
+        return None
+    lab = str(obj.get("label") or obj.get("texte") or obj.get("action") or "").strip()
+    if not lab:
+        return None
+    guide = str(obj.get("guide") or obj.get("aide") or obj.get("detail") or "").strip()
+    return ChecklistItem(label=lab[:420], guide=guide[:2600])
+
+
+def parse_atelier_checklist_dict(raw_cl: dict[str, Any]) -> AtelierChecklist | None:
+    """Parse une checklist Atelier depuis un dict JSON (clés FR / formes variables)."""
+    sections: list[ChecklistSection] = []
+    raw_sections = (
+        raw_cl.get("sections")
+        or raw_cl.get("etapes")
+        or raw_cl.get("phases")
+        or []
+    )
+    for sec in raw_sections[:40]:
+        if not isinstance(sec, dict):
+            continue
+        title = (
+            str(sec.get("title") or sec.get("nom") or sec.get("phase") or "")
+            .strip()[:220]
+        )
+        if not title:
+            continue
+        subtitle = (
+            str(sec.get("subtitle") or sec.get("sous_titre") or "")
+            .strip()[:200]
+            or None
+        )
+        items: list[ChecklistItem] = []
+        item_list = sec.get("items") or sec.get("actions") or sec.get("taches") or []
+        for it in item_list[:60]:
+            ci = _checklist_item_from_obj(it)
+            if ci:
+                items.append(ci)
+        if items:
+            sections.append(
+                ChecklistSection(title=title, subtitle=subtitle, items=items)
+            )
+    pitfalls: list[ChecklistItem] = []
+    for it in (raw_cl.get("pitfalls") or raw_cl.get("pieges") or [])[:18]:
+        ci = _checklist_item_from_obj(it)
+        if ci:
+            pitfalls.append(ci)
+    headline = str(raw_cl.get("headline") or raw_cl.get("titre") or "").strip()[:220]
+    lede = str(raw_cl.get("lede") or raw_cl.get("intro") or "").strip()[:360] or None
+    pitfalls_title = (
+        str(raw_cl.get("pitfalls_title") or raw_cl.get("pieges_titre") or "")
+        .strip()[:120]
+        or None
+    )
+    if not sections and not pitfalls:
+        return None
+    return AtelierChecklist(
+        headline=headline,
+        lede=lede,
+        sections=sections,
+        pitfalls_title=pitfalls_title,
+        pitfalls=pitfalls,
+    )
+
+
+def coerce_checklist_from_llm_dict(raw: dict[str, Any]) -> AtelierChecklist | None:
+    """Extrait une `AtelierChecklist` depuis `{"checklist": {...}}` ou racine checklist."""
+    cl = raw.get("checklist") if isinstance(raw.get("checklist"), dict) else raw
+    if not isinstance(cl, dict):
+        return None
+    return parse_atelier_checklist_dict(cl)
+
+
+def merge_atelier_checklist_detail_chunks(
+    outline: list[dict[str, Any]],
+    chunk_results: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Fusionne les réponses « détail » parallèles selon l'ordre du squelette (ids s01…).
+
+    Retourne une liste de dicts `{title, subtitle, items}` prête pour l'étape QA JSON.
+    """
+    by_id: dict[str, dict[str, Any]] = {}
+    for raw in chunk_results:
+        if not isinstance(raw, dict):
+            continue
+        for sec in raw.get("sections") or []:
+            if not isinstance(sec, dict):
+                continue
+            sid = str(sec.get("id") or "").strip()
+            if sid:
+                by_id[sid] = sec
+    merged: list[dict[str, Any]] = []
+    for skel in outline:
+        sid = skel["id"]
+        block = by_id.get(sid)
+        title = str((block or skel).get("title") or skel["title"]).strip()[:220]
+        sub = (block or skel).get("subtitle")
+        if sub is None:
+            sub = skel.get("subtitle")
+        subtitle = str(sub).strip()[:200] if sub not in (None, "") else None
+        items: list[dict[str, str]] = []
+        if block and isinstance(block.get("items"), list):
+            for it in block["items"]:
+                if isinstance(it, dict):
+                    lab = str(it.get("label") or "").strip()
+                    if lab:
+                        items.append(
+                            {
+                                "label": lab[:420],
+                                "guide": str(it.get("guide") or "").strip()[:2600],
+                            }
+                        )
+        merged.append({"title": title, "subtitle": subtitle, "items": items})
+    return merged
+
+
 def coerce_dossier(raw: dict[str, Any]) -> tuple[
     ProjectBrief, BusinessCanvas, FlowMap, list[SegmentBrief], AgentSynthesis
 ]:
@@ -218,76 +338,12 @@ def coerce_dossier(raw: dict[str, Any]) -> tuple[
                 break
         return out
 
-    def _parse_item(obj: object) -> ChecklistItem | None:
-        if isinstance(obj, str):
-            lab = obj.strip()
-            return ChecklistItem(label=lab[:280], guide="") if lab else None
-        if not isinstance(obj, dict):
-            return None
-        lab = str(obj.get("label") or obj.get("texte") or obj.get("action") or "").strip()
-        if not lab:
-            return None
-        guide = str(obj.get("guide") or obj.get("aide") or obj.get("detail") or "").strip()
-        return ChecklistItem(label=lab[:420], guide=guide[:2600])
-
-    def _parse_checklist(raw_cl: object) -> AtelierChecklist | None:
-        if not isinstance(raw_cl, dict):
-            return None
-        sections: list[ChecklistSection] = []
-        raw_sections = (
-            raw_cl.get("sections")
-            or raw_cl.get("etapes")
-            or raw_cl.get("phases")
-            or []
-        )
-        for sec in raw_sections[:40]:
-            if not isinstance(sec, dict):
-                continue
-            title = (
-                str(sec.get("title") or sec.get("nom") or sec.get("phase") or "")
-                .strip()[:220]
-            )
-            if not title:
-                continue
-            subtitle = (
-                str(sec.get("subtitle") or sec.get("sous_titre") or "")
-                .strip()[:200]
-                or None
-            )
-            items: list[ChecklistItem] = []
-            item_list = sec.get("items") or sec.get("actions") or sec.get("taches") or []
-            for it in item_list[:60]:
-                ci = _parse_item(it)
-                if ci:
-                    items.append(ci)
-            if items:
-                sections.append(
-                    ChecklistSection(title=title, subtitle=subtitle, items=items)
-                )
-        pitfalls: list[ChecklistItem] = []
-        for it in (raw_cl.get("pitfalls") or raw_cl.get("pieges") or [])[:18]:
-            ci = _parse_item(it)
-            if ci:
-                pitfalls.append(ci)
-        headline = str(raw_cl.get("headline") or raw_cl.get("titre") or "").strip()[:220]
-        lede = str(raw_cl.get("lede") or raw_cl.get("intro") or "").strip()[:360] or None
-        pitfalls_title = (
-            str(raw_cl.get("pitfalls_title") or raw_cl.get("pieges_titre") or "")
-            .strip()[:120]
-            or None
-        )
-        if not sections and not pitfalls:
-            return None
-        return AtelierChecklist(
-            headline=headline,
-            lede=lede,
-            sections=sections,
-            pitfalls_title=pitfalls_title,
-            pitfalls=pitfalls,
-        )
-
     raw_checklist = syn.get("checklist")
-    checklist = _parse_checklist(raw_checklist) if raw_checklist is not None else None
+    checklist = (
+        parse_atelier_checklist_dict(raw_checklist)
+        if isinstance(raw_checklist, dict)
+        else None
+    )
 
     synthesis = AgentSynthesis(
         forces=_lst2("forces"),

@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from services.filter import run_filter
 from services.guard import run_guard
-from services.orchestrator import run_orchestrator
+from services.orchestrator import maybe_clamp_prospection_after_plan_patches, run_orchestrator
 from services.api_engine import execute_plan
 from services.relevance import filter_results_by_relevance
 from services.digital_pitch_enrichment import (
@@ -42,6 +42,7 @@ async def main() -> None:
         print("orch clarification", plan.clarification_question)
         return
     patch_sirene_calls_from_guard_entities(plan, g.entities)
+    maybe_clamp_prospection_after_plan_patches(plan, "prospection", g)
     sr = await execute_plan(plan, mode="prospection")
     print("raw_total", sr.total)
     if sr.total == 0:

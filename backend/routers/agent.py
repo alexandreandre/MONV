@@ -51,6 +51,7 @@ from models.schemas import (
     AgentResponse,
     AtelierBriefUpdateRequest,
     AtelierCanvasRegenerateRequest,
+    AtelierChecklistRegenerateRequest,
     AtelierDossierGetResponse,
     AtelierDossierMutationResponse,
     AtelierGenerationStats,
@@ -70,6 +71,7 @@ from services.agent import (
     generate_dossier_skeleton,
     is_atelier_fake_mode_enabled,
     regenerate_atelier_canvas_llm,
+    regenerate_atelier_checklist_llm,
     regenerate_atelier_flows_llm,
     run_segment_search,
     run_segment_searches,
@@ -108,6 +110,10 @@ AGENT_WELCOME_COPY = (
 )
 
 ATELIER_REGEN_SEGMENT_CREDITS = 1
+
+# Régénération checklist : plusieurs appels LLM (squelette → détails → QA). Le plafond
+# route doit rester inférieur au proxy front Next (`maxDuration` 600s, undici `headersTimeout`).
+ATELIER_CHECKLIST_REGENERATE_TIMEOUT_S = 480.0
 
 
 def _atelier_pitch_and_qcm_answers(messages: list[Message]) -> tuple[str, str]:
@@ -308,6 +314,71 @@ async def atelier_regenerate_canvas(
     except Exception as exc:
         plog("atelier_canvas_regenerate_error", error=str(exc)[:500])
         raise HTTPException(502, "Regénération du canvas indisponible.") from exc
+
+
+@router.post("/checklist/regenerate", response_model=AtelierDossierMutationResponse)
+async def atelier_regenerate_checklist(
+    body: AtelierChecklistRegenerateRequest,
+    user=Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+):
+    conv = await conversation_get(supabase, body.conversation_id, user.id)
+    if not conv or (conv.mode or "") != ATELIER_MODE_LABEL:
+        raise HTTPException(404, "Conversation Atelier introuvable.")
+    msgs = await messages_list_asc(supabase, body.conversation_id)
+    pair = _find_latest_dossier_pair(msgs)
+    if not pair:
+        raise HTTPException(404, "Aucun dossier Atelier à mettre à jour.")
+    msg, dossier = pair
+    pitch, answers = _atelier_pitch_and_qcm_answers(msgs)
+    try:
+        labels = [s.label for s in dossier.segments if (s.label or "").strip()]
+        new_cl = await asyncio.wait_for(
+            regenerate_atelier_checklist_llm(
+                pitch,
+                answers,
+                dossier.brief,
+                dossier.synthesis,
+                labels,
+            ),
+            timeout=ATELIER_CHECKLIST_REGENERATE_TIMEOUT_S,
+        )
+        if new_cl is None:
+            raise HTTPException(
+                502,
+                "Réponse IA invalide ou incomplète pour la checklist. Réessaie dans un instant.",
+            )
+        new_syn = dossier.synthesis.model_copy(update={"checklist": new_cl})
+        d2 = dossier.model_copy(
+            update={
+                "synthesis": new_syn,
+                "version": (dossier.version or 1) + 1,
+                "generated_at": datetime.now(timezone.utc),
+            }
+        )
+        await message_update(
+            supabase,
+            msg.id,
+            {"metadata_json": dossier_metadata_json(d2)},
+            body.conversation_id,
+        )
+        plog("atelier_checklist_regenerate", conversation_id=body.conversation_id)
+        return AtelierDossierMutationResponse(
+            dossier=d2,
+            generation_stats=AtelierGenerationStats(llm_calls=1, api_calls=0, credits_charged=0),
+            credits_remaining=user.credits if not user_has_unlimited_credits(user) else None,
+        )
+    except asyncio.TimeoutError:
+        plog("atelier_checklist_regenerate_timeout", conversation_id=body.conversation_id)
+        raise HTTPException(
+            504,
+            "Délai dépassé : la checklist met trop longtemps à se régénérer. Réessaie.",
+        ) from None
+    except HTTPException:
+        raise
+    except Exception as exc:
+        plog("atelier_checklist_regenerate_error", error=str(exc)[:500])
+        raise HTTPException(502, "Regénération de la checklist indisponible.") from exc
 
 
 @router.post("/brief/update", response_model=AtelierDossierMutationResponse)

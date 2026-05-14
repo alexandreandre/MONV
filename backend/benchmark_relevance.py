@@ -25,9 +25,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config import settings
+from models.schemas import GUARD_INTENTS_STATIC_REPLY
 from services.filter import run_filter
 from services.guard import run_guard
-from services.orchestrator import run_orchestrator
+from services.orchestrator import maybe_clamp_prospection_after_plan_patches, run_orchestrator
 from services.api_engine import execute_plan
 from services.relevance import filter_results_by_relevance
 from services.sirene import patch_sirene_calls_from_guard_entities
@@ -139,7 +140,7 @@ async def run_one(q: dict) -> dict:
 
         # Guard
         guard = await run_guard(q["query"])
-        if guard.intent in ("hors_scope", "salutation", "meta_question"):
+        if guard.intent in GUARD_INTENTS_STATIC_REPLY:
             result["error"] = f"intent={guard.intent}"
             return result
         e = guard.entities
@@ -162,6 +163,7 @@ async def run_one(q: dict) -> dict:
 
         # API Engine
         patch_sirene_calls_from_guard_entities(plan, guard.entities)
+        maybe_clamp_prospection_after_plan_patches(plan, q["mode"], guard)
         search_results = await execute_plan(plan, mode=q["mode"])
         result["raw_count"] = search_results.total
         raw_results = list(search_results.results)

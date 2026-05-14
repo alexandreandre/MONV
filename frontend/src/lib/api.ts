@@ -142,6 +142,7 @@ export interface User {
   credits: number;
   credits_unlimited?: boolean;
   created_at: string;
+  is_admin?: boolean;
 }
 
 export interface AuthResponse {
@@ -413,6 +414,10 @@ export interface AtelierCanvasRegenerateBody {
   conversation_id: string;
 }
 
+export interface AtelierChecklistRegenerateBody {
+  conversation_id: string;
+}
+
 export interface AtelierBriefUpdateBody {
   conversation_id: string;
   brief: ProjectBrief;
@@ -451,6 +456,18 @@ export function regenerateAtelierCanvas(
   );
 }
 
+/** Régénère uniquement la checklist d’actions (pitch, QCM, brief et synthèse hors checklist). */
+export function regenerateAtelierChecklist(
+  body: AtelierChecklistRegenerateBody,
+  options?: ApiFetchOptions
+) {
+  return apiPost<AtelierDossierMutationResponse>(
+    "/agent/checklist/regenerate",
+    body,
+    options
+  );
+}
+
 /** Met à jour le brief puis recalcule canvas / flux / segments selon `impacts`. */
 export function updateAtelierBrief(
   body: AtelierBriefUpdateBody,
@@ -460,5 +477,192 @@ export function updateAtelierBrief(
     "/agent/brief/update",
     body,
     options
+  );
+}
+
+// --- Super Admin (graphes agents) ---
+
+export interface AdminAgentSummary {
+  agent_id: string;
+  label: string;
+  active_version_id: string | null;
+  active_version_number: number | null;
+  last_modified_at: string | null;
+  primary_model: string;
+  errors_24h: number;
+  runs_7d: number;
+}
+
+export interface AdminAgentVersion {
+  id: string;
+  agent_id: string;
+  version_number: number;
+  label: string;
+  overrides_json: Record<string, unknown>;
+  created_by: string | null;
+  created_at: string;
+  is_active: boolean;
+  parent_version_id?: string | null;
+}
+
+export interface AdminAgentGraph {
+  agent_id: string;
+  label: string;
+  graph: {
+    nodes: AdminGraphNode[];
+    edges: AdminGraphEdge[];
+  };
+  active_version: AdminAgentVersion | null;
+}
+
+export interface AdminApiEndpoint {
+  method: string;
+  path: string;
+  purpose?: string;
+  params?: string[];
+}
+
+export interface AdminApiAuth {
+  type: string;
+  header?: string | null;
+  env_var?: string | null;
+}
+
+export interface AdminApiMeta {
+  provider?: string;
+  base_url?: string;
+  base_url_env?: string | null;
+  endpoints?: AdminApiEndpoint[];
+  auth?: AdminApiAuth | null;
+  cost?: string;
+  rate_limit?: string;
+  timeout_s?: number;
+  doc_url?: string;
+  usage?: string;
+  triggered_by?: string;
+}
+
+export interface AdminGraphNode {
+  id: string;
+  label: string;
+  type: string;
+  model_ref?: string;
+  source_file?: string;
+  default_params?: Record<string, unknown>;
+  default_prompt_preview?: string;
+  effective?: Record<string, unknown> | null;
+  sub_blocks?: string[];
+  fallback?: string;
+  errors?: string[];
+  inputs?: { name: string; type: string }[];
+  outputs?: { name: string; type: string }[];
+  api?: AdminApiMeta;
+}
+
+export interface AdminGraphEdge {
+  from: string;
+  to: string;
+  kind?: string;
+  condition?: string;
+}
+
+export interface AdminTestResponse {
+  run_id: string;
+  status: string;
+  steps: { block_id: string; status: string; latency_ms?: number }[];
+}
+
+export interface AdminSettings {
+  models: Record<string, string>;
+  api_keys_present: Record<string, boolean>;
+  flags: Record<string, boolean>;
+}
+
+export function adminMe(): Promise<{ is_admin: boolean; email: string }> {
+  return apiGet("/admin/me");
+}
+
+export function adminListAgents(): Promise<AdminAgentSummary[]> {
+  return apiGet("/admin/agents");
+}
+
+export function adminGetGraph(agentId: string): Promise<AdminAgentGraph> {
+  return apiGet(`/admin/agents/${encodeURIComponent(agentId)}/graph`);
+}
+
+export function adminListVersions(agentId: string): Promise<AdminAgentVersion[]> {
+  return apiGet(`/admin/agents/${encodeURIComponent(agentId)}/versions`);
+}
+
+export function adminCreateVersion(
+  agentId: string,
+  body: { label?: string; overrides: Record<string, Record<string, unknown>> }
+): Promise<AdminAgentVersion> {
+  return apiPost(`/admin/agents/${encodeURIComponent(agentId)}/versions`, body);
+}
+
+export function adminPublishVersion(agentId: string, versionId: string): Promise<AdminAgentVersion> {
+  return apiPost(
+    `/admin/agents/${encodeURIComponent(agentId)}/versions/${encodeURIComponent(versionId)}/publish`,
+    {}
+  );
+}
+
+export function adminRollbackVersion(agentId: string, versionId: string): Promise<AdminAgentVersion> {
+  return apiPost(
+    `/admin/agents/${encodeURIComponent(agentId)}/versions/${encodeURIComponent(versionId)}/rollback`,
+    {}
+  );
+}
+
+export function adminTestAgent(
+  agentId: string,
+  body: { message?: string; full_pipeline?: boolean }
+): Promise<AdminTestResponse> {
+  return apiPost(`/admin/agents/${encodeURIComponent(agentId)}/test`, body);
+}
+
+export function adminListRuns(params?: {
+  agent_id?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ items: Record<string, unknown>[]; limit: number; offset: number }> {
+  const q = new URLSearchParams();
+  if (params?.agent_id) q.set("agent_id", params.agent_id);
+  if (params?.limit != null) q.set("limit", String(params.limit));
+  if (params?.offset != null) q.set("offset", String(params.offset));
+  const s = q.toString();
+  return apiGet(`/admin/runs${s ? `?${s}` : ""}`);
+}
+
+export function adminGetRun(runId: string): Promise<{
+  run: Record<string, unknown>;
+  steps: Record<string, unknown>[];
+}> {
+  return apiGet(`/admin/runs/${encodeURIComponent(runId)}`);
+}
+
+export function adminGetSettings(): Promise<AdminSettings> {
+  return apiGet("/admin/settings");
+}
+
+export function adminExportAgent(agentId: string): Promise<Record<string, unknown>> {
+  return apiGet(`/admin/agents/${encodeURIComponent(agentId)}/export`);
+}
+
+export function adminImportAgent(
+  agentId: string,
+  payload: Record<string, unknown>
+): Promise<AdminAgentVersion> {
+  return apiPost(`/admin/agents/${encodeURIComponent(agentId)}/import`, payload);
+}
+
+export function adminDiffVersions(
+  agentId: string,
+  fromVersion: string,
+  toVersion: string
+): Promise<{ blocks: { block_id: string; from: unknown; to: unknown }[] }> {
+  return apiGet(
+    `/admin/agents/${encodeURIComponent(agentId)}/diff?from_version=${encodeURIComponent(fromVersion)}&to_version=${encodeURIComponent(toVersion)}`
   );
 }

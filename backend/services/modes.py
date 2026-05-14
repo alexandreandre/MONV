@@ -1,13 +1,14 @@
 """
 Définitions des 4 modes d'usage MONV.
 
-Un mode adapte trois choses :
+Un mode adapte notamment :
   1. Le prompt orchestrateur (quels critères privilégier, quelles colonnes inclure)
-  2. L'ordre des colonnes par défaut renvoyées dans `ExecutionPlan.columns`
+  2. L'ordre des colonnes par défaut renvoyées dans `ExecutionPlan.columns` (panneau aperçu / export)
   3. Le cadre éditorial du message d'introduction des résultats (cf. chat.py)
 
-Le mode `prospection` reproduit le comportement historique : c'est le défaut
-quand `mode` est absent du `ChatRequest`, ce qui garantit la non-régression.
+Le mode `prospection` est le défaut quand `mode` est absent du `ChatRequest`
+(non-régression). Son addendum orchestrateur rappelle la hiérarchie des ``priority``
+(structuré vs niche locale).
 """
 
 from __future__ import annotations
@@ -58,8 +59,10 @@ MODE_LABELS: dict[Mode, str] = {
 # présentes derrière. Aucune n'est retirée → pas de régression sur l'export.
 
 # Colonnes affichées / exportées en mode prospection (ordre figé).
+# Inclut ``signaux`` : calculés dans ``execute_plan``, alignés export / métadonnées chat.
 PROSPECTION_RESULT_COLUMNS: list[str] = [
     "nom",
+    "signaux",
     "telephone",
     "site_web",
     "adresse",
@@ -120,7 +123,24 @@ MODE_PRIORITY_COLUMNS: dict[Mode, list[str]] = {
 # on cadre l'intention.
 
 MODE_ORCHESTRATOR_ADDENDUM: dict[Mode, str] = {
-    "prospection": "",
+    "prospection": (
+        "\n\nMODE ACTIF : PROSPECTION.\n"
+        "Rappel hiérarchique des ``priority`` (déjà détaillé dans le prompt générique) :\n"
+        "- **Structuré** (NAF + zone + taille, sans enjeu « commerce de rue » dominant) : **sirene search** "
+        "en **priority=1** ; google_places seulement en complément si utile (priority plus élevée).\n"
+        "- **Niche locale / commerce** (padel, crossfit, restauration typée, coworking, etc.) : "
+        "**google_places en priority=1**, **sirene ≥ 2** — ce cas **prime** sur toute formulation « SIRENE d'abord ».\n"
+        "- **Pappers** (payant) : **interdit** d'ajouter un ``pappers search`` en parallèle d'un large panneau SIRENE/Places "
+        "sans filtre CA sur l'entité ni mention explicite. ``get_dirigeants`` / ``get_finances`` seulement si l'utilisateur "
+        "demande contacts/dirigeants/CA (ou intent enrichissement / dirigeant), **ou** si le plan SIRENE cible déjà une "
+        "liste courte (``code_commune`` INSEE, SIREN/SIRET). Le backend retire sinon les appels Pappers superflus du **plan**.\n"
+        "- **Après exécution du plan** (hors benchmark/rachat) : complément optionnel **fiche entreprise Pappers** "
+        "(téléphone / site web manquants), **plafonné** par ``PAPPERS_CONTACT_ENRICH_MAX`` — distinct du plan, "
+        "non annulé par le clamp ci-dessus.\n"
+        "- **Colonnes d'aperçu / export** normalisées côté serveur (tu peux proposer d'autres champs intermédiaires ; "
+        "le panneau livré au client sera réordonné) : ``nom``, ``signaux``, ``telephone``, ``site_web``, ``adresse``, "
+        "``code_postal``, ``ville``, ``google_maps_url``.\n"
+    ),
     "sous_traitant": (
         "\n\nMODE ACTIF : SOUS-TRAITANT.\n"
         "L'utilisateur cherche un prestataire ou sous-traitant à qui confier "

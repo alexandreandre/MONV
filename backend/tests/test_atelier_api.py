@@ -61,6 +61,13 @@ def test_atelier_routes_require_auth(client):
     )
     assert (
         client.post(
+            "/api/agent/checklist/regenerate",
+            json={"conversation_id": "c"},
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
             "/api/agent/brief/update",
             json={
                 "conversation_id": "c",

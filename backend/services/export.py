@@ -20,6 +20,7 @@ from models.schemas import SearchResults
 # En-têtes export mode prospection (alignés produit).
 PROSPECTION_EXPORT_LABELS = {
     "nom": "Dénomination",
+    "signaux": "Signaux business",
     "telephone": "Téléphone",
     "site_web": "Site Web",
     "adresse": "Adresse",

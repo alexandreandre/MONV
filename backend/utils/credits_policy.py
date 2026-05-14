@@ -5,6 +5,7 @@ from __future__ import annotations
 from config import settings
 from models.entities import User
 from models.schemas import UserOut
+from utils.admin_policy import user_is_admin
 
 # Solde affiché / suffisant pour les contrôles UI (export autorisé sans débit réel)
 UNLIMITED_CREDITS_DISPLAY = 9_999_999
@@ -35,4 +36,5 @@ def user_to_user_out(user: User) -> UserOut:
         credits=credits_for_api(user),
         credits_unlimited=user_has_unlimited_credits(user),
         created_at=user.created_at,
+        is_admin=user_is_admin(user),
     )

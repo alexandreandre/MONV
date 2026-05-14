@@ -4,7 +4,12 @@ Transforme l'intent structuré en plan d'exécution API.
 """
 
 import json
+import re
+from pathlib import Path
+
 from models.schemas import GuardResult, ExecutionPlan, APICall
+from config import settings
+from services.agent_config import resolve_llm_for_block
 from services.modes import (
     Mode,
     addendum_for_mode,
@@ -13,6 +18,7 @@ from services.modes import (
     normalize_mode,
     reorder_columns_for_mode,
 )
+from utils.llm import llm_json_call
 
 # Colonnes financières / effectif (Pappers) — ajoutées à la liste affichée si Pappers est utilisé
 FINANCIAL_AND_SIZE_COLUMNS: list[str] = [
@@ -50,10 +56,138 @@ def extend_columns_for_plan(columns: list[str], api_calls: list[APICall]) -> lis
             seen.add(col)
             out.append(col)
     return out
-from utils.llm import llm_json_call
-from config import settings
 
-ORCHESTRATOR_SYSTEM_PROMPT = """Tu es l'orchestrateur de MONV, un outil de recherche d'entreprises en France (clients, prestataires, fournisseurs, partenaires, concurrents).
+
+def _guard_lexical_blob(guard_result: GuardResult) -> str:
+    parts: list[str] = []
+    if guard_result.original_query:
+        parts.append(guard_result.original_query)
+    e = guard_result.entities
+    if e.secteur:
+        parts.append(e.secteur)
+    parts.extend(e.mots_cles or [])
+    return " ".join(parts)
+
+
+_DIRIGEANT_OR_CONTACT_RE = re.compile(
+    r"\b("
+    r"dirigeants?|gérants?|g[ée]rants?|présidents?|\bpdg\b|"
+    r"directeurs?\s+g[ée]n[ée]ral|mandataires?|"
+    r"contacts?|coordonn[ée]es|emails?|e-?mails?|"
+    r"t[ée]l[ée]phones?(?:\s+pro|\s+direct)?|noms?\s+des\s+dirigeants?"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_FINANCE_LEX_RE = re.compile(
+    r"\b("
+    r"chiffre(?:s)?\s*d['']?affaires|"
+    r"\bca\b(?:\s*(?:min|max|>|＜|<|sup|inf|entre))?|"
+    r"financ(?:ier|ière|e)s?|bilans?|comptes?\s+annuels|"
+    r"marge(?:\s+brute)?|r[ée]sultat(?:\s+net)?|ebe\b|capital(?:\s+social)?"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _sirene_plan_targets_narrow_shortlist(api_calls: list[APICall]) -> bool:
+    """Panneau SIRENE déjà cadré (commune INSEE ou SIREN/SIRET ciblé) → liste courte attendue."""
+    for c in api_calls:
+        if c.source != "sirene" or c.action != "search":
+            continue
+        p = c.params or {}
+        cc = str(p.get("code_commune") or "").strip()
+        if len(cc) == 5 and cc.isdigit():
+            return True
+        siren = str(p.get("siren") or "").replace(" ", "")
+        if len(siren) == 9 and siren.isdigit():
+            return True
+        siret = str(p.get("siret") or "").replace(" ", "")
+        if len(siret) == 14 and siret.isdigit():
+            return True
+    return False
+
+
+def clamp_prospection_pappers_calls(
+    api_calls: list[APICall], guard_result: GuardResult
+) -> None:
+    """
+    Mode prospection : évite plans coûteux SIRENE large + Pappers redondants.
+    Conserve Pappers si la requête / le guard demande contacts, dirigeants ou données
+    financières, si le plan SIRENE cible déjà un périmètre court (commune / SIREN),
+    ou si l'utilisateur cite explicitement Pappers.
+    Modifie ``api_calls`` sur place.
+    """
+    e = guard_result.entities
+    blob = _guard_lexical_blob(guard_result)
+    intent = guard_result.intent
+
+    narrow = _sirene_plan_targets_narrow_shortlist(api_calls)
+    explicit_pappers = bool(re.search(r"\bpappers\b", blob, re.IGNORECASE))
+    contacts = intent in ("recherche_dirigeant", "enrichissement") or bool(
+        _DIRIGEANT_OR_CONTACT_RE.search(blob)
+    )
+    finances = (
+        intent == "enrichissement"
+        or e.ca_min is not None
+        or e.ca_max is not None
+        or bool(_FINANCE_LEX_RE.search(blob))
+    )
+
+    allow_get_dirigeants = contacts or narrow
+    allow_get_finances = finances or narrow
+    ca_bounds_entity = e.ca_min is not None or e.ca_max is not None
+    allow_pappers_search = ca_bounds_entity or explicit_pappers
+
+    kept: list[APICall] = []
+    removed = 0
+    for c in api_calls:
+        if c.source != "pappers":
+            kept.append(c)
+            continue
+        if c.action == "search":
+            if allow_pappers_search:
+                kept.append(c)
+            else:
+                removed += 1
+            continue
+        if c.action == "get_dirigeants":
+            if allow_get_dirigeants:
+                kept.append(c)
+            else:
+                removed += 1
+            continue
+        if c.action == "get_finances":
+            if allow_get_finances:
+                kept.append(c)
+            else:
+                removed += 1
+            continue
+        kept.append(c)
+
+    if removed:
+        try:
+            from utils.pipeline_log import plog
+
+            plog("prospection_pappers_clamped", removed=removed)
+        except Exception:
+            pass
+    api_calls.clear()
+    api_calls.extend(kept)
+
+
+def maybe_clamp_prospection_after_plan_patches(
+    plan: ExecutionPlan,
+    mode: str | None,
+    guard_result: GuardResult,
+) -> None:
+    """Après ``patch_sirene_calls_from_guard_entities`` (et variantes Places) : plan final."""
+    if normalize_mode(mode) != "prospection":
+        return
+    clamp_prospection_pappers_calls(plan.api_calls, guard_result)
+
+
+ORCHESTRATOR_CORE_PROMPT = """Tu es l'orchestrateur de MONV, un outil de recherche d'entreprises en France (clients, prestataires, fournisseurs, partenaires, concurrents).
 
 Tu reçois un intent structuré (JSON) issu de la couche Guard et tu dois produire un plan d'exécution API.
 
@@ -75,7 +209,7 @@ SOURCES DISPONIBLES :
 
 3. "pappers" — API Pappers (payant, données enrichies)
    Actions :
-   - "search" : recherche entreprises avec plus de filtres
+   - "search" : recherche entreprises avec plus de filtres (**réservé** aux filtres CA / usage explicite — pas en parallèle d'un panneau SIRENE large sans besoin financier)
    - "get_dirigeants" : récupérer les dirigeants d'une entreprise (par SIREN)
    - "get_finances" : récupérer CA et données financières (par SIREN)
    Params : siren, siret, q, code_naf, departement, region, ville, ca_min, ca_max,
@@ -142,40 +276,13 @@ RÈGLES DE CHOIX DE SOURCE :
   ou département ou segment large (ex. « PACA »), pour capter les commerces hors centre-ville.
 - **Google Places seul** : si le code NAF est trop large pour être utile et que la spécificité vient
   d'un mot-clé sémantique introuvable dans les raisons sociales INSEE.
-- **Pappers** : seulement si dirigeants ou CA demandés explicitement.
+- **Pappers** : **pas** de ``pappers search`` en doublon d'un large panneau SIRENE / Places sans besoin explicite.
+  Utilise ``get_dirigeants`` / ``get_finances`` **après** les ``search`` seulement si l'utilisateur demande
+  dirigeants, contacts professionnels ou données financières (CA, bilan…), **ou** si le plan SIRENE cible déjà
+  une liste courte (ex. ``code_commune`` INSEE, SIREN/SIRET). Un ``pappers search`` seulement si filtres CA
+  sur l'entité (ca_min/ca_max) ou mention explicite de Pappers / besoin de crible CA côté Pappers.
 
-STRATÉGIE MULTI-APPELS POUR ACTIVITÉS DE NICHE (OBLIGATOIRE) :
-Quand l'activité est une niche spécifique (padel, crossfit, yoga, coworking, escape game, salon de
-coiffure, restaurant japonais, etc.), tu DOIS générer PLUSIEURS api_calls :
-
-1. google_places (priority=1) — mot-clé métier + zone géo
-2. Plusieurs appels sirene SANS "q" (priority=2), chacun avec un code activite_principale différent :
-   Attention : NE METS JAMAIS le mot-clé niche dans "q" quand tu utilises un code NAF !
-   "q" cherche dans le NOM LÉGAL (raison sociale), PAS dans l'activité réelle.
-   Un club de padel s'appelle souvent "Le Smash", "Ace Club", "Sport Plus" — pas "Padel XYZ".
-3. Un appel sirene avec q="<mot-clé>" SANS filtre NAF (priority=3) pour les rares entreprises
-   qui ont le mot dans leur raison sociale
-
-CODES NAF POUR NICHES FRÉQUENTES :
-Sports/Loisirs : 93.12Z (clubs de sports), 93.11Z (installations sportives), 93.13Z (centres de
-culture physique), 93.29Z (loisirs : escape game, karting, bowling), 47.64Z (magasins de sport),
-85.51Z (enseignement sportif)
-Restauration : 56.10A (traditionnelle), 56.10C (rapide), 56.30Z (débits de boissons)
-Services : 96.02A/96.02B (coiffure/beauté), 96.09Z (tatoueurs, etc.)
-
-EXEMPLE — « boutiques de padel en PACA » :
-{
-    "api_calls": [
-        {"source": "google_places", "action": "search", "params": {"query": "padel", "location": "PACA"}, "priority": 1},
-        {"source": "sirene", "action": "search", "params": {"activite_principale": "93.12Z", "region": "93", "per_page": 25}, "priority": 2},
-        {"source": "sirene", "action": "search", "params": {"activite_principale": "93.11Z", "region": "93", "per_page": 25}, "priority": 2},
-        {"source": "sirene", "action": "search", "params": {"activite_principale": "47.64Z", "region": "93", "per_page": 25}, "priority": 2},
-        {"source": "sirene", "action": "search", "params": {"q": "padel", "region": "93", "per_page": 25}, "priority": 3}
-    ],
-    "estimated_credits": 3,
-    "description": "Multi-source padel PACA : Google Places + clubs (93.12Z) + installations (93.11Z) + détaillants sport (47.64Z) + recherche nom",
-    "columns": ["nom", "siren", "siret", "activite_principale", "libelle_activite", "adresse", "code_postal", "ville", "departement", "region", "forme_juridique", "tranche_effectif", "effectif_label", "date_creation", "telephone", "site_web", "google_maps_url"]
-}
+Si le message système inclut une **annexe NICHE** (bloc ajouté par le serveur sous le titre correspondant), applique-la en complément des règles générales ci-dessus (multi-appels Google Places + SIRENE, codes NAF niches, exemple padel).
 
 RÈGLE CRITIQUE — IGNORER LE MOTIF BUSINESS :
 L'intent peut contenir des mots-clés comme "rachat", "acquisition", "investissement", "analyse de marché",
@@ -185,10 +292,20 @@ L'intent peut contenir des mots-clés comme "rachat", "acquisition", "investisse
 - Se concentrer UNIQUEMENT sur les critères objectifs : secteur, activité, zone, taille
 Exemple : intent dit mots_cles=["hôtel", "3 étoiles", "rachat"] → utiliser "hôtel 3 étoiles" pour Google Places et activite_principale="55.10Z" pour SIRENE, IGNORER "rachat"
 
-RÈGLES GÉNÉRALES :
-- Si l'utilisateur demande des dirigeants ou du CA, ajoute une étape Pappers APRÈS la recherche SIRENE principale
-- Mets TOUJOURS une recherche SIRENE en priority=1 comme source principale, même si Pappers est utilisé pour l'enrichissement
-- Si ca_min / ca_max est demandé : SIRENE d'abord (priority=1), puis Pappers get_finances (priority=2) pour filtrer par CA
+RÈGLES GÉNÉRALES — ORDRE DES ``priority`` (plus petit = exécuté en premier ; pas de contradiction) :
+- **Parcours structuré** (cible par NAF/section + zone + effectif, type « PME du BTP en IDF », « ESN Lyon 50+ »,
+  sans besoin prioritaire de découvrir des commerces par recherche géolocalisée) : au moins un **sirene search**
+  en **priority=1** ; google_places seulement en complément si pertinent, avec une **priority** strictement
+  supérieure (ex. 2) pour s'exécuter après le bloc SIRENE principal.
+- **Parcours niche / commerce / géo-découverte** : lorsque les sections « Google Places + SIRENE » ou
+  « STRATÉGIE MULTI-APPELS POUR ACTIVITÉS DE NICHE » s'appliquent, **google_places search en priority=1**,
+  les **sirene search** en **priority ≥ 2** (et le sirene « q » nom éventuel en dernier). Ce parcours **prime**
+  sur l'exigence « SIRENE en premier » du parcours structuré.
+- Si l'utilisateur demande des dirigeants, des contacts pro ou du CA / données financières, ajoute les étapes
+  Pappers **après** les ``search`` du plan (``get_dirigeants`` / ``get_finances`` avec des **priority** supérieures).
+  Sans ce besoin ni panneau SIRENE déjà étroit (commune / SIREN), **n'ajoute pas** Pappers (évite coût redondant).
+- Si ca_min / ca_max est demandé : exécute d'abord le panneau SIRENE du parcours choisi (structuré ou niche),
+  puis Pappers ``get_finances`` avec **priority** supérieure aux sirene search concernés.
 - Limite la recherche SIRENE : utilise les filtres de tranche d'effectif pour réduire les résultats
 - Si pas de tranche spécifiée et requête dit "PME" → tranche "11,12,21,22,31,32" (10-499 salariés)
 - Maximum 500 résultats par requête (20 pages de 25)
@@ -354,6 +471,42 @@ def _detect_niche_naf_codes(entities) -> list[str]:
     return sorted(candidates) if candidates else []
 
 
+_orch_niche_appendix_cache: str | None = None
+
+
+def _load_orchestrator_niche_appendix() -> str:
+    global _orch_niche_appendix_cache
+    if _orch_niche_appendix_cache is None:
+        _orch_niche_appendix_cache = Path(__file__).with_name(
+            "_orchestrator_niche_appendix.txt"
+        ).read_text(encoding="utf-8")
+    return _orch_niche_appendix_cache
+
+
+def orchestrator_needs_niche_appendix(guard_result: GuardResult) -> bool:
+    """True si une annexe détaillée niche (multi-appels Places + SIRENE) est utile."""
+    e = guard_result.entities
+    has_geo = bool(e.localisation or e.departement or e.region)
+    if not has_geo:
+        return False
+    if _detect_niche_naf_codes(e):
+        return True
+    if e.mots_cles:
+        return True
+    if (e.secteur or "").strip():
+        return True
+    return False
+
+
+def _orchestrator_merged_system(active_mode: Mode, guard_result: GuardResult) -> str:
+    niche = (
+        _load_orchestrator_niche_appendix()
+        if orchestrator_needs_niche_appendix(guard_result)
+        else ""
+    )
+    return ORCHESTRATOR_CORE_PROMPT + niche + addendum_for_mode(active_mode)
+
+
 def _get_tranche_codes(taille_min: int | None, taille_max: int | None) -> list[str]:
     """Convert min/max employees to INSEE tranche codes."""
     if taille_min is None and taille_max is None:
@@ -371,10 +524,26 @@ def _get_tranche_codes(taille_min: int | None, taille_max: int | None) -> list[s
 async def run_orchestrator(
     guard_result: GuardResult,
     mode: str | None = None,
+    *,
+    config_agent_id: str | None = None,
+    config_block_id: str = "orchestrator",
 ) -> ExecutionPlan:
     active_mode: Mode = normalize_mode(mode)
-    system_prompt = ORCHESTRATOR_SYSTEM_PROMPT + addendum_for_mode(active_mode)
-    # context_hints sert au QCM uniquement ; évite de polluer le plan API.
+    agent_id = (config_agent_id or str(active_mode)).strip()
+    merged_system = _orchestrator_merged_system(active_mode, guard_result)
+    cfg = await resolve_llm_for_block(
+        agent_id,
+        config_block_id,
+        default_model=settings.ORCHESTRATOR_MODEL,
+        default_system=merged_system,
+        default_max_tokens=2048,
+        default_temperature=0.0,
+    )
+    system_prompt = cfg.system_prompt
+    # Si l'override ne reprend pas l'addendum mode, on le réinjecte quand c'est le prompt code par défaut
+    if cfg.system_prompt.strip() == ORCHESTRATOR_CORE_PROMPT.strip():
+        system_prompt = merged_system
+
     guard_json = json.dumps(
         guard_result.model_dump(exclude={"context_hints"}),
         ensure_ascii=False,
@@ -383,11 +552,12 @@ async def run_orchestrator(
 
     try:
         result = await llm_json_call(
-            model=settings.ORCHESTRATOR_MODEL,
+            model=cfg.model,
             system=system_prompt,
             messages=[{"role": "user", "content": f"Intent structuré :\n{guard_json}"}],
-            max_tokens=2048,
-            temperature=0.0,
+            max_tokens=cfg.max_tokens,
+            temperature=cfg.temperature,
+            usage_stage="orchestrator",
         )
     except Exception:
         return _build_fallback_plan(guard_result, active_mode)

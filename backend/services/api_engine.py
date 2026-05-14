@@ -1,12 +1,17 @@
 """
 Couche 3 — Moteur d'exécution API
 Exécute le plan de l'orchestrateur, agrège et déduplique les résultats.
+
+Le graphe admin (``agent_registry``) expose une étape « fusion + dédoublonnage » distincte des
+connecteurs HTTP : tout vit ici dans ``execute_plan``, mais la topologie documente le contrat
+**une liste unifiée → un seul scoring pertinence** côté chat / Atelier.
 """
 
 import asyncio
+import time
 
 from config import settings
-from models.schemas import BusinessSignal, ExecutionPlan, CompanyResult, SearchResults
+from models.schemas import APICall, BusinessSignal, ExecutionPlan, CompanyResult, SearchResults
 from services.sirene import search_sirene
 from services.pappers import (
     enrich_missing_contacts_pappers_fr,
@@ -103,8 +108,102 @@ def _dedup_key(r: CompanyResult) -> str:
     return f"name:{(r.nom or '').lower().strip()}|{(r.ville or '').lower().strip()}"
 
 
+_SEARCH_PARALLEL_SOURCES = frozenset({"sirene", "google_places", "pappers"})
+
+
+def _is_parallel_search_call(c: APICall) -> bool:
+    return c.action == "search" and c.source in _SEARCH_PARALLEL_SOURCES
+
+
+async def _run_search_api_call(call: APICall) -> tuple[APICall, list[CompanyResult]]:
+    """Un appel search isolé (SIRENE / Places / Pappers) pour exécution parallèle."""
+    if call.source == "google_places" and call.action == "search":
+        plog("api_call_start", source=call.source, action=call.action, params=call.params)
+        results = await search_google_places(
+            query=call.params.get("query", ""),
+            location=call.params.get("location"),
+        )
+        plog("api_call_end", source=call.source, action=call.action, nb=len(results))
+        return call, results
+    if call.source == "sirene" and call.action == "search":
+        plog("api_call_start", source=call.source, action=call.action, params=call.params)
+        results = await search_sirene(call.params)
+        plog("api_call_end", source=call.source, action=call.action, nb=len(results))
+        return call, results
+    if call.source == "pappers" and call.action == "search":
+        plog("api_call_start", source=call.source, action=call.action, params=call.params)
+        results = await search_pappers(call.params)
+        plog("api_call_end", source=call.source, action=call.action, nb=len(results))
+        return call, results
+    raise ValueError(f"unexpected search call: {call.source} {call.action}")
+
+
+def _ingest_google_results(
+    results: list[CompanyResult],
+    all_results: list[CompanyResult],
+    seen_keys: set[str],
+) -> None:
+    for r in results:
+        if len(all_results) >= MAX_TOTAL_RESULTS:
+            return
+        key = _dedup_key(r)
+        if key not in seen_keys:
+            seen_keys.add(key)
+            all_results.append(r)
+
+
+def _ingest_sirene_results(
+    results: list[CompanyResult],
+    all_results: list[CompanyResult],
+    seen_keys: set[str],
+) -> None:
+    for r in results:
+        if len(all_results) >= MAX_TOTAL_RESULTS:
+            return
+        key = _dedup_key(r)
+        if key not in seen_keys:
+            seen_keys.add(key)
+            all_results.append(r)
+        else:
+            _merge_result(all_results, r)
+
+
+def _ingest_pappers_search_results(
+    results: list[CompanyResult],
+    all_results: list[CompanyResult],
+    seen_keys: set[str],
+) -> None:
+    for r in results:
+        if len(all_results) >= MAX_TOTAL_RESULTS:
+            return
+        key = _dedup_key(r)
+        if key not in seen_keys:
+            seen_keys.add(key)
+            all_results.append(r)
+        else:
+            _merge_result(all_results, r)
+
+
+def _ingest_search_batch(
+    ordered: list[tuple[APICall, list[CompanyResult]]],
+    all_results: list[CompanyResult],
+    seen_keys: set[str],
+) -> None:
+    """Applique les résultats dans l'ordre du plan (déterminisme dédup)."""
+    for call, results in ordered:
+        if call.source == "google_places":
+            _ingest_google_results(results, all_results, seen_keys)
+        elif call.source == "sirene":
+            _ingest_sirene_results(results, all_results, seen_keys)
+        elif call.source == "pappers":
+            _ingest_pappers_search_results(results, all_results, seen_keys)
+
+
 async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> SearchResults:
     """Execute all API calls from the plan and merge results."""
+    t_plan = time.perf_counter()
+    timing_ms: dict[str, float] = {}
+
     all_results: list[CompanyResult] = []
     seen_keys: set[str] = set()
 
@@ -114,54 +213,68 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
     _marches_publics_by_siren: dict[str, BusinessSignal] = {}
 
     sorted_calls = sorted(plan.api_calls, key=lambda c: c.priority)
+    n_calls = len(sorted_calls)
 
-    for call in sorted_calls:
+    t_loop_start = time.perf_counter()
+    i = 0
+    while i < n_calls:
+        call = sorted_calls[i]
+
         if len(all_results) >= MAX_TOTAL_RESULTS and call.action == "search":
             plog("execute_plan_cap_reached", total=len(all_results),
                  skipped_source=call.source, skipped_action=call.action)
+            i += 1
             continue
 
-        if call.source == "google_places" and call.action == "search":
-            plog("api_call_start", source=call.source, action=call.action, params=call.params)
-            results = await search_google_places(
-                query=call.params.get("query", ""),
-                location=call.params.get("location"),
-            )
-            plog("api_call_end", source=call.source, action=call.action, nb=len(results))
-            for r in results:
-                key = _dedup_key(r)
-                if key not in seen_keys:
-                    seen_keys.add(key)
-                    all_results.append(r)
+        if _is_parallel_search_call(call):
+            prio = call.priority
+            group: list[APICall] = []
+            j = i
+            while j < n_calls and _is_parallel_search_call(sorted_calls[j]) and sorted_calls[j].priority == prio:
+                if len(all_results) >= MAX_TOTAL_RESULTS:
+                    break
+                group.append(sorted_calls[j])
+                j += 1
+            if group:
+                raw = await asyncio.gather(
+                    *[_run_search_api_call(c) for c in group],
+                    return_exceptions=True,
+                )
+                ordered: list[tuple[APICall, list[CompanyResult]]] = []
+                for part in raw:
+                    if isinstance(part, BaseException):
+                        plog("parallel_search_error", error=repr(part))
+                        continue
+                    ordered.append(part)
+                _ingest_search_batch(ordered, all_results, seen_keys)
+                i = j
+                continue
+            i += 1
+            continue
 
-        elif call.source == "sirene" and call.action == "search":
-            plog("api_call_start", source=call.source, action=call.action, params=call.params)
-            results = await search_sirene(call.params)
-            plog("api_call_end", source=call.source, action=call.action, nb=len(results))
-            for r in results:
-                key = _dedup_key(r)
-                if key not in seen_keys:
-                    seen_keys.add(key)
-                    all_results.append(r)
-                else:
-                    _merge_result(all_results, r)
-
-        elif call.source == "pappers" and call.action == "search":
-            plog("api_call_start", source=call.source, action=call.action, params=call.params)
-            results = await search_pappers(call.params)
-            plog("api_call_end", source=call.source, action=call.action, nb=len(results))
-            for r in results:
-                key = _dedup_key(r)
-                if key not in seen_keys:
-                    seen_keys.add(key)
-                    all_results.append(r)
-                else:
-                    _merge_result(all_results, r)
-
-        elif call.source == "pappers" and call.action == "get_dirigeants":
+        if call.source == "pappers" and call.action == "get_dirigeants":
             plog("api_call_start", source=call.source, action=call.action, nb_targets=min(50, len(all_results)))
-            for result in all_results[:50]:
-                dir_data = await get_company_dirigeants(result.siren)
+            targets = [r for r in all_results[:50] if r.siren]
+            sem_d = asyncio.Semaphore(12)
+
+            async def _one_dirigeant(result: CompanyResult) -> tuple[CompanyResult, object]:
+                async with sem_d:
+                    try:
+                        return result, await get_company_dirigeants(result.siren)
+                    except Exception as ex:
+                        return result, ex
+
+            dir_pairs = await asyncio.gather(*[_one_dirigeant(r) for r in targets], return_exceptions=True)
+            for item in dir_pairs:
+                if isinstance(item, Exception):
+                    plog("get_dirigeants_row_error", error=repr(item))
+                    continue
+                result, dir_data = item
+                if isinstance(dir_data, Exception):
+                    plog("get_dirigeants_row_error", error=repr(dir_data))
+                    continue
+                if not isinstance(dir_data, dict):
+                    continue
                 reps = dir_data.get("representants", [])
                 if reps:
                     _dirigeants_by_siren[result.siren] = reps
@@ -179,8 +292,27 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
         elif call.source == "bodacc" and call.action == "get_signals":
             plog("api_call_start", source="bodacc", action="get_signals",
                  nb_targets=min(20, len(all_results)))
-            for result in all_results[:20]:
-                bodacc_signals = await get_bodacc_signals_for_siren(result.siren)
+            targets_b = [r for r in all_results[:20] if r.siren]
+            sem_b = asyncio.Semaphore(8)
+
+            async def _one_bodacc(result: CompanyResult) -> tuple[CompanyResult, object]:
+                async with sem_b:
+                    try:
+                        return result, await get_bodacc_signals_for_siren(result.siren)
+                    except Exception as ex:
+                        return result, ex
+
+            bod_pairs = await asyncio.gather(*[_one_bodacc(r) for r in targets_b], return_exceptions=True)
+            for item in bod_pairs:
+                if isinstance(item, Exception):
+                    plog("bodacc_row_error", error=repr(item))
+                    continue
+                result, bodacc_signals = item
+                if isinstance(bodacc_signals, Exception):
+                    plog("bodacc_row_error", error=repr(bodacc_signals))
+                    continue
+                if not isinstance(bodacc_signals, list):
+                    continue
                 bucket = _bodacc_by_siren.setdefault(result.siren, [])
                 existing_types = {s.type for s in bucket}
                 for sig in bodacc_signals:
@@ -199,10 +331,11 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
                  action="get_marches", nb_targets=min(20, len(all_results)))
             targets = all_results[:20]
             marches_list = await asyncio.gather(
-                *[get_marches_for_siren(r.siren) for r in targets],
+                *[get_marches_for_siren(r.siren) for r in targets if r.siren],
                 return_exceptions=True,
             )
-            for result, marches in zip(targets, marches_list):
+            targets_with_siren = [r for r in targets if r.siren]
+            for result, marches in zip(targets_with_siren, marches_list):
                 if isinstance(marches, Exception) or not marches:
                     continue
                 nb = len(marches)
@@ -222,8 +355,27 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
 
         elif call.source == "pappers" and call.action == "get_finances":
             plog("api_call_start", source=call.source, action=call.action, nb_targets=min(50, len(all_results)))
-            for result in all_results[:50]:
-                fin_data = await get_company_finances(result.siren)
+            targets_f = [r for r in all_results[:50] if r.siren]
+            sem_f = asyncio.Semaphore(12)
+
+            async def _one_finance(result: CompanyResult) -> tuple[CompanyResult, object]:
+                async with sem_f:
+                    try:
+                        return result, await get_company_finances(result.siren)
+                    except Exception as ex:
+                        return result, ex
+
+            fin_pairs = await asyncio.gather(*[_one_finance(r) for r in targets_f], return_exceptions=True)
+            for item in fin_pairs:
+                if isinstance(item, Exception):
+                    plog("get_finances_row_error", error=repr(item))
+                    continue
+                result, fin_data = item
+                if isinstance(fin_data, Exception):
+                    plog("get_finances_row_error", error=repr(fin_data))
+                    continue
+                if not isinstance(fin_data, dict):
+                    continue
                 finances = fin_data.get("finances", [])
                 cap_co = fin_data.get("capital_social")
                 if cap_co is not None:
@@ -242,6 +394,11 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
                     result.site_web = str(web_fd).strip()
             plog("api_call_end", source=call.source, action=call.action)
 
+        i += 1
+
+    timing_ms["execute_plan_api_loop_ms"] = (time.perf_counter() - t_loop_start) * 1000
+
+    t_broaden = time.perf_counter()
     if len(all_results) < 5:
         for call in sorted_calls:
             if call.source != "sirene" or call.action != "search":
@@ -297,6 +454,9 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
                             seen_keys.add(key)
                             all_results.append(r)
 
+    timing_ms["execute_plan_broaden_ms"] = (time.perf_counter() - t_broaden) * 1000
+
+    t_signals = time.perf_counter()
     for result in all_results:
         if not result.numero_tva and result.siren:
             result.numero_tva = _compute_tva(result.siren)
@@ -316,24 +476,37 @@ async def execute_plan(plan: ExecutionPlan, *, mode: str | None = None) -> Searc
             if sig_mp.type not in existing_types_mp:
                 result.signaux.append(sig_mp)
 
+    timing_ms["execute_plan_signals_ms"] = (time.perf_counter() - t_signals) * 1000
+
     cols = extend_columns_for_plan(plan.columns, plan.api_calls)
-    if any(r.signaux for r in all_results) and "signaux" not in cols:
+    nm = normalize_mode(mode)
+    # Prospection : ``signaux`` est déjà dans le panneau figé (``apply_result_columns_for_mode``).
+    if nm != "prospection" and any(r.signaux for r in all_results) and "signaux" not in cols:
         cols.insert(0, "signaux")
-    cols = apply_result_columns_for_mode(cols, normalize_mode(mode))
+    cols = apply_result_columns_for_mode(cols, nm)
 
     plog("signals_detected",
          total_with_signals=sum(1 for r in all_results if r.signaux),
          total_results=len(all_results))
 
+    t_geo = time.perf_counter()
     await geocode_results(all_results)
+    timing_ms["geocode_ms"] = (time.perf_counter() - t_geo) * 1000
+
+    t_pap = time.perf_counter()
     if normalize_mode(mode) not in ("benchmark", "rachat"):
-        await enrich_missing_contacts_pappers_fr(all_results, max_companies=60)
+        max_contact = max(1, int(getattr(settings, "PAPPERS_CONTACT_ENRICH_MAX", 60) or 60))
+        await enrich_missing_contacts_pappers_fr(all_results, max_companies=max_contact)
+    timing_ms["pappers_contacts_enrich_ms"] = (time.perf_counter() - t_pap) * 1000
+
+    timing_ms["execute_plan_total_ms"] = (time.perf_counter() - t_plan) * 1000
 
     return SearchResults(
         total=len(all_results),
         results=all_results,
         columns=cols,
         credits_required=plan.estimated_credits,
+        timing_ms=timing_ms,
     )
 
 

@@ -1,0 +1,552 @@
+{
+  "brief": {
+    "nom": "Compte rendu Atelier (fixture)",
+    "tagline": "Jeu de données statique pour QA interface — aucun appel IA ni pipeline réel.",
+    "secteur": "Conseil et accompagnement de projets entrepreneuriaux",
+    "localisation": "France",
+    "cible": "Les deux",
+    "budget": "60 kEUR - 120 kEUR selon le rythme de lancement",
+    "modele_revenus": "Abonnement mensuel + prestations ponctuelles",
+    "ambition": "Atteindre 150 clients actifs la deuxieme annee",
+    "budget_min_eur": 60000,
+    "budget_max_eur": 120000,
+    "budget_hypotheses": [
+      "Structure legere les 3 premiers mois",
+      "Sous-traitance partielle sur les taches techniques"
+    ]
+  },
+  "canvas": {
+    "proposition_valeur": [
+      "Methodologie Atelier en etapes actionnables",
+      "Vision produit et execution dans un seul espace",
+      "Rendu clair pour arbitrer rapidement"
+    ],
+    "segments_clients": [
+      "Createurs de PME en pre-lancement",
+      "TPE voulant structurer leur offre",
+      "Consultants independants en repositionnement"
+    ],
+    "canaux": [
+      "Acquisition organique",
+      "Partenariats locaux",
+      "Demonstrations produit"
+    ],
+    "relation_client": [
+      "Onboarding guide",
+      "Suivi hebdomadaire",
+      "Support asynchrone"
+    ],
+    "sources_revenus": [
+      "Abonnement",
+      "Ateliers premium",
+      "Audit express"
+    ],
+    "ressources_cles": [
+      "Framework Atelier",
+      "Playbooks metier",
+      "Base de contenus"
+    ],
+    "activites_cles": [
+      "Diagnostic",
+      "Priorisation",
+      "Execution assistee"
+    ],
+    "partenaires_cles": [
+      "Experts sectoriels",
+      "Réseau local",
+      "Integrateurs no-code"
+    ],
+    "structure_couts": [
+      "Produit",
+      "Accompagnement",
+      "Acquisition"
+    ]
+  },
+  "flows": {
+    "acteurs": [
+      {
+        "label": "Client",
+        "segment_key": "clients_cibles",
+        "actor_id": null,
+        "role": "Demandeur",
+        "hint": "Exprime le besoin et valide",
+        "emphasis": "primary"
+      },
+      {
+        "label": "Atelier MONV",
+        "segment_key": null,
+        "actor_id": null,
+        "role": "Orchestrateur",
+        "hint": "Structure et priorise",
+        "emphasis": "primary"
+      },
+      {
+        "label": "Partenaire exécution",
+        "segment_key": "partenaires",
+        "actor_id": null,
+        "role": "Exécution",
+        "hint": "Livre des actions terrain",
+        "emphasis": "secondary"
+      },
+      {
+        "label": "Cible de consolidation",
+        "segment_key": "cibles_rachat",
+        "actor_id": null,
+        "role": "Cible M&A",
+        "hint": "Piste de rachat ou croissance externe",
+        "emphasis": "secondary"
+      }
+    ],
+    "flux_valeur": [
+      {
+        "origine": "Client",
+        "destination": "Atelier MONV",
+        "label": "Contexte projet",
+        "detail": "Objectifs, contraintes et priorites initiales.",
+        "pattern": "solid"
+      },
+      {
+        "origine": "Atelier MONV",
+        "destination": "Partenaire execution",
+        "label": "Plan d'action",
+        "detail": "Roadmap operationnelle et ordonnancement.",
+        "pattern": "solid"
+      }
+    ],
+    "flux_financiers": [
+      {
+        "origine": "Client",
+        "destination": "Atelier MONV",
+        "label": "Abonnement",
+        "detail": "Facturation mensuelle de l'accompagnement.",
+        "pattern": "solid"
+      }
+    ],
+    "flux_information": [
+      {
+        "origine": "Partenaire execution",
+        "destination": "Atelier MONV",
+        "label": "Retours terrain",
+        "detail": "Bloquants, risques et avancement reel.",
+        "pattern": "dashed"
+      }
+    ],
+    "diagram_title": "Boucle Atelier mode fake",
+    "layout": "horizontal",
+    "flow_insight": "Le flux montre un cycle simple de cadrage puis delivery."
+  },
+  "segments": [
+    {
+      "key": "clients_cibles",
+      "label": "Clients cibles",
+      "description": "Panel de cibles pour tests UX et proposition de valeur",
+      "mode": "prospection",
+      "icon": "target",
+      "query": "fixture affichage clients",
+      "search_id": "c36f9f49-ad6f-426c-aa8b-70bf3a3e0f22",
+      "total": 3,
+      "credits_required": 0,
+      "columns": [
+        "nom",
+        "ville",
+        "libelle_activite",
+        "relevance_flag"
+      ],
+      "preview": [
+        {
+          "siren": "000000001",
+          "nom": "Demo Entreprise 1",
+          "ville": "Paris",
+          "libelle_activite": "Activite de demonstration",
+          "_dedup_key": "siren:000000001",
+          "relevance_score": 0.9,
+          "relevance_flag": "ok",
+          "reason_excluded": null,
+          "segments": [
+            "clients_cibles"
+          ]
+        },
+        {
+          "siren": "000000011",
+          "nom": "Demo Partenaire 1",
+          "ville": "Lyon",
+          "libelle_activite": "Service de test UI",
+          "_dedup_key": "siren:000000011",
+          "relevance_score": 0.7,
+          "relevance_flag": "warning",
+          "reason_excluded": null,
+          "segments": [
+            "clients_cibles"
+          ]
+        },
+        {
+          "siren": "000000021",
+          "nom": "Demo Exclue 1",
+          "ville": "Marseille",
+          "libelle_activite": "Ligne de test pertinence exclue",
+          "_dedup_key": "siren:000000021",
+          "relevance_score": 0.15,
+          "relevance_flag": "excluded",
+          "reason_excluded": "Hors cible pour la fixture d'affichage.",
+          "segments": [
+            "clients_cibles"
+          ]
+        }
+      ],
+      "map_points": [
+        {
+          "siren": "000000001",
+          "nom": "Demo Entreprise 1",
+          "ville": "Paris",
+          "libelle_activite": "Activite de demonstration",
+          "_dedup_key": "siren:000000001",
+          "relevance_score": 0.9,
+          "relevance_flag": "ok",
+          "reason_excluded": null,
+          "segments": [
+            "clients_cibles"
+          ],
+          "latitude": 48.8566,
+          "longitude": 2.3522,
+          "adresse": "1 rue de la Paix",
+          "code_postal": "75002"
+        },
+        {
+          "siren": "000000011",
+          "nom": "Demo Partenaire 1",
+          "ville": "Lyon",
+          "libelle_activite": "Service de test UI",
+          "_dedup_key": "siren:000000011",
+          "relevance_score": 0.7,
+          "relevance_flag": "warning",
+          "reason_excluded": null,
+          "segments": [
+            "clients_cibles"
+          ],
+          "latitude": 45.764,
+          "longitude": 4.8357,
+          "adresse": "10 cours Vitton",
+          "code_postal": "69006"
+        }
+      ],
+      "error": null,
+      "out_of_scope": false,
+      "out_of_scope_note": null,
+      "total_relevant": 2,
+      "relevance_threshold": 5
+    },
+    {
+      "key": "partenaires",
+      "label": "Partenaires exécution",
+      "description": "Acteurs opérationnels potentiels pour délivrer vite",
+      "mode": "sous_traitant",
+      "icon": "briefcase",
+      "query": "fixture affichage partenaires",
+      "search_id": "e68ab30b-add6-4135-a709-fd4c641edb8f",
+      "total": 3,
+      "credits_required": 0,
+      "columns": [
+        "nom",
+        "ville",
+        "libelle_activite",
+        "relevance_flag"
+      ],
+      "preview": [
+        {
+          "siren": "000000002",
+          "nom": "Demo Entreprise 2",
+          "ville": "Paris",
+          "libelle_activite": "Activite de demonstration",
+          "_dedup_key": "siren:000000002",
+          "relevance_score": 0.9,
+          "relevance_flag": "ok",
+          "reason_excluded": null,
+          "segments": [
+            "partenaires"
+          ]
+        },
+        {
+          "siren": "000000012",
+          "nom": "Demo Partenaire 2",
+          "ville": "Lyon",
+          "libelle_activite": "Service de test UI",
+          "_dedup_key": "siren:000000012",
+          "relevance_score": 0.7,
+          "relevance_flag": "warning",
+          "reason_excluded": null,
+          "segments": [
+            "partenaires"
+          ]
+        },
+        {
+          "siren": "000000022",
+          "nom": "Demo Exclue 2",
+          "ville": "Marseille",
+          "libelle_activite": "Ligne de test pertinence exclue",
+          "_dedup_key": "siren:000000022",
+          "relevance_score": 0.15,
+          "relevance_flag": "excluded",
+          "reason_excluded": "Hors cible pour la fixture d'affichage.",
+          "segments": [
+            "partenaires"
+          ]
+        }
+      ],
+      "map_points": [
+        {
+          "siren": "000000002",
+          "nom": "Demo Entreprise 2",
+          "ville": "Paris",
+          "libelle_activite": "Activite de demonstration",
+          "_dedup_key": "siren:000000002",
+          "relevance_score": 0.9,
+          "relevance_flag": "ok",
+          "reason_excluded": null,
+          "segments": [
+            "partenaires"
+          ],
+          "latitude": 48.8566,
+          "longitude": 2.3522,
+          "adresse": "1 rue de la Paix",
+          "code_postal": "75002"
+        },
+        {
+          "siren": "000000012",
+          "nom": "Demo Partenaire 2",
+          "ville": "Lyon",
+          "libelle_activite": "Service de test UI",
+          "_dedup_key": "siren:000000012",
+          "relevance_score": 0.7,
+          "relevance_flag": "warning",
+          "reason_excluded": null,
+          "segments": [
+            "partenaires"
+          ],
+          "latitude": 45.764,
+          "longitude": 4.8357,
+          "adresse": "10 cours Vitton",
+          "code_postal": "69006"
+        }
+      ],
+      "error": null,
+      "out_of_scope": false,
+      "out_of_scope_note": null,
+      "total_relevant": 2,
+      "relevance_threshold": 5
+    },
+    {
+      "key": "cibles_rachat",
+      "label": "Cibles de croissance (rachat)",
+      "description": "Sociétés type pour tester le mode rachat dans le même dossier",
+      "mode": "rachat",
+      "icon": "scale",
+      "query": "fixture affichage rachat",
+      "search_id": "4f228da2-56dc-4f48-9f15-d5f649b8c931",
+      "total": 3,
+      "credits_required": 0,
+      "columns": [
+        "nom",
+        "ville",
+        "libelle_activite",
+        "relevance_flag"
+      ],
+      "preview": [
+        {
+          "siren": "000000003",
+          "nom": "Demo Entreprise 3",
+          "ville": "Paris",
+          "libelle_activite": "Activite de demonstration",
+          "_dedup_key": "siren:000000003",
+          "relevance_score": 0.9,
+          "relevance_flag": "ok",
+          "reason_excluded": null,
+          "segments": [
+            "cibles_rachat"
+          ]
+        },
+        {
+          "siren": "000000013",
+          "nom": "Demo Partenaire 3",
+          "ville": "Lyon",
+          "libelle_activite": "Service de test UI",
+          "_dedup_key": "siren:000000013",
+          "relevance_score": 0.7,
+          "relevance_flag": "warning",
+          "reason_excluded": null,
+          "segments": [
+            "cibles_rachat"
+          ]
+        },
+        {
+          "siren": "000000023",
+          "nom": "Demo Exclue 3",
+          "ville": "Marseille",
+          "libelle_activite": "Ligne de test pertinence exclue",
+          "_dedup_key": "siren:000000023",
+          "relevance_score": 0.15,
+          "relevance_flag": "excluded",
+          "reason_excluded": "Hors cible pour la fixture d'affichage.",
+          "segments": [
+            "cibles_rachat"
+          ]
+        }
+      ],
+      "map_points": [
+        {
+          "siren": "000000003",
+          "nom": "Demo Entreprise 3",
+          "ville": "Paris",
+          "libelle_activite": "Activite de demonstration",
+          "_dedup_key": "siren:000000003",
+          "relevance_score": 0.9,
+          "relevance_flag": "ok",
+          "reason_excluded": null,
+          "segments": [
+            "cibles_rachat"
+          ],
+          "latitude": 48.8566,
+          "longitude": 2.3522,
+          "adresse": "1 rue de la Paix",
+          "code_postal": "75002"
+        },
+        {
+          "siren": "000000013",
+          "nom": "Demo Partenaire 3",
+          "ville": "Lyon",
+          "libelle_activite": "Service de test UI",
+          "_dedup_key": "siren:000000013",
+          "relevance_score": 0.7,
+          "relevance_flag": "warning",
+          "reason_excluded": null,
+          "segments": [
+            "cibles_rachat"
+          ],
+          "latitude": 45.764,
+          "longitude": 4.8357,
+          "adresse": "10 cours Vitton",
+          "code_postal": "69006"
+        }
+      ],
+      "error": null,
+      "out_of_scope": false,
+      "out_of_scope_note": null,
+      "total_relevant": 2,
+      "relevance_threshold": 5
+    },
+    {
+      "key": "prescripteurs_off_market",
+      "label": "Prescripteurs hors annuaires",
+      "description": "Cas volontairement hors périmètre pour l'état « hors scope »",
+      "mode": "prospection",
+      "icon": "megaphone",
+      "query": "",
+      "search_id": null,
+      "total": 0,
+      "credits_required": 0,
+      "columns": [],
+      "preview": [],
+      "map_points": [],
+      "error": null,
+      "out_of_scope": true,
+      "out_of_scope_note": "Les annuaires MONV ne couvrent pas ce type d'acteurs ; compléter par desk research ou entretiens terrain.",
+      "total_relevant": null,
+      "relevance_threshold": null
+    }
+  ],
+  "synthesis": {
+    "forces": [
+      "Structure stable pour iterer rapidement l'UI",
+      "Aucun appel IA requis en mode fake",
+      "Donnees deterministes pour snapshots frontend"
+    ],
+    "risques": [
+      "Le rendu fake ne reflete pas toute la variabilite reelle",
+      "Ne pas utiliser pour valider la qualite metier IA"
+    ],
+    "prochaines_etapes": [
+      "Ajuster les composants UI sur ce dossier fixe",
+      "Ajouter des cas fake alternatifs si besoin",
+      "Repasser en mode reel pour la validation metier"
+    ],
+    "kpis": [
+      "Temps de rendu ecran",
+      "Stabilite visuelle",
+      "Absence de regressions UX"
+    ],
+    "budget_estimatif": "En mode fake, aucun credit IA n'est consomme.",
+    "ordres_grandeur": [
+      "0 appel LLM",
+      "0 appel API recherche",
+      "Payload deterministe"
+    ],
+    "conseil_semaine": "Utilise ce mode pour finaliser les ecrans avant les tests metier.",
+    "checklist": {
+      "headline": "Finaliser l'UI Atelier avec mode fake",
+      "lede": "Semaine de stabilisation interface",
+      "sections": [
+        {
+          "title": "Cadre de travail",
+          "subtitle": "Jour 1",
+          "items": [
+            {
+              "label": "Activer ATELIER_FAKE_MODE dans .env",
+              "guide": "Active le flag et redemarre le backend pour prendre la nouvelle configuration."
+            },
+            {
+              "label": "Valider le parcours Atelier de bout en bout",
+              "guide": "Cree une conversation Atelier et verifie QCM, dossier, canvas et flux."
+            },
+            {
+              "label": "Verifier les etats de chargement",
+              "guide": "Confirme que les loaders et transitions restent coherents sans latence IA."
+            },
+            {
+              "label": "Capturer des references visuelles",
+              "guide": "Prends des captures pour comparer avant/apres chaque ajustement UI."
+            }
+          ]
+        },
+        {
+          "title": "Iterer les composants",
+          "subtitle": "Jours 2-4",
+          "items": [
+            {
+              "label": "Peaufiner la lisibilite du canvas",
+              "guide": "Ajuste espacements et hierarchie typographique pour les 9 blocs."
+            },
+            {
+              "label": "Ajuster la carte des flux",
+              "guide": "Teste les interactions acteurs et liens pour un parcours compréhensible."
+            },
+            {
+              "label": "Verrouiller le responsive mobile",
+              "guide": "Controle le rendu sur ecrans etroits et corrige les ruptures de mise en page."
+            },
+            {
+              "label": "Stabiliser les micro-etats",
+              "guide": "Uniformise placeholders, messages vides, erreurs et succes."
+            }
+          ]
+        }
+      ],
+      "pitfalls_title": "Pieges frequents en mode fake",
+      "pitfalls": [
+        {
+          "label": "Oublier le redemarrage backend",
+          "guide": "Le changement .env ne s'applique pas sans redemarrage du serveur."
+        },
+        {
+          "label": "Conclure trop tot sur le mode reel",
+          "guide": "Le mode fake sert l'UI; valide ensuite le comportement metier avec IA active."
+        }
+      ]
+    }
+  },
+  "version": 1,
+  "generated_at": "2026-05-13 21:27:29.553559+00:00",
+  "total_raw": 9,
+  "total_unique": 9,
+  "total_relevant": 6,
+  "total_credits": 0,
+  "mode": "atelier"
+}

@@ -3,12 +3,51 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import os
 from unittest.mock import AsyncMock, patch
 
 os.environ.setdefault("SKIP_DB_VERIFY_ON_STARTUP", "true")
 os.environ.setdefault("SUPABASE_URL", "https://placeholder.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_KEY", "placeholder-service-key")
+
+import sys
+import types
+
+# Import léger : évite models.db / supabase avant le stub agent_config
+if "services.agent_config" not in sys.modules:
+    _stub_ac = types.ModuleType("services.agent_config")
+
+    async def _fake_resolve_llm_block(
+        agent_id: str,
+        block_id: str,
+        *,
+        default_model: str,
+        default_system: str,
+        default_max_tokens: int,
+        default_temperature: float,
+        default_top_p: float = 1.0,
+    ):
+        return types.SimpleNamespace(
+            model=default_model,
+            system_prompt=default_system,
+            max_tokens=default_max_tokens,
+            temperature=default_temperature,
+            top_p=default_top_p,
+        )
+
+    _stub_ac.resolve_llm_for_block = _fake_resolve_llm_block
+    sys.modules["services.agent_config"] = _stub_ac
+
+if "openai" not in sys.modules:
+    _stub_openai = types.ModuleType("openai")
+
+    class _AsyncOpenAIStub:  # noqa: D401
+        def __init__(self, *a, **k):
+            pass
+
+    _stub_openai.AsyncOpenAI = _AsyncOpenAIStub
+    sys.modules["openai"] = _stub_openai
 
 from config import settings  # noqa: E402
 from models.schemas import CompanyResult, GuardEntity, GuardResult  # noqa: E402
@@ -19,6 +58,8 @@ from services.relevance import (  # noqa: E402
     relevance_flag_for_score,
     row_for_relevance_check,
 )
+
+_LLM_MOD = importlib.import_module("utils.llm")
 
 
 def _guard() -> GuardResult:
@@ -76,7 +117,7 @@ def test_filter_keeps_rows_per_llm_decisions():
         CompanyResult(siren="333333333", nom="Smash Padel", libelle_activite="Location terrain padel"),
     ]
 
-    async def fake_llm_json_call(model, system, messages, max_tokens=2048, temperature=0.0):
+    async def fake_llm_json_call(model, system, messages, max_tokens=2048, temperature=0.0, **kwargs):
         payload = (messages[0].get("content") or "") if messages else ""
         if "Yoga Zen" in payload:
             # Seuil niche 6 : une ligne < 6 est exclue.
@@ -90,13 +131,14 @@ def test_filter_keeps_rows_per_llm_decisions():
         return {"scores": []}
 
     async def run():
-        with patch.object(relevance_mod, "llm_json_call", new_callable=AsyncMock, side_effect=fake_llm_json_call):
-            return await filter_results_by_relevance(
-                rows,
-                user_query="boutique padel Marseille",
-                guard_result=_guard(),
-                mode="prospection",
-            )
+        with patch.object(settings, "OPENROUTER_API_KEY", "x"):
+            with patch.object(_LLM_MOD, "llm_json_call", new_callable=AsyncMock, side_effect=fake_llm_json_call):
+                return await filter_results_by_relevance(
+                    rows,
+                    user_query="boutique padel Marseille",
+                    guard_result=_guard(),
+                    mode="prospection",
+                )
 
     out, stats = asyncio.run(run())
     assert len(out) == 2
@@ -143,7 +185,7 @@ def test_filter_partial_llm_missing_ids_excluded():
 
     async def run():
         with patch.object(settings, "OPENROUTER_API_KEY", "x"):
-            with patch.object(relevance_mod, "llm_json_call", new_callable=AsyncMock, side_effect=fake_llm_json_call):
+            with patch.object(_LLM_MOD, "llm_json_call", new_callable=AsyncMock, side_effect=fake_llm_json_call):
                 return await filter_results_by_relevance(
                     rows,
                     user_query="x",
@@ -158,6 +200,11 @@ def test_filter_partial_llm_missing_ids_excluded():
 
 
 def test_filter_fallback_when_all_rejected():
+    from utils.observability_counters import get_counters, reset_counters
+
+    reset_counters()
+    before = int(get_counters().get("relevance_fallback_all_rejected", 0))
+
     rows = [
         CompanyResult(siren="111111111", nom="A"),
         CompanyResult(siren="222222222", nom="B"),
@@ -173,15 +220,51 @@ def test_filter_fallback_when_all_rejected():
         }
 
     async def run():
-        with patch.object(relevance_mod, "llm_json_call", new_callable=AsyncMock, side_effect=fake_llm_json_call):
-            return await filter_results_by_relevance(
-                rows,
-                user_query="x",
-                guard_result=_guard(),
-                mode="prospection",
-            )
+        with patch.object(settings, "OPENROUTER_API_KEY", "x"):
+            with patch.object(_LLM_MOD, "llm_json_call", new_callable=AsyncMock, side_effect=fake_llm_json_call):
+                return await filter_results_by_relevance(
+                    rows,
+                    user_query="x",
+                    guard_result=_guard(),
+                    mode="prospection",
+                )
 
     out, stats = asyncio.run(run())
     assert len(out) == 2
     assert stats.get("relevance_fallback_unfiltered") is True
     assert stats["relevance_removed"] == 0
+    after = int(get_counters().get("relevance_fallback_all_rejected", 0))
+    assert after == before + 1
+    reset_counters()
+
+
+def test_compute_relevance_skips_llm_small_structured_prospection_panel():
+    """Prospection structurée sans mots-clés niche, ≤6 lignes : pas d'appel LLM pertinence."""
+    rows = [
+        CompanyResult(siren="111111111", nom="A"),
+        CompanyResult(siren="222222222", nom="B"),
+        CompanyResult(siren="333333333", nom="C"),
+    ]
+    g = GuardResult(
+        intent="recherche_entreprise",
+        entities=GuardEntity(secteur="BTP", departement="69"),
+        confidence=0.9,
+    )
+
+    async def run():
+        with patch.object(settings, "OPENROUTER_API_KEY", "x"):
+            with patch.object(_LLM_MOD, "llm_json_call", new_callable=AsyncMock) as mock_llm:
+                scores, th, st = await compute_relevance_scores(
+                    rows,
+                    user_query="PME BTP",
+                    guard_result=g,
+                    mode="prospection",
+                )
+                mock_llm.assert_not_called()
+        return scores, th, st
+
+    scores, th, st = asyncio.run(run())
+    assert st["relevance_skipped"] is True
+    assert st["relevance_skip_reason"] == "small_structured_panel"
+    assert len(scores) == 3
+    assert all(s >= th for s in scores)

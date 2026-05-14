@@ -245,7 +245,13 @@ export default function AtelierDossier({
         ) : null}
       </div>
 
-      <DossierChecklist synthesis={synthesis} />
+      <DossierChecklist
+        synthesis={synthesis}
+        conversationId={canMutate ? conversationId : null}
+        onDossierReplaced={canMutate ? onDossierReplaced : undefined}
+        onNotify={canMutate ? onNotify : undefined}
+        onCreditsRemaining={onCreditsRemaining}
+      />
 
       <div className="space-y-8 scroll-mt-24" id="atelier-section-synthesis">
         <div>

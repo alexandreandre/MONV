@@ -1,6 +1,36 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
 from typing import Any, Literal
+
+# Intents produits par le Guard (LLM + normalisation). Aligné sur ``routers/chat`` (réponse statique).
+GuardIntent = Literal[
+    "recherche_entreprise",
+    "recherche_dirigeant",
+    "enrichissement",
+    "hors_scope",
+    "salutation",
+    "meta_question",
+]
+
+GUARD_INTENT_VALUES: frozenset[str] = frozenset(
+    {
+        "recherche_entreprise",
+        "recherche_dirigeant",
+        "enrichissement",
+        "hors_scope",
+        "salutation",
+        "meta_question",
+    }
+)
+
+GUARD_INTENTS_STATIC_REPLY: frozenset[str] = frozenset(
+    {"hors_scope", "salutation", "meta_question"}
+)
+
+# Libellé des arêtes graphe admin (condition = routage ``chat`` vers ``static_reply``).
+GUARD_STATIC_REPLY_EDGE_CONDITION = (
+    "intent ∈ {hors_scope, salutation, meta_question}"
+)
 
 
 # --- Auth ---
@@ -37,6 +67,7 @@ class UserOut(BaseModel):
     credits: int
     credits_unlimited: bool = False
     created_at: datetime
+    is_admin: bool = False
 
 
 class TokenOut(BaseModel):
@@ -55,6 +86,28 @@ class ChatRequest(BaseModel):
     mode: str | None = None
     # Nouvelle conversation rattachée à un projet (vue PROJETS).
     folder_id: str | None = None
+
+
+class SearchEstimateRequest(BaseModel):
+    """Aperçu plan / crédits sans exécuter les connecteurs (SIRENE, Pappers, Places)."""
+
+    conversation_id: str | None = None
+    message: str
+    mode: str | None = None
+
+
+class SearchEstimateResponse(BaseModel):
+    in_scope: bool
+    clarification_needed: bool = False
+    clarification_source: str | None = None
+    orchestrator_clarification_needed: bool = False
+    guard_static_intent: str | None = None
+    estimated_credits: int | None = None
+    description: str | None = None
+    api_calls: list[dict[str, Any]] = Field(default_factory=list)
+    columns: list[str] = Field(default_factory=list)
+    intent: str | None = None
+    missing_criteria: list[str] = Field(default_factory=list)
 
 
 class MessageOut(BaseModel):
@@ -121,7 +174,7 @@ class GuardEntity(BaseModel):
 
 
 class GuardResult(BaseModel):
-    intent: str  # recherche_entreprise, recherche_dirigeant, enrichissement, hors_scope
+    intent: GuardIntent
     entities: GuardEntity
     confidence: float
     clarification_needed: bool = False
@@ -135,6 +188,13 @@ class GuardResult(BaseModel):
     sector_confirmed: str | None = None
     # Terme exact confirmé par l'utilisateur après clarification
     original_query: str = ""
+
+    @field_validator("intent", mode="before")
+    @classmethod
+    def normalize_guard_intent(cls, v: object) -> str:
+        if isinstance(v, str) and v in GUARD_INTENT_VALUES:
+            return v
+        return "recherche_entreprise"
 
 
 # --- QCM (clarification) ---
@@ -242,6 +302,8 @@ class SearchResults(BaseModel):
     columns: list[str]
     credits_required: int
     search_id: str | None = None
+    # Sous-étapes ``execute_plan`` (ms) pour agrégation admin / pipeline_timing
+    timing_ms: dict[str, float] | None = None
 
 
 # --- Credits ---
@@ -364,7 +426,7 @@ class SegmentBrief(BaseModel):
     key: str           # identifiant technique (ex: "fournisseurs")
     label: str         # libellé UI (ex: "Fournisseurs clés")
     description: str   # explication courte du segment pour l'utilisateur
-    mode: str          # "prospection" | "sous_traitant" | "rachat"
+    mode: str          # "prospection" | "sous_traitant" | "benchmark" | "rachat"
     query: str         # requête qui sera passée au pipeline MONV
     icon: str = "building"  # nom Lucide pour l'UI
     # Hors périmètre SIRENE / Pappers / Places France : pas d'appel pipeline
@@ -474,6 +536,10 @@ class AtelierSegmentRegenerateRequest(BaseModel):
 
 
 class AtelierCanvasRegenerateRequest(BaseModel):
+    conversation_id: str
+
+
+class AtelierChecklistRegenerateRequest(BaseModel):
     conversation_id: str
 
 

@@ -79,6 +79,7 @@ cython_debug/
 .python-version
 venv/
 .venv/
+backend/.venv_fixture/
 env/
 ENV/
 env.bak/

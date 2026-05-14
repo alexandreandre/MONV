@@ -18,13 +18,18 @@ def _cors_allow_origins() -> list[str]:
         origins.append(site)
     return origins
 from routers import agent, auth, chat, credits, search
+from routers.admin import router as admin_router
 from routers.benchmark import router as benchmark_router
 from utils.pipeline_log import configure_pipeline_logging
+from utils.llm import configure_llm_usage_logging
+from utils.pipeline_timing import get_pipeline_timing_summary
+from utils.connector_cache import connector_cache_stats
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_pipeline_logging()
+    configure_llm_usage_logging()
     Path(settings.EXPORTS_DIR).mkdir(parents=True, exist_ok=True)
     if not settings.SKIP_DB_VERIFY_ON_STARTUP:
         await verify_connection(get_supabase())
@@ -52,6 +57,7 @@ app.include_router(benchmark_router)
 app.include_router(agent.router)
 app.include_router(search.router)
 app.include_router(credits.router)
+app.include_router(admin_router)
 
 exports_path = Path(settings.EXPORTS_DIR)
 exports_path.mkdir(exist_ok=True)
@@ -59,11 +65,14 @@ exports_path.mkdir(exist_ok=True)
 
 @app.get("/api/health")
 async def health():
+    timing = get_pipeline_timing_summary()
     return {
         "status": "ok",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "pipeline_debug": settings.PIPELINE_DEBUG,
+        "pipeline_timing_sample_count": timing.get("sample_count", 0),
+        "connector_cache": connector_cache_stats(),
     }
 
 

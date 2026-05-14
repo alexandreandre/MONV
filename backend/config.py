@@ -23,8 +23,23 @@ class Settings(BaseSettings):
 
     # Couche 0 — Filtre scope (le moins cher, rapide)
     FILTER_MODEL: str = "google/gemini-flash-1.5"
+    # Erreur LLM / JSON sur le filtre : fail_open (dev), fail_closed (tout rejeter),
+    # heuristic_then_closed (second seuil léger puis hors-scope si doute).
+    FILTER_LLM_ERROR_POLICY: str = "fail_open"
+    # Si True : court-circuit run_filter (pas d'appel LLM) quand l'heuristique locale est très confiante
+    FILTER_HEURISTIC_SHORT_CIRCUIT: bool = True
+    # Limite /api/chat/send par utilisateur (fenêtre glissante, mémoire process).
+    CHAT_SEND_RATE_LIMIT_ENABLED: bool = True
+    CHAT_SEND_RATE_LIMIT_MAX_REQUESTS: int = 40
+    CHAT_SEND_RATE_LIMIT_WINDOW_S: int = 60
+    # Limite ``POST /api/search/estimate`` (fenêtre glissante, mémoire process).
+    SEARCH_ESTIMATE_RATE_LIMIT_ENABLED: bool = True
+    SEARCH_ESTIMATE_RATE_LIMIT_MAX_REQUESTS: int = 80
+    SEARCH_ESTIMATE_RATE_LIMIT_WINDOW_S: int = 60
     # Couche 1 / 1b — Guard extraction + Conversationalist (coût moyen)
     GUARD_MODEL: str = "anthropic/claude-3.5-haiku"
+    # Guard : second passage « ambiguïté sectorielle » (prompt long) si détecteur lexical
+    GUARD_SECTOR_AMBIGUITY_SECOND_PASS: bool = True
     # Couche 2 — Orchestrateur plan d'exécution (le meilleur, précis)
     ORCHESTRATOR_MODEL: str = "anthropic/claude-3.5-sonnet"
     # Post-filtrage des lignes de résultats (rapide, JSON fiable via OpenRouter)
@@ -42,6 +57,8 @@ class Settings(BaseSettings):
     GOOGLE_PLACES_API_KEY: str = ""
     PAPPERS_BASE_URL: str = "https://api.pappers.in/v1"
     PAPPERS_COUNTRY_CODE: str = "FR"
+    # Max fiches Pappers pour compléter téléphone/site (lignes déjà complètes sont ignorées)
+    PAPPERS_CONTACT_ENRICH_MAX: int = 60
 
     # ── App ───────────────────────────────────────────────────────
     CACHE_TTL_HOURS: int = 48
@@ -51,6 +68,29 @@ class Settings(BaseSettings):
 
     # Emails (séparés par des virgules) : pas de débit à l'export, solde API affiché comme illimité
     UNLIMITED_CREDITS_EMAILS: str = ""
+
+    # Accès `/api/admin/*` et interface `/admin` (emails, séparés par des virgules, insensible à la casse)
+    ADMIN_EMAILS: str = ""
+
+    # Enregistrer chaque étape LLM dans agent_runs / agent_run_steps (impact perf — désactivé par défaut)
+    RUN_RECORDING_ENABLED: bool = False
+    # Journaliser usage tokens (OpenRouter / OpenAI) sur stderr via logging ``monv.llm``
+    LLM_USAGE_LOG_ENABLED: bool = True
+
+    # Cache lecture overrides actifs (secondes)
+    AGENT_CONFIG_CACHE_SECONDS: float = 30.0
+
+    # Métriques pipeline chat (anneau mémoire, voir ``utils/pipeline_timing.py``)
+    PIPELINE_TIMING_MAX_SAMPLES: int = 500
+
+    # Cache connecteurs SIRENE / Google Places (process-local, TTL court)
+    CONNECTOR_CACHE_ENABLED: bool = True
+    CONNECTOR_CACHE_TTL_S: float = 300.0
+    CONNECTOR_CACHE_MAX_KEYS: int = 256
+
+    # Jobs chat async (spike : anneau mémoire, voir ``services/chat_async_jobs.py``)
+    CHAT_ASYNC_JOBS_MAX: int = 200
+    CHAT_ASYNC_JOB_RESULT_TTL_S: float = 3600.0
 
     JWT_SECRET: str = "monv-local-dev-secret-change-in-prod"
     JWT_ALGORITHM: str = "HS256"
